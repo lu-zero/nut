@@ -1,0 +1,83 @@
+Index: Makefile
+===================================================================
+RCS file: /cvsroot/mplayer/main/Makefile,v
+retrieving revision 1.330
+diff -u -r1.330 Makefile
+--- Makefile	19 Aug 2005 19:24:30 -0000	1.330
++++ Makefile	13 Sep 2005 19:28:19 -0000
+@@ -109,6 +109,7 @@
+               $(W32_LIB) \
+               $(DS_LIB) \
+               libaf/libaf.a \
++              ../nut/libnut/demuxer.o \
+               libmpdemux/libmpdemux.a \
+               input/libinput.a \
+               postproc/libswscale.a \
+Index: libmpdemux/Makefile
+===================================================================
+RCS file: /cvsroot/mplayer/main/libmpdemux/Makefile,v
+retrieving revision 1.96
+diff -u -r1.96 Makefile
+--- libmpdemux/Makefile	1 Aug 2005 20:16:56 -0000	1.96
++++ libmpdemux/Makefile	13 Sep 2005 19:28:42 -0000
+@@ -72,6 +72,7 @@
+         demux_mpc.c \
+         demux_mpg.c \
+         demux_nsv.c \
++        demux_nut.c \
+         demux_nuv.c \
+         demux_ogg.c \
+         demux_pva.c \
+@@ -148,7 +149,7 @@
+ 
+ OBJS	= $(SRCS:.c=.o)
+ OBJS   += $(CPLUSPLUSSRCS:.cpp=.o)
+-INCLUDE = -I.. -I../loader $(CSS_INC) $(EXTRA_INC) $(LIBAV_INC)
++INCLUDE = -I.. -I../loader $(CSS_INC) $(EXTRA_INC) $(LIBAV_INC) -I../../nut/libnut
+ CFLAGS  = $(OPTFLAGS) $(INCLUDE) $(XMMS_CFLAGS) $(CDPARANOIA_INC) $(DVB_INC)
+ CPLUSPLUSFLAGS  = $(CFLAGS) $(CPLUSPLUSINCLUDE)
+ CPLUSPLUS = $(CC)
+Index: libmpdemux/demuxer.c
+===================================================================
+RCS file: /cvsroot/mplayer/main/libmpdemux/demuxer.c,v
+retrieving revision 1.199
+diff -u -r1.199 demuxer.c
+--- libmpdemux/demuxer.c	26 Aug 2005 17:40:01 -0000	1.199
++++ libmpdemux/demuxer.c	13 Sep 2005 19:28:53 -0000
+@@ -61,6 +61,7 @@
+ extern demuxer_desc_t demuxer_desc_rtp;
+ extern demuxer_desc_t demuxer_desc_lavf;
+ extern demuxer_desc_t demuxer_desc_aac;
++extern demuxer_desc_t demuxer_desc_nut;
+ 
+ demuxer_desc_t* demuxer_list[] = {
+   &demuxer_desc_rawaudio,
+@@ -119,6 +120,7 @@
+   &demuxer_desc_lavf,
+ #endif
+   &demuxer_desc_aac,
++  &demuxer_desc_nut,
+   NULL
+ };
+ 
+Index: libmpdemux/demuxer.h
+===================================================================
+RCS file: /cvsroot/mplayer/main/libmpdemux/demuxer.h,v
+retrieving revision 1.80
+diff -u -r1.80 demuxer.h
+--- libmpdemux/demuxer.h	26 Aug 2005 17:40:02 -0000	1.80
++++ libmpdemux/demuxer.h	13 Sep 2005 19:28:54 -0000
+@@ -50,11 +50,12 @@
+ #define DEMUXER_TYPE_MPC 40
+ #define DEMUXER_TYPE_MPEG_PES 41
+ #define DEMUXER_TYPE_MPEG_GXF 42
++#define DEMUXER_TYPE_NUT 43
+ 
+ // This should always match the higest demuxer type number.
+ // Unless you want to disallow users to force the demuxer to some types
+ #define DEMUXER_TYPE_MIN 0
+-#define DEMUXER_TYPE_MAX 42
++#define DEMUXER_TYPE_MAX 43
+ 
+ #define DEMUXER_TYPE_DEMUXERS (1<<16)
+ // A virtual demuxer type for the network code

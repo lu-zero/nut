@@ -1,0 +1,30 @@
+DO NOT USE NUTMERGE FOR _ANYTHING_ EXCEPT TESTING!!
+IT CREATES COMPLETELY INVALID BROKEN FILES, WHICH JUST "HAPPEN" TO WORK!
+
+
+for MPlayer, directory structure necessary: (only CVS works)
+somedir/main
+somedir/nut/libnut
+
+move demux_nut.c to libmpdemux and apply mplayer.diff
+
+
+to use:
+./nutmerge bla.avi bla.nut
+
+
+to debug:
+./riffreader bla.avi
+
+
+to play:
+mplayer -demuxer nut bla.nut
+
+
+If you have weird endianess, test the MPlayer demuxer, because it
+shouldn't work! send me some debugging stuff... Everything else
+SHOULD work though! You'll need to compile with '-DWORDS_BIGENDIAN',
+just uncomment the apporpiate file in the main Makefile.
+
+
+- ods15
