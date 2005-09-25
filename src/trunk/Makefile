@@ -14,7 +14,6 @@ nututils: libnut FORCE
 
 clean:
 	$(MAKE) -C libnut clean
-	$(MAKE) -C example clean
 	$(MAKE) -C nututils clean
 
 FORCE:
