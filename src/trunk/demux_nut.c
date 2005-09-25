@@ -1,3 +1,5 @@
+#include <stdio.h>
+
 #include "config.h"
 #include "mp_msg.h"
 
@@ -218,7 +220,7 @@ static void demux_seek_nut(demuxer_t * demuxer, float time_pos, int flags) {
 		time_pos *= ((nut_priv_t*)demuxer->priv)->max_pts *
 				(double)sh_video->video.dwScale / sh_video->video.dwRate;
 
-	ret = nut_seek(nut, time_pos, nutflags);
+	ret = nut_seek(nut, time_pos, nutflags, NULL);
 	if (ret < 0) mp_msg(MSGT_HEADER, MSGL_ERR, "NUT error: %s\n", nut_error(-ret));
 }
 
