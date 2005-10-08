@@ -222,6 +222,11 @@ int get_avi_packet(AVIContext * avi, nut_packet_t * p) {
 				if (!p->is_key) printf("Error detected stream %d frame %d\n", s, p->pts);
 				p->is_key = 1;
 				break;
+			case 3: // S
+				printf("S-Frame %d\n", (int)ftell(avi->in));
+				//err = 12;
+				//goto err_out;
+				// FALL THROUGH!
 			case 1: { // P
 				off_t where = ftell(avi->in);
 				while (fourcc[0] != 'i') {
@@ -241,10 +246,6 @@ int get_avi_packet(AVIContext * avi, nut_packet_t * p) {
 			case 2: // B
 				p->pts--;
 				break;
-			case 3: // S
-				if (type == 3) printf("S-Frame %d\n", (int)ftell(avi->in));
-				err = 12;
-				goto err_out;
 		}
 	} else if (s < avi->avih->dwStreams) { // 0.5 secs of audio or a single packet
 		int samplesize = avi->stream[s].strh->dwSampleSize;
