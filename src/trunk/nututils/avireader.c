@@ -1,5 +1,198 @@
 #include "nutmerge.h"
-#include "avireader.h"
+#include <string.h>
+
+#define mmioFOURCC(ch0, ch1, ch2, ch3) ((ch0) | ((ch1) << 8) | ((ch2) << 16) | ((ch3) << 24))
+#define strFOURCC(str) mmioFOURCC((str)[0], (str)[1], (str)[2], (str)[3])
+
+#ifdef WORDS_BIGENDIAN
+#define FIXENDIAN32(a) do { \
+	(a) = (((a) & 0xFF00FF00) >> 8)  | (((a) & 0x00FF00FF) << 8); \
+	(a) = (((a) & 0xFFFF0000) >> 16) | (((a) & 0x0000FFFF) << 16); \
+	} while(0)
+#define FIXENDIAN16(a) \
+	(a) = (((a) & 0xFF00) >> 8)  | (((a) & 0x00FF) << 8)
+#else
+#define FIXENDIAN32(a) do{}while(0)
+#define FIXENDIAN16(a) do{}while(0)
+#endif
+
+typedef struct riff_tree_s {
+	uint32_t len;
+	char name[4];
+	char listname[4];
+	int type; // 0 - list/tree, 1 - node
+	int amount; // if a list, amount of nodes
+	struct riff_tree_s * tree; // this is an array (size is 'amount')
+	char * data;
+	int offset;
+} riff_tree_t;
+
+typedef struct {
+	int amount;
+	riff_tree_t * tree;
+} full_riff_tree_t;
+
+typedef struct  __attribute__((packed)) {
+	uint8_t wFormatTag[2];
+	uint16_t nChannels;
+	uint32_t nSamplesPerSec;
+	uint32_t nAvgBytesPerSec;
+	uint16_t nBlockAlign;
+	uint16_t wBitsPerSample;
+	uint16_t cbSize;
+} WAVEFORMATEX;
+
+typedef struct  __attribute__((packed)) {
+	uint32_t biSize;
+	uint32_t biWidth;
+	uint32_t biHeight;
+	uint16_t biPlanes;
+	uint16_t biBitCount;
+	uint8_t biCompression[4];
+	uint32_t biSizeImage;
+	uint32_t biXPelsPerMeter;
+	uint32_t biYPelsPerMeter;
+	uint32_t biClrUsed;
+	uint32_t biClrImportant;
+} BITMAPINFOHEADER;
+
+typedef struct  __attribute__((packed)) {
+	uint32_t dwMicroSecPerFrame;
+	uint32_t dwMaxBytesPerSec;
+	uint32_t dwReserved1;
+	uint32_t dwFlags;
+	uint32_t dwTotalFrames;
+	uint32_t dwInitialFrames;
+	uint32_t dwStreams;
+	uint32_t dwSuggestedBufferSize;
+	uint32_t dwWidth;
+	uint32_t dwHeight;
+	uint32_t dwScale;
+	uint32_t dwRate;
+	uint32_t dwStart;
+	uint32_t dwLength;
+} MainAVIHeader;
+
+typedef struct  __attribute__((packed)) {
+	uint8_t fccType[4];
+	uint8_t fccHandler[4];
+	uint32_t dwFlags;
+	uint32_t dwReserved1;
+	uint32_t dwInitialFrames;
+	uint32_t dwScale;
+	uint32_t dwRate;
+	uint32_t dwStart;
+	uint32_t dwLength;
+	uint32_t dwSuggestedBufferSize;
+	uint32_t dwQuality;
+	uint32_t dwSampleSize;
+	uint16_t rcframe[4];
+} AVIStreamHeader;
+
+typedef struct __attribute__((packed)) {
+	uint8_t ckid[4];
+	uint32_t dwFlags;
+	uint32_t dwChunkOffset;
+	uint32_t dwChunkLength;
+} AVIINDEXENTRY;
+
+typedef struct {
+	int type; // 0 video, 1 audio
+	AVIStreamHeader * strh; // these are all pointers to data
+	BITMAPINFOHEADER * video;
+	WAVEFORMATEX * audio;
+	int extra_len;
+	int last_pts;
+	uint8_t * extra;
+} AVIStreamContext;
+
+typedef struct {
+	full_riff_tree_t * riff;
+	MainAVIHeader * avih;
+	AVIStreamContext * stream; // this is an array, free this
+	AVIINDEXENTRY * index; // this is an array and data
+	int packets;
+	FILE * in;
+	int cur;
+} AVIContext;
+
+static int mk_riff_tree(FILE * in, riff_tree_t * tree) {
+	int left;
+	tree->tree = NULL;
+	tree->data = NULL;
+	tree->amount = 0;
+	tree->offset = ftell(in);
+	FREAD(in, 4, tree->name);
+	FREAD(in, 4, &tree->len);
+	FIXENDIAN32(tree->len);
+	left = tree->len;
+
+	switch(strFOURCC(tree->name)) {
+		case mmioFOURCC('L','I','S','T'):
+		case mmioFOURCC('R','I','F','F'):
+			tree->type = 0;
+			FREAD(in, 4, tree->listname); left -= 4; // read real name
+			if (!strncmp(tree->listname, "movi", 4)) {
+				fseek(in, left, SEEK_CUR);
+				break;
+			}
+			while (left > 0) {
+				int err;
+				tree->tree =
+					realloc(tree->tree, sizeof(riff_tree_t) * ++tree->amount);
+				if ((err = mk_riff_tree(in, &tree->tree[tree->amount - 1])))
+					return err;
+				left -= (tree->tree[tree->amount - 1].len + 8);
+				if (tree->tree[tree->amount - 1].len & 1) left--;
+			}
+			break;
+		default:
+			tree->type = 1;
+			tree->data = malloc(left);
+			FREAD(in, left, tree->data);
+	}
+	if (tree->len & 1) fgetc(in);
+	return 0;
+}
+
+static void free_riff_tree(riff_tree_t * tree) {
+	int i;
+	if (!tree) return;
+
+	for (i = 0; i < tree->amount; i++) free_riff_tree(&tree->tree[i]);
+	tree->amount = 0;
+
+	free(tree->tree); tree->tree = NULL;
+	free(tree->data); tree->data = NULL;
+}
+
+static full_riff_tree_t * init_riff() {
+	full_riff_tree_t * full = malloc(sizeof(full_riff_tree_t));
+	full->amount = 0;
+	full->tree = NULL;
+	return full;
+}
+
+static int get_full_riff_tree(FILE * in, full_riff_tree_t * full) {
+	int err = 0;
+
+	while (1) {
+		int c;
+		if ((c = fgetc(in)) == EOF) break; ungetc(c, in);
+		full->tree = realloc(full->tree, sizeof(riff_tree_t) * ++full->amount);
+		if ((err = mk_riff_tree(in, &full->tree[full->amount - 1]))) goto err_out;
+	}
+err_out:
+	return err;
+}
+
+static void uninit_riff(full_riff_tree_t * full) {
+	int i;
+	if (!full) return;
+	for (i = 0; i < full->amount; i++) free_riff_tree(&full->tree[i]);
+	free(full->tree);
+	free(full);
+}
 
 static int avi_read_stream_header(AVIStreamContext * stream, riff_tree_t * tree) {
 	int i, j;
@@ -86,7 +279,7 @@ static int avi_read_main_header(AVIContext * avi, const riff_tree_t * tree) {
 	return 0;
 }
 
-int avi_read_headers(AVIContext * avi) {
+static int avi_read_headers(AVIContext * avi) {
 	const riff_tree_t * tree;
 	int i, err;
 	if ((err = get_full_riff_tree(avi->in, avi->riff))) return err;
@@ -129,7 +322,7 @@ int avi_read_headers(AVIContext * avi) {
 	return 0;
 }
 
-AVIContext * init_avi(FILE * in) {
+static void * init(FILE * in) {
 	AVIContext * avi = malloc(sizeof(AVIContext));
 	avi->avih = NULL;
 	avi->stream = NULL;
@@ -140,7 +333,8 @@ AVIContext * init_avi(FILE * in) {
 	return avi;
 }
 
-void uninit_avi(AVIContext * avi) {
+static void uninit(void * priv) {
+	AVIContext * avi = priv;
 	if (!avi) return;
 
 	uninit_riff(avi->riff);
@@ -148,10 +342,12 @@ void uninit_avi(AVIContext * avi) {
 	free(avi);
 }
 
-nut_stream_header_t * nut_create_stream_context(AVIContext * avi) {
+static int read_headers(void * priv, nut_stream_header_t ** nut_streams) {
+	AVIContext * avi = priv;
 	nut_stream_header_t * s;
 	int i;
-	s = malloc(sizeof(nut_stream_header_t) * (avi->avih->dwStreams + 1));
+	if ((i = avi_read_headers(avi))) return i;
+	*nut_streams = s = malloc(sizeof(nut_stream_header_t) * (avi->avih->dwStreams + 1));
 	for (i = 0; i < avi->avih->dwStreams; i++) {
 		s[i].type = avi->stream[i].type;
 		s[i].time_base_denom = avi->stream[i].strh->dwRate;
@@ -178,10 +374,10 @@ nut_stream_header_t * nut_create_stream_context(AVIContext * avi) {
 		}
 	}
 	s[i].type = -1;
-	return s;
+	return 0;
 }
 
-int find_frame_type(FILE * in, int len, int * type) {
+static int find_frame_type(FILE * in, int len, int * type) {
 	uint8_t buf[len];
 	int i;
 	FREAD(in, len, buf);
@@ -196,7 +392,8 @@ int find_frame_type(FILE * in, int len, int * type) {
 	return 13;
 }
 
-int get_avi_packet(AVIContext * avi, nut_packet_t * p) {
+static int get_packet(void * priv, nut_packet_t * p) {
+	AVIContext * avi = priv;
 	char fourcc[4];
 	int err = 0;
 	int s; // stream
@@ -265,10 +462,56 @@ err_out:
 	return err;
 }
 
-#ifdef AVI_PROG
+struct demuxer_t avi_demuxer = {
+	"avi",
+	init,
+	read_headers,
+	get_packet,
+	uninit
+};
+
+#ifdef RIFF_PROG
+void print_riff_tree(riff_tree_t * tree, int indent) {
+	char ind[indent + 1];
+	int i;
+	memset(ind, ' ', indent);
+	ind[indent] = 0;
+
+	if (tree->type == 0) {
+		printf("%s%4.4s: offset: %d name: `%4.4s', len: %u (amount: %d)\n",
+			ind, tree->name, tree->offset, tree->listname, tree->len, tree->amount);
+		for (i = 0; i < tree->amount; i++) {
+			print_riff_tree(&tree->tree[i], indent + 4);
+		}
+	} else {
+		printf("%sDATA: offset: %d name: `%4.4s', len: %u\n",
+			ind, tree->offset, tree->name, tree->len);
+	}
+}
 
 FILE * stats = NULL;
+int main(int argc, char * argv []) {
+	FILE * in;
+	full_riff_tree_t * full = init_riff();
+	int err = 0;
+	int i;
+	if (argc < 2) { printf("bleh, more params you fool...\n"); return 1; }
+	in = fopen(argv[1], "r");
 
+	if ((err = get_full_riff_tree(in, full))) goto err_out;
+	for (i = 0; i < full->amount; i++) {
+		print_riff_tree(&full->tree[i], 0);
+	}
+
+err_out:
+	uninit_riff(full);
+	fclose(in);
+	return err;
+}
+#endif
+
+#ifdef AVI_PROG
+FILE * stats = NULL;
 int main(int argc, char * argv []) {
 	FILE * in;
 	AVIContext * avi = NULL;
@@ -277,7 +520,7 @@ int main(int argc, char * argv []) {
 	if (argc < 2) { printf("bleh, more params you fool...\n"); return 1; }
 
 	in = fopen(argv[1], "r");
-	avi = init_avi(in);
+	avi = init(in);
 
 	if ((err = avi_read_headers(avi))) goto err_out;
 
@@ -347,9 +590,8 @@ int main(int argc, char * argv []) {
 	}
 
 err_out:
-	uninit_avi(avi);
+	uninit(avi);
 	fclose(in);
 	return err;
 }
-
 #endif
