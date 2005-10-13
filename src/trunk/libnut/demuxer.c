@@ -192,6 +192,7 @@ static int get_frame(nut_context_t * nut, nut_packet_t * fd, int n) {
 
 	if (nut->ft[n].flags & 1) GET_V(nut->i, size_lsb);
 	fd->len = size_lsb * nut->ft[n].mul + nut->ft[n].lsb;
+	fd->is_key = (nut->ft[n].flags & 2) ? 1 : 0;
 
 	for (i = 0; i < nut->ft[n].reserved; i++) GET_V(nut->i, scrap);
 
