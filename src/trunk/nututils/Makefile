@@ -2,11 +2,11 @@ CFLAGS += -I../libnut -lm
 
 all: riffreader avireader nutmerge
 
-riffreader: avireader.c
+riffreader: demux_avi.c
 	${CC} ${CFLAGS} -DRIFF_PROG $^ -o $@
-avireader: avireader.c
+avireader: demux_avi.c
 	${CC} ${CFLAGS} -DAVI_PROG $^ -o $@
-nutmerge: avireader.c nutmerge.c ../libnut/muxer.o ../libnut/reorder.o
+nutmerge: demux_nut.c demux_avi.c nutmerge.c ../libnut/libnut.so
 	${CC} ${CFLAGS} $^ -o $@
 
 clean:

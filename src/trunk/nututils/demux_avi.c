@@ -16,6 +16,8 @@
 #define FIXENDIAN16(a) do{}while(0)
 #endif
 
+#define FREAD(file, len, var) do { if (fread((var), 1, (len), (file)) != (len)) return 1; }while(0)
+
 typedef struct riff_tree_s {
 	uint32_t len;
 	char name[4];
@@ -392,7 +394,7 @@ static int find_frame_type(FILE * in, int len, int * type) {
 	return 13;
 }
 
-static int get_packet(void * priv, nut_packet_t * p) {
+static int get_packet(void * priv, nut_packet_t * p, uint8_t ** buf) {
 	AVIContext * avi = priv;
 	char fourcc[4];
 	int err = 0;
@@ -458,6 +460,8 @@ static int get_packet(void * priv, nut_packet_t * p) {
 		err = 10;
 		goto err_out;
 	}
+	*buf = malloc(p->len);
+	FREAD(avi->in, p->len, *buf);
 err_out:
 	return err;
 }

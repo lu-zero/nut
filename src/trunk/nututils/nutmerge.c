@@ -5,9 +5,11 @@
 FILE * stats = NULL;
 
 extern struct demuxer_t avi_demuxer;
+extern struct demuxer_t nut_demuxer;
 
 struct demuxer_t * demuxers[] = {
 	&avi_demuxer,
+	&nut_demuxer,
 	NULL
 };
 
@@ -18,6 +20,7 @@ int main(int argc, char * argv []) {
 	nut_context_t * nut = NULL;
 	nut_stream_header_t * nut_stream = NULL;
 	nut_muxer_opts_t mopts;
+	uint8_t * buf;
 	int err = 0;
 	int i;
 	int * pts = NULL;
@@ -63,10 +66,9 @@ int main(int argc, char * argv []) {
 	frames_pos = calloc(i, sizeof(int));
 
 	if (stats) fprintf(stats, "%10s%10s%10s%10s\n", "stream", "len", "pts_diff", "is_key");
-	while (!(err = demuxer->get_packet(demuxer_priv, &p))) {
-		uint8_t buf[p.len];
-		FREAD(in, p.len, buf);
+	while (!(err = demuxer->get_packet(demuxer_priv, &p, &buf))) {
 		nut_write_frame_reorder(nut, &p, buf);
+		free(buf);
 		frames[p.stream] = realloc(frames[p.stream], sizeof(int) * ++frames_pos[p.stream]);
 		frames[p.stream][frames_pos[p.stream] - 1] = p.len;
 		if (stats) fprintf(stats, "%10d%10d%10d%10d\n", p.stream, p.len, p.pts - pts[p.stream], p.is_key);
