@@ -131,7 +131,8 @@ int nut_skip_packet(nut_context_t * nut, int * len);
 
 /** Read headers, must be called ONLY after read_next_packet
 gave e_headers.
-"s" is malloced and needs to be free'd. */
+@brief "s" is malloced and needs to be free'd.
+*/
 int nut_read_headers(nut_context_t * nut, nut_packet_t * pd, nut_stream_header_t * s []);
 
 /** Just reads the frame DATA. all it's header has already been
