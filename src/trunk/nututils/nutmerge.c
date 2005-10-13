@@ -32,7 +32,7 @@ int main(int argc, char * argv []) {
 	fprintf(stderr, "PLEASE NOTE THAT NUTMERGE FOR NOW CREATES _INVALID_ NUT FILES.\n");
 	fprintf(stderr, "DO NOT USE THESE FILES FOR ANYTHING BUT TESTING LIBNUT.\n");
 	fprintf(stderr, "==============================================================\n");
-	if (!strcmp(argv[1], "-v") && argc > 4) {
+	if (argc > 4 && !strcmp(argv[1], "-v")) {
 		stats = fopen(argv[2], "w");
 		argv += 2;
 		argc -= 2;
