@@ -24,7 +24,7 @@ mplayer -demuxer nut bla.nut
 If you have weird endianess, test the MPlayer demuxer, because it
 shouldn't work! send me some debugging stuff... Everything else
 SHOULD work though! You'll need to compile with '-DWORDS_BIGENDIAN',
-just uncomment the apporpiate file in the main Makefile.
+just uncomment the appropriate file in the main Makefile.
 
 
 - ods15
