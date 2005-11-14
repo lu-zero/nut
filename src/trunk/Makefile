@@ -1,9 +1,4 @@
-export CFLAGS = -Os -fomit-frame-pointer -Wall -g
-#export CFLAGS = -g -Wall
-
-#export CFLAGS += -DWORDS_BIGENDIAN
-
-export CC = cc
+include config.mak
 
 all: libnut nututils
 
@@ -11,6 +6,9 @@ libnut: FORCE
 	${MAKE} -C libnut
 nututils: libnut FORCE
 	${MAKE} -C nututils
+
+
+distclean: clean
 
 clean:
 	$(MAKE) -C libnut clean

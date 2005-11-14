@@ -1,3 +1,5 @@
+include ../config.mak
+
 CFLAGS += -I../libnut -lm
 
 all: riffreader avireader nutmerge

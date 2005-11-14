@@ -1,3 +1,5 @@
+include ../config.mak
+
 all: libnut.so
 
 libnut.so: muxer.o demuxer.o reorder.o
