@@ -8,8 +8,8 @@
 
 typedef struct {
 	void * priv;
-	off_t (*seek)(void * priv, long pos, int whence);
 	size_t (*read)(void * priv, size_t len, uint8_t * buf);
+	off_t (*seek)(void * priv, long pos, int whence);
 	int (*eof)(void * priv);
 } nut_input_stream_t;
 

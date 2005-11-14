@@ -43,8 +43,8 @@ static demuxer_t * demux_open_nut(demuxer_t * demuxer) {
 	nut_demuxer_opts_t dopts = {
 		.input = {
 			.priv = demuxer->stream,
-			.seek = mp_seek,
 			.read = mp_read,
+			.seek = mp_seek,
 			.eof = NULL,
 		},
 		.read_index = 1
