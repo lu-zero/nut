@@ -120,7 +120,7 @@ nut_read_next_packet should always be called after a negative error.
 
 /**
 @return information about next packet. pd must be alloced.
-If not skippped, the _appropiatte_ function must be called. */
+If not skipped, the _appropriate_ function must be called. */
 int nut_read_next_packet(nut_context_t * nut, nut_packet_t * pd);
 
 /** Unless read_next_packet gives e_eof, skip_packet always works.
