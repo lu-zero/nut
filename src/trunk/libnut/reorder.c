@@ -77,6 +77,8 @@ static void flushcheck_frames(nut_context_t * nut) {
 
 void nut_muxer_uninit_reorder(nut_context_t * nut) {
 	int i;
+	if (!nut) return;
+
 	for (i = 0; i < nut->stream_count; i++) nut->sc[i].next_pts = -1;
 	flushcheck_frames(nut);
 
