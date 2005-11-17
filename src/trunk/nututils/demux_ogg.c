@@ -419,10 +419,10 @@ static int vorbis_read_headers(ogg_t * ogg, int stream) {
 			CHECK(get_bits(&bp, 4, &num));
 			submaps = num + 1;
 		}
-		CHECK(get_bits(&bp, 1, &num));
+		CHECK(get_bits(&bp, 1, &num)); // square polar
 		if (num) {
 			CHECK(get_bits(&bp, 8, &num));
-			CHECK(get_bits(&bp, ilog(channels - 1) * 2 * num, NULL));
+			CHECK(get_bits(&bp, ilog(channels - 1) * 2 * (num + 1), NULL));
 		}
 		CHECK(get_bits(&bp, 2, &num)); // reserved
 		if (num) return 8;
