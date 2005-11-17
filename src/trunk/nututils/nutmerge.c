@@ -6,10 +6,12 @@ FILE * stats = NULL;
 
 extern struct demuxer_t avi_demuxer;
 extern struct demuxer_t nut_demuxer;
+extern struct demuxer_t ogg_demuxer;
 
 struct demuxer_t * demuxers[] = {
 	&avi_demuxer,
 	&nut_demuxer,
+	&ogg_demuxer,
 	NULL
 };
 
