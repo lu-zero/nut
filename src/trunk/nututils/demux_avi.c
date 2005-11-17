@@ -116,6 +116,7 @@ typedef struct {
 	int packets;
 	FILE * in;
 	int cur;
+	uint8_t * buf;
 } AVIContext;
 
 static int mk_riff_tree(FILE * in, riff_tree_t * tree) {
@@ -332,6 +333,7 @@ static void * init(FILE * in) {
 	avi->in = in;
 	avi->riff = init_riff();
 	avi->cur = 0;
+	avi->buf = NULL;
 	return avi;
 }
 
@@ -341,6 +343,7 @@ static void uninit(void * priv) {
 
 	uninit_riff(avi->riff);
 	free(avi->stream);
+	free(avi->buf);
 	free(avi);
 }
 
@@ -460,7 +463,7 @@ static int get_packet(void * priv, nut_packet_t * p, uint8_t ** buf) {
 		err = 10;
 		goto err_out;
 	}
-	*buf = malloc(p->len);
+	*buf = avi->buf = realloc(avi->buf, p->len);
 	FREAD(avi->in, p->len, *buf);
 err_out:
 	return err;

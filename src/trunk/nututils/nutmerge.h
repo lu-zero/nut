@@ -15,7 +15,7 @@ struct demuxer_t {
 	void * (*init)(FILE * in); ///< returns priv
 	/// nut_streams must be free()'d!! nut_streams becomes invalid after uninit!!
 	int (*read_headers)(void * priv, nut_stream_header_t ** nut_streams);
-	/// buf must be free()'d!
+	/// buf must be handled by demuxer! no free-ing or mallocing done by controller.
 	int (*get_packet)(void * priv, nut_packet_t * p, uint8_t ** buf);
 	void (*uninit)(void * priv);
 };

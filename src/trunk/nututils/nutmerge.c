@@ -68,7 +68,6 @@ int main(int argc, char * argv []) {
 	if (stats) fprintf(stats, "%10s%10s%10s%10s\n", "stream", "len", "pts_diff", "is_key");
 	while (!(err = demuxer->get_packet(demuxer_priv, &p, &buf))) {
 		nut_write_frame_reorder(nut, &p, buf);
-		free(buf);
 		frames[p.stream] = realloc(frames[p.stream], sizeof(int) * ++frames_pos[p.stream]);
 		frames[p.stream][frames_pos[p.stream] - 1] = p.len;
 		if (stats) fprintf(stats, "%10d%10d%10d%10d\n", p.stream, p.len, p.pts - pts[p.stream], p.is_key);
@@ -77,30 +76,28 @@ int main(int argc, char * argv []) {
 	if (err == -1) err = 0;
 err_out:
 	nut_muxer_uninit_reorder(nut);
-	if (demuxer) demuxer->uninit(demuxer_priv);
-	if (in) fclose(in);
-	if (out) fclose(out);
-	if (nut_stream) {
-		for (i = 0; nut_stream[i].type >= 0; i++) {
-			int j;
-			uint64_t total = 0;
-			double avg;
-			double std = 0;
-			for (j = 0; j < frames_pos[i]; j++) total += frames[i][j];
-			avg = (double)total / frames_pos[i];
-			for (j = 0; j < frames_pos[i]; j++) {
-				std += (frames[i][j] - avg)*(frames[i][j] - avg);
-			}
-			std /= frames_pos[i];
-			std = sqrt(std);
-			fprintf(stderr, "Stream %d: Standard Deviation %.2lf\n", i, std);
-			free(frames[i]);
+	if (frames) for (i = 0; nut_stream[i].type >= 0; i++) {
+		int j;
+		uint64_t total = 0;
+		double avg;
+		double std = 0;
+		for (j = 0; j < frames_pos[i]; j++) total += frames[i][j];
+		avg = (double)total / frames_pos[i];
+		for (j = 0; j < frames_pos[i]; j++) {
+			std += (frames[i][j] - avg)*(frames[i][j] - avg);
 		}
-		free(nut_stream);
+		std /= frames_pos[i];
+		std = sqrt(std);
+		fprintf(stderr, "Stream %d: Standard Deviation %.2lf\n", i, std);
+		free(frames[i]);
 	}
+	free(nut_stream);
 	free(pts);
 	free(frames);
 	free(frames_pos);
+	if (demuxer) demuxer->uninit(demuxer_priv);
+	if (in) fclose(in);
+	if (out) fclose(out);
 	if (stats) fclose(stats);
 	return err;
 }
