@@ -685,6 +685,8 @@ int nut_seek(nut_context_t * nut, double time_pos, int type, int * active_stream
 
 		if (i == nut->sc[0].index.len) seek_buf(nut->i, 0, SEEK_END);
 		else seek_buf(nut->i, nut->sc[0].index.ii[i].pos, SEEK_SET);
+
+		// FIXME no pts handling!!!!
 	}
 
 	return 0;
