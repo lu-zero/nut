@@ -25,9 +25,6 @@ int main(int argc, char * argv []) {
 	uint8_t * buf;
 	int err = 0;
 	int i;
-	int * pts = NULL;
-	int ** frames = NULL;
-	int * frames_pos = NULL;
 	nut_packet_t p;
 	const char * extention;
 	fprintf(stderr, "==============================================================\n");
@@ -63,22 +60,32 @@ int main(int argc, char * argv []) {
 	nut = nut_muxer_init(&mopts, nut_stream);
 
 	for (i = 0; nut_stream[i].type >= 0; i++);
-	pts = calloc(i, sizeof(int));
-	frames = calloc(i, sizeof(int*));
-	frames_pos = calloc(i, sizeof(int));
+	{
+	int pts[i];
+	int * frames[i];
+	int frames_pos[i];
+	int frames_alloc[i];
+	for (i = 0; nut_stream[i].type >= 0; i++) {
+		frames_alloc[i] = frames_pos[i] = pts[i] = 0;
+		frames[i] = NULL;
+	}
 
 	if (stats) fprintf(stats, "%10s%10s%10s%10s\n", "stream", "len", "pts_diff", "is_key");
 	while (!(err = demuxer->get_packet(demuxer_priv, &p, &buf))) {
+		int s = p.stream;
 		nut_write_frame_reorder(nut, &p, buf);
-		frames[p.stream] = realloc(frames[p.stream], sizeof(int) * ++frames_pos[p.stream]);
-		frames[p.stream][frames_pos[p.stream] - 1] = p.len;
-		if (stats) fprintf(stats, "%10d%10d%10d%10d\n", p.stream, p.len, p.pts - pts[p.stream], p.is_key);
-		pts[p.stream] = p.pts;
+		if (++frames_pos[s] > frames_alloc[s]) {
+			frames_alloc[s] = frames_pos[s] + 4096;
+			frames[s] = realloc(frames[s], sizeof(int) * frames_alloc[s]);
+		}
+		frames[s][frames_pos[s] - 1] = p.len;
+		if (stats) fprintf(stats, "%10d%10d%10d%10d\n", p.stream, p.len, p.pts - pts[s], p.is_key);
+		pts[s] = p.pts;
 	}
 	if (err == -1) err = 0;
-err_out:
 	nut_muxer_uninit_reorder(nut);
-	if (frames) for (i = 0; nut_stream[i].type >= 0; i++) {
+	nut = NULL;
+	for (i = 0; nut_stream[i].type >= 0; i++) {
 		int j;
 		uint64_t total = 0;
 		double avg;
@@ -93,10 +100,10 @@ err_out:
 		fprintf(stderr, "Stream %d: Standard Deviation %.2lf\n", i, std);
 		free(frames[i]);
 	}
+	}
+err_out:
+	nut_muxer_uninit_reorder(nut);
 	free(nut_stream);
-	free(pts);
-	free(frames);
-	free(frames_pos);
 	if (demuxer) demuxer->uninit(demuxer_priv);
 	if (in) fclose(in);
 	if (out) fclose(out);
