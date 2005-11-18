@@ -5,6 +5,9 @@
 #include "nutmerge.h"
 #define FREAD(file, len, var) do { if (fread((var), 1, (len), (file)) != (len)) return -1; }while(0)
 
+#define SIZES_ALLOC 500
+#define PAGE_ALLOC 65000
+
 struct ogg_s;
 typedef struct ogg_s ogg_t;
 struct ogg_stream_s;
@@ -74,7 +77,7 @@ static void vorbis_uninit(ogg_stream_t * os);
 
 static ogg_codec_t vorbis_ogg_codec = {
 	"\001vorbis", 7, // magic
-	"VRBS", 4, // fourcc
+	"vrbs", 4, // fourcc
 	1, // type
 	vorbis_read_headers,
 	vorbis_get_pts,
@@ -96,12 +99,12 @@ static int find_stream(ogg_t * ogg, int serial) {
 	ogg->streams = realloc(ogg->streams, sizeof(ogg_stream_t) * ++ogg->nstreams);
 	os = &ogg->streams[i];
 	os->serial = serial;
-	os->buf = NULL;
+	os->buf = malloc(PAGE_ALLOC);
 	os->buf_pos = 0;
 	os->buf_end = 0;
 	os->pos = 0;
 	os->totpos = 0;
-	os->sizes = NULL;
+	os->sizes = malloc(sizeof(int) * SIZES_ALLOC);
 	os->oc = NULL;
 	os->oc_priv = NULL;
 	return i;
@@ -134,13 +137,15 @@ static int read_page(ogg_t * ogg, int * stream) {
 		tot += seg[i];
 		totseg += seg[i];
 		if (seg[i] < 255) {
-			if (os->totpos > 255) return 4;
-			os->sizes = realloc(os->sizes, sizeof(int) * ++os->totpos);
+			// FIXME if (os->totpos > 256) printf("%d\n", os->totpos);
+			os->totpos++;
+			if (os->totpos > SIZES_ALLOC)
+				os->sizes = realloc(os->sizes, sizeof(int) * os->totpos);
 			os->sizes[os->totpos - 1] = totseg;
 			totseg = 0;
 		}
 	}
-	os->buf = realloc(os->buf, os->buf_end + tot);
+	if (os->buf_end + tot > PAGE_ALLOC) os->buf = realloc(os->buf, os->buf_end + tot);
 	FREAD(ogg->in, tot, os->buf + os->buf_end);
 	os->buf_end += tot;
 	if (seg[i-1] == 255) // this page is incomplete, move on to next page
@@ -251,7 +256,8 @@ static int vorbis_read_headers(ogg_t * ogg, int stream) {
 	sample_rate = (os->buf[15] << 24) | (os->buf[14] << 16) | (os->buf[13] << 8) | os->buf[12];
 	blocksize0 = 1 << (os->buf[28] & 0xF);
 	blocksize1 = 1 << (os->buf[28] >> 4);
-	i = gcd(blocksize0, blocksize1);
+	if (blocksize0 == blocksize1) i = blocksize0/2;
+	else i = blocksize0/4;
 	blocksize0 /= i;
 	blocksize1 /= i;
 
@@ -433,13 +439,13 @@ static int vorbis_read_headers(ogg_t * ogg, int stream) {
 	// modes
 	CHECK(get_bits(&bp, 6, &num)); i = num + 1;
 	priv = os->oc_priv = malloc(sizeof(int) * (i + 4));
-	priv[0] = i;
-	priv[1] = blocksize0;
-	priv[2] = blocksize1;
-	priv[3] = 0;
-	for (i = 0; i < priv[0]; i++) {
+	priv[0] = blocksize0;
+	priv[1] = blocksize1;
+	priv[2] = i; // mode count
+	priv[3] = -1; // initial pts
+	for (i = 0; i < priv[2]; i++) {
 		CHECK(get_bits(&bp, 1, &num)); // block flag
-		priv[i+4] = num + 1;
+		priv[i+4] = num;
 		CHECK(get_bits(&bp, 16 + 16 + 8, NULL));
 	}
 	CHECK(get_bits(&bp, 1, &num)); // framing
@@ -454,14 +460,30 @@ static int vorbis_get_pts(ogg_stream_t * os) {
 	bit_packer_t bp;
 	uint64_t num;
 	int * priv = os->oc_priv;
-	int pts = priv[3];
+	int last_pts = MAX(priv[3], 0); // -1 is not valid
+	int mode;
+	int mybs, prevbs, nextbs;
 	bp.buf_ptr = os->buf + os->buf_pos;
 	bp.left = os->sizes[os->pos]*8;
 	bp.pos = 0;
 	get_bits(&bp, 1, NULL);
-	get_bits(&bp, ilog(priv[0] - 1), &num);
-	priv[3] += priv[priv[num+4]];
-	return pts;
+	get_bits(&bp, ilog(priv[2] - 1), &num);
+	if ((int)num >= priv[2]) return 0; // ERROR
+
+	mode = priv[num+4];
+	prevbs = nextbs = mybs = priv[mode];
+	if (mode) { // big window
+		get_bits(&bp, 1, &num); prevbs = priv[num];
+		get_bits(&bp, 1, &num); nextbs = priv[num];
+	}
+
+	if (priv[3] == -1) priv[3] = -MIN(prevbs, mybs)/2; // negative pts for first frame
+
+	priv[3] += MIN(prevbs, mybs)/2; // overlapped with prev
+	priv[3] += (mybs - prevbs)/4; // self contained
+	priv[3] += (mybs - nextbs)/4;
+
+	return last_pts;
 }
 
 static void vorbis_uninit(ogg_stream_t * os) {
@@ -572,8 +594,10 @@ struct demuxer_t ogg_demuxer = {
 int main(int argc, char *argv[]) {
 	FILE * in;
 	ogg_t * ogg = NULL;
-	int err;
+	int err = 0;
 	int i;
+	nut_packet_t p;
+	uint8_t * buf;
 
 	if (argc < 2) {
 		printf("bleh, more params you fool...\n");
@@ -600,7 +624,13 @@ int main(int argc, char *argv[]) {
 			printf("  channels: %d\n", os->channel_count);
 		}
 	}
+	printf("\n");
+	while (!(err = get_packet(ogg, &p, &buf))) {
+		printf("pos: 0x%X stream: %d pts: %d len: %d key: %d\n", (int)ftell(in), p.stream, p.pts, p.len, p.is_key);
+	}
 	uninit(ogg);
-	return 0;
+	fclose(in);
+	if (err == -1) err = 0;
+	return err;
 }
 #endif
