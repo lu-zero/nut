@@ -146,7 +146,7 @@ struct nut_context_s {
 	int syncpoints;
 };
 
-static struct { char * name, * type; } info_table [] = {
+static const struct { char * name, * type; } info_table [] = {
         {NULL                   ,  NULL }, // end
         {NULL                   ,  NULL },
         {NULL                   , "UTF8"},
