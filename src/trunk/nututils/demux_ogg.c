@@ -5,7 +5,6 @@
 #include "nutmerge.h"
 #define FREAD(file, len, var) do { if (fread((var), 1, (len), (file)) != (len)) return -1; }while(0)
 
-#define SIZES_ALLOC 500
 #define PAGE_ALLOC 65000
 
 struct ogg_s;
@@ -30,7 +29,7 @@ struct ogg_stream_s {
 	uint8_t * buf; // buffer, always re-alloced
 	int buf_pos; // position to read from
 	int buf_end; // total data in buf
-	int * sizes; // sizes of segments in buf
+	int sizes[256]; // sizes of segments in buf
 	int totpos; // amount of segments
 	int pos; // pos in sizes
 
@@ -104,7 +103,6 @@ static int find_stream(ogg_t * ogg, int serial) {
 	os->buf_end = 0;
 	os->pos = 0;
 	os->totpos = 0;
-	os->sizes = malloc(sizeof(int) * SIZES_ALLOC);
 	os->oc = NULL;
 	os->oc_priv = NULL;
 	return i;
@@ -125,30 +123,30 @@ static int read_page(ogg_t * ogg, int * stream) {
 	os = &ogg->streams[*stream];
 
 	FREAD(ogg->in, tmp.segments, seg);
-	if (!(tmp.type & 0x01) && os->pos == os->totpos) {
-		os->pos = 0;
-		os->totpos = 0;
-		os->buf_pos = 0;
-		os->buf_end = 0;
-	}
+
+	if (os->buf_pos) memmove(os->buf, os->buf + os->buf_pos, os->buf_end - os->buf_pos);
+	if (os->pos) for (i = os->pos; i < os->totpos; i++) os->sizes[i - os->pos] = os->sizes[i];
+
+	os->totpos -= os->pos;
+	os->pos = 0;
+	os->buf_end -= os->buf_pos;
+	os->buf_pos = 0;
+
 	totseg = os->buf_end;
 	for (i = 0; i < os->totpos; i++) totseg -= os->sizes[i];
 	for (i = 0; i < tmp.segments; i++) {
 		tot += seg[i];
 		totseg += seg[i];
 		if (seg[i] < 255) {
-			// FIXME if (os->totpos > 256) printf("%d\n", os->totpos);
-			os->totpos++;
-			if (os->totpos > SIZES_ALLOC)
-				os->sizes = realloc(os->sizes, sizeof(int) * os->totpos);
-			os->sizes[os->totpos - 1] = totseg;
+			if (os->totpos > 255) return 4;
+			os->sizes[os->totpos++] = totseg;
 			totseg = 0;
 		}
 	}
 	if (os->buf_end + tot > PAGE_ALLOC) os->buf = realloc(os->buf, os->buf_end + tot);
 	FREAD(ogg->in, tot, os->buf + os->buf_end);
 	os->buf_end += tot;
-	if (seg[i-1] == 255) // this page is incomplete, move on to next page
+	if (os->totpos == 0) // this page gave nothing, move on to next page
 		return read_page(ogg, stream);
 
 	return 0;
@@ -509,7 +507,6 @@ static void uninit(void * priv) {
 		if (ogg->streams[i].oc && ogg->streams[i].oc->uninit)
 			ogg->streams[i].oc->uninit(&ogg->streams[i]);
 		free(ogg->streams[i].buf);
-		free(ogg->streams[i].sizes);
 	}
 	free(ogg->streams);
 	free(ogg);
