@@ -166,8 +166,9 @@ static const struct { char * name, * type; } info_table [] = {
 };
 
 static inline uint32_t adler32(uint8_t * buf, int len) {
-	unsigned long a = 0, b = 1;
+	unsigned long a = 1, b = 0;
 	int k;
+	printf("checking adler len %d\n", len);
 	while (len > 0) {
 		k = MIN(len, 5552);
 		len -= k;
