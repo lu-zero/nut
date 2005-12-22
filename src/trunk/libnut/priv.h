@@ -40,7 +40,7 @@ enum errors {
 	ERR_NO_HEADERS = 6,
 	ERR_NOT_SEEKABLE = 7,
 	ERR_BAD_STREAM_ORDER = 11,
-	ERR_CANT_SEEK = 12,
+	ERR_NOSTREAM_STARTCODE = 12,
 	ERR_BAD_EOF = 13,
 };
 
@@ -74,7 +74,7 @@ typedef struct {
 } frame_table_t;
 
 typedef struct {
-	int64_t pts;
+	uint64_t pts;
 	off_t pos;
 } index_item_t;
 
@@ -85,23 +85,38 @@ typedef struct {
 } index_context_t;
 
 typedef struct {
+	uint64_t pts;
+	off_t pos;
+	int back_ptr;
+} syncpoint_t;
+
+typedef struct {
+	int len;
+	int alloc_len;
+	syncpoint_t * s;
+} syncpoint_list_t;
+
+typedef struct {
 	nut_packet_t p;
 	uint8_t * buf;
 	int64_t dts;
 } reorder_packet_t;
 
 typedef struct {
-	int last_key; // re-set to 0 on every keyframe
+	int last_key; // muxer.c, re-set to 0 on every keyframe
 	int last_pts;
+	int last_dts;
 	int msb_pts_shift;
 	int decode_delay; // FIXME
 	index_context_t index;
 	nut_stream_header_t sh;
+	int64_t * pts_cache;
+	off_t back_ptr;
 	// reorder.c
 	int next_pts;
 	reorder_packet_t * packets;
 	int num_packets;
-	int64_t * pts_cache;
+	int64_t * reorder_pts_cache;
 	// debug stuff
 	int overhead;
 	int tot_size;
@@ -119,31 +134,30 @@ typedef struct {
 } frame_table_input_t;
 
 struct nut_context_s {
+	nut_muxer_opts_t mopts;
+	nut_demuxer_opts_t dopts;
 	input_buffer_t * i;
 	output_buffer_t * o;
+
 	int stream_count;
+	stream_context_t * sc;
+
 	int max_distance;
 	int max_index_distance;
-	int global_time_base_nom;
-	int global_time_base_denom;
-	off_t prev_pos;
-	off_t index_pos;
+	nut_timebase_t global_timebase;
 	frame_table_input_t * fti;
 	frame_table_t ft[256];
 
-	uint64_t first_synctime;
-	off_t first_syncpoint;
-	uint64_t last_synctime;
-	off_t last_syncpoint;
+	off_t last_syncpoint; // for checking corruption and putting syncpoints, also for back_ptr
+	off_t last_headers; // for header repetition and state for demuxer
 
-	off_t last_headers;
-	stream_context_t * sc;
-	nut_muxer_opts_t mopts;
-	nut_demuxer_opts_t dopts;
+	off_t before_seek; // position before any seek mess
+	off_t seek_status;
+
+	syncpoint_list_t syncpoints;
 
 	// debug
 	int sync_overhead;
-	int syncpoints;
 };
 
 static const struct { char * name, * type; } info_table [] = {
@@ -154,7 +168,7 @@ static const struct { char * name, * type; } info_table [] = {
         {NULL                   , "s"},
         {"StreamId"             , "v"},
         {"Author"               , "UTF8"},
-        {"Titel"                , "UTF8"},
+        {"Title"                , "UTF8"},
         {"Language"             , "UTF8"},
         {"Description"          , "UTF8"},
         {"Copyright"            , "UTF8"},
@@ -168,7 +182,6 @@ static const struct { char * name, * type; } info_table [] = {
 static inline uint32_t adler32(uint8_t * buf, int len) {
 	unsigned long a = 1, b = 0;
 	int k;
-	printf("checking adler len %d\n", len);
 	while (len > 0) {
 		k = MIN(len, 5552);
 		len -= k;
@@ -177,6 +190,25 @@ static inline uint32_t adler32(uint8_t * buf, int len) {
 		b %= 65521;
 	}
 	return (b << 16) | a;
+}
+
+static inline uint64_t convert_ts(uint64_t sn, nut_timebase_t from, nut_timebase_t to) {
+	uint64_t ln, d1, d2;
+	ln = (uint64_t)from.nom * to.den;
+	d1 = from.den;
+	d2 = to.nom;
+	return (ln / d1 * sn + (ln%d1) * sn / d1) / d2;
+}
+
+static inline int get_dts(int d, uint64_t * pts_cache, int pts) {
+	while (d--) {
+		int64_t t = pts_cache[d];
+		if (t < pts) {
+			pts_cache[d] = pts;
+			pts = t;
+		}
+	}
+	return pts;
 }
 
 #define bctello(bc) ((bc)->file_pos + ((bc)->buf_ptr - (bc)->buf))

@@ -3,28 +3,6 @@
 #include "nut.h"
 #include "priv.h"
 
-static int get_dts(stream_context_t * s, int pts) {
-	int d = s->decode_delay;
-
-	while (d--) {
-		int64_t t = s->pts_cache[d];
-		if (t < pts) {
-			s->pts_cache[d] = pts;
-			pts = t;
-		}
-	}
-	return pts;
-}
-
-static int convert_pts(nut_context_t * nut, int from, int to, int pts) {
-	int64_t ln, timestamp = pts, d1, d2;
-
-	d1 = nut->sc[from].sh.time_base_denom;
-	ln = (int64_t)nut->sc[from].sh.time_base_nom * nut->sc[to].sh.time_base_denom;
-	d2 = nut->sc[to].sh.time_base_nom;
-	return (ln / d1 * timestamp + (ln % d1) * timestamp / d1) / d2;
-}
-
 static void shift_frames(nut_context_t * nut, stream_context_t * s, int amount) {
 	int i;
 	assert(amount <= s->num_packets);
@@ -58,7 +36,7 @@ static void flushcheck_frames(nut_context_t * nut) {
 				else pts = nut->sc[j].next_pts;
 
 				if (pts != -1) {
-					pts = convert_pts(nut, j, i, pts);
+					pts = convert_ts(pts, nut->sc[j].sh.timebase, nut->sc[i].sh.timebase);
 					min = MIN(min, pts);
 					if (min == -1) min = pts;
 				}
@@ -100,7 +78,7 @@ void nut_write_frame_reorder(nut_context_t * nut, const nut_packet_t * p, const 
 	s->num_packets++;
 	s->packets = realloc(s->packets, s->num_packets * sizeof(reorder_packet_t));
 	s->packets[s->num_packets - 1].p = *p;
-	s->packets[s->num_packets - 1].dts = get_dts(s, p->pts);
+	s->packets[s->num_packets - 1].dts = get_dts(s->decode_delay, s->reorder_pts_cache, p->pts);
 
 	s->packets[s->num_packets - 1].buf = malloc(p->len); // FIXME
 	memcpy(s->packets[s->num_packets - 1].buf, buf, p->len);

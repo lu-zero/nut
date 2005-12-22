@@ -355,8 +355,8 @@ static int read_headers(void * priv, nut_stream_header_t ** nut_streams) {
 	*nut_streams = s = malloc(sizeof(nut_stream_header_t) * (avi->avih->dwStreams + 1));
 	for (i = 0; i < avi->avih->dwStreams; i++) {
 		s[i].type = avi->stream[i].type;
-		s[i].time_base_denom = avi->stream[i].strh->dwRate;
-		s[i].time_base_nom = avi->stream[i].strh->dwScale;
+		s[i].timebase.den = avi->stream[i].strh->dwRate;
+		s[i].timebase.nom = avi->stream[i].strh->dwScale;
 		s[i].fixed_fps = 1;
 		s[i].codec_specific_len = avi->stream[i].extra_len;
 		s[i].codec_specific = avi->stream[i].extra;

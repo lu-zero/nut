@@ -31,14 +31,14 @@ frame_table_input_t ft_default[] = {
 	  {    2,      4,   1, 314,      2,  313,     0 },
 	  {    2,      4,   1, 627,      2,  626,     0 },
 	  {    2,      4,   1, 105,      2,  104,     0 },
-	  {    1,      4,   1,  68,      1,    0,     0 },
+	  {    2,      4,   2,  68,      1,    0,     0 },
 //	  {    2,      4,   1, 385,      2,  384,     0 },
 //	  {    1,      4,   1,  73,      1,    0,     0 },
 	  {    3,      6,   0,   1,      2,    0,     1 },
 	  {    3,      6,   1,   1,      1,    0,     1 },
 	  {    3,      6,   0,   1,      1,    0,     1 },
 	  {    4,      2,   0,   1,      0,    0,     0 }, // 'N', invalid
-	  {    0,      4,   1, 508,      1,  333,     1 },
+	  {    2,      4,  16, 275,      1,  100,     1 },
 	  {    1,      6,   0,   1,      0,    0,     1 },
 	  {    3,      6,   0,   1,      0,    0,     1 },
 	  {   -1,      0,   0,   0,      0,    0,     0 } // end
@@ -182,6 +182,7 @@ static void put_frame(nut_context_t * nut, const nut_packet_t * fd, const uint8_
 		put_v(nut->o, (fd->len - nut->ft[ftnum].lsb) / nut->ft[ftnum].mul);
 	put_data(nut->o, fd->len, data);
 	sc->last_pts = fd->pts;
+	sc->last_dts = get_dts(sc->decode_delay, sc->pts_cache, fd->pts);
 	sc->sh.max_pts = MAX(sc->sh.max_pts, fd->pts);
 }
 
@@ -208,8 +209,8 @@ static void put_main_header(nut_context_t * nut) {
 	put_v(tmp, nut->stream_count);
 	put_v(tmp, nut->max_distance);
 	put_v(tmp, nut->max_index_distance);
-	put_v(tmp, nut->global_time_base_nom);
-	put_v(tmp, nut->global_time_base_denom);
+	put_v(tmp, nut->global_timebase.nom);
+	put_v(tmp, nut->global_timebase.den);
 	for(n=i=0; i < 256; n++) {
 		assert(nut->fti[n].tmp_flag != -1);
 		put_v(tmp, flag = nut->fti[n].tmp_flag);
@@ -245,8 +246,8 @@ static void put_stream_header(nut_context_t * nut, int id) {
 	put_v(tmp, id); // ### is stream_id staying in spec
 	put_v(tmp, sc->sh.type);
 	put_vb(tmp, sc->sh.fourcc_len, sc->sh.fourcc);
-	put_v(tmp, sc->sh.time_base_nom);
-	put_v(tmp, sc->sh.time_base_denom);
+	put_v(tmp, sc->sh.timebase.nom);
+	put_v(tmp, sc->sh.timebase.den);
 	put_v(tmp, sc->msb_pts_shift);
 	put_v(tmp, sc->decode_delay);
 	put_bytes(tmp, 1, sc->sh.fixed_fps ? 1 : 0);
@@ -271,6 +272,34 @@ static void put_stream_header(nut_context_t * nut, int id) {
 	free_buffer(tmp);
 }
 
+static void put_syncpoint(nut_context_t *nut) {
+	int i;
+	uint64_t pts = 0;
+	off_t back_ptr = 0;
+
+	nut->last_syncpoint = bctello(nut->o);
+
+	for (i = 0; i < nut->stream_count; i++) {
+		pts = MAX(pts, convert_ts(nut->sc[i].last_dts, nut->sc[i].sh.timebase, nut->global_timebase));
+		if (nut->sc[i].back_ptr) {
+			if (back_ptr) back_ptr = MIN(back_ptr, nut->sc[i].back_ptr);
+			else back_ptr = nut->sc[i].back_ptr;
+		}
+	}
+	if (back_ptr) back_ptr = (nut->last_syncpoint - back_ptr) / 8;
+
+	put_bytes(nut->o, 8, KEYFRAME_STARTCODE);
+	put_v(nut->o, pts);
+	put_v(nut->o, back_ptr);
+
+	for (i = 0; i < nut->stream_count; i++) {
+		nut->sc[i].last_pts = convert_ts(pts, nut->global_timebase, nut->sc[i].sh.timebase);
+	}
+
+	nut->sync_overhead += bctello(nut->o) - nut->last_syncpoint;
+	nut->syncpoints.len++;
+}
+
 static void put_headers(nut_context_t * nut) {
 	int i;
 	nut->last_headers = bctello(nut->o);
@@ -278,31 +307,7 @@ static void put_headers(nut_context_t * nut) {
 	for (i = 0; i < nut->stream_count; i++) {
 		put_stream_header(nut, i);
 	}
-}
-
-static void put_syncpoint(nut_context_t *nut) {
-	int i;
-	uint64_t ln, timestamp, d1, d2;
-
-	ln = (uint64_t)nut->sc[0].sh.time_base_nom * nut->global_time_base_denom;
-	d1 = nut->sc[0].sh.time_base_denom;
-	d2 = nut->global_time_base_nom;
-	timestamp = (ln / d1 * (uint64_t)nut->sc[0].last_pts + (ln%d1) * (uint64_t)nut->sc[0].last_pts / d1) / d2;
-
-	nut->sync_overhead += 8 + v_len(timestamp) + 1; // FIXME back_ptr
-	nut->syncpoints++;
-
-	put_bytes(nut->o, 8, KEYFRAME_STARTCODE);
-	put_v(nut->o, timestamp);
-	put_v(nut->o, 0); // FIXME back_ptr
-
-	d1 = nut->global_time_base_denom;
-	for (i = 0; i < nut->stream_count; i++) {
-		ln = (uint64_t)nut->global_time_base_nom * nut->sc[i].sh.time_base_denom;
-		d2 = nut->sc[i].sh.time_base_nom;
-		nut->sc[i].last_pts = (ln / d1 * timestamp + (ln%d1) * timestamp / d1) / d2;
-	}
-	nut->last_syncpoint = bctello(nut->o);
+	put_syncpoint(nut);
 }
 
 static void put_index(nut_context_t * nut) {
@@ -374,6 +379,9 @@ void nut_write_info(nut_context_t * nut, const nut_info_packet_t info []) {
 void nut_write_frame(nut_context_t * nut, const nut_packet_t * fd, const uint8_t * buf) {
 	int wrote_syncpoint = 0;
 	stream_context_t * sc = &nut->sc[fd->stream];
+
+	if (fd->is_key) sc->back_ptr = 0; // hint for put_syncpoint
+
 	if (bctello(nut->o) > (1 << 23)) { // main header repetition
 		int i = 23; // ### magic value for header repetition
 		if (bctello(nut->o) > (1 << 25)) {
@@ -408,6 +416,9 @@ void nut_write_frame(nut_context_t * nut, const nut_packet_t * fd, const uint8_t
 		idx->ii[idx->len].pts = fd->pts;
 		idx->ii[idx->len].pos = bctello(nut->o);
 		idx->len++;
+
+		// reset back_ptr
+		sc->back_ptr = nut->last_syncpoint;
 	} else if (sc->last_key > 0)
 		sc->last_key++;
 	else
@@ -425,13 +436,13 @@ nut_context_t * nut_muxer_init(const nut_muxer_opts_t * mopts, const nut_stream_
 	nut->max_distance = 32768; // TODO
 	//nut->max_index_distance = 32768; // TODO
 	nut->max_index_distance = 524288; // TODO
-	nut->global_time_base_nom = 1; // TODO
-	nut->global_time_base_denom = 1000; // TODO
+	nut->global_timebase.nom = 1; // TODO
+	nut->global_timebase.den = 1000; // TODO
 	nut->fti = ft_default; // TODO
 	nut->mopts = *mopts;
 
 	nut->sync_overhead = 0;
-	nut->syncpoints = 0;
+	nut->syncpoints.len = 0;
 
 	for (i = 0; s[i].type >= 0; i++);
 	nut->stream_count = i;
@@ -439,6 +450,7 @@ nut_context_t * nut_muxer_init(const nut_muxer_opts_t * mopts, const nut_stream_
 	nut->sc = malloc(sizeof(stream_context_t) * nut->stream_count);
 
 	for (i = 0; i < nut->stream_count; i++) {
+		int j;
 		nut->sc[i].index.len = 0;
 		nut->sc[i].index.alloc_len = PREALLOC_SIZE;
 		nut->sc[i].index.ii = malloc(sizeof(index_item_t) * nut->sc[i].index.alloc_len);
@@ -447,6 +459,7 @@ nut_context_t * nut_muxer_init(const nut_muxer_opts_t * mopts, const nut_stream_
 		nut->sc[i].last_pts = 0;
 		nut->sc[i].msb_pts_shift = 7; // TODO
 		nut->sc[i].decode_delay = 0; // ### TODO
+		nut->sc[i].back_ptr = 0;
 		nut->sc[i].sh = s[i];
 		nut->sc[i].sh.max_pts = 0;
 
@@ -462,8 +475,11 @@ nut_context_t * nut_muxer_init(const nut_muxer_opts_t * mopts, const nut_stream_
 		nut->sc[i].next_pts = 0;
 		nut->sc[i].packets = NULL;
 		nut->sc[i].num_packets = 0;
+
 		nut->sc[i].pts_cache = malloc(nut->sc[i].decode_delay * sizeof(int64_t));
-		memset(nut->sc[i].pts_cache, -1, nut->sc[i].decode_delay * sizeof(int64_t));
+		nut->sc[i].reorder_pts_cache = malloc(nut->sc[i].decode_delay * sizeof(int64_t));
+		for (j = 0; j < nut->sc[i].decode_delay; j++)
+			nut->sc[i].reorder_pts_cache[j] = nut->sc[i].pts_cache[j] = -1;
 
 		nut->sc[i].total_frames = 0;
 		nut->sc[i].overhead = 0;
@@ -473,7 +489,6 @@ nut_context_t * nut_muxer_init(const nut_muxer_opts_t * mopts, const nut_stream_
 	put_data(nut->o, strlen(ID_STRING) + 1, ID_STRING);
 
 	put_headers(nut);
-	put_syncpoint(nut);
 
 	return nut;
 }
@@ -502,8 +517,9 @@ void nut_muxer_uninit(nut_context_t * nut) {
 		free(nut->sc[i].sh.fourcc);
 		free(nut->sc[i].sh.codec_specific);
 		free(nut->sc[i].pts_cache);
+		free(nut->sc[i].reorder_pts_cache);
 	}
-	fprintf(stderr, "Syncpoints: %d size: %d\n", nut->syncpoints, nut->sync_overhead);
+	fprintf(stderr, "Syncpoints: %d size: %d\n", nut->syncpoints.len, nut->sync_overhead);
 
 	free(nut->sc);
 	free_buffer(nut->o); // flushes file

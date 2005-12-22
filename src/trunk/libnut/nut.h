@@ -9,7 +9,7 @@
 typedef struct {
 	void * priv;
 	size_t (*read)(void * priv, size_t len, uint8_t * buf);
-	off_t (*seek)(void * priv, long pos, int whence);
+	off_t (*seek)(void * priv, long long pos, int whence);
 	int (*eof)(void * priv);
 } nut_input_stream_t;
 
@@ -18,12 +18,16 @@ typedef struct {
 	int (*write)(void * priv, size_t len, const uint8_t * buf);
 } nut_output_stream_t;
 
+typedef struct { // for example 23.976 (24000/1001)
+	int nom; // is 1001
+	int den; // 24000
+} nut_timebase_t;
+
 typedef struct {
 	int type; // -1 means end
 	int fourcc_len;
 	uint8_t * fourcc;
-	int time_base_nom;
-	int time_base_denom;
+	nut_timebase_t timebase;
 	int fixed_fps;
 	int codec_specific_len;
 	uint8_t * codec_specific;
@@ -49,6 +53,7 @@ typedef struct {
 typedef struct {
 	nut_input_stream_t input;
 	int read_index;
+	int cache_syncpoints;
 } nut_demuxer_opts_t;
 
 typedef struct {
