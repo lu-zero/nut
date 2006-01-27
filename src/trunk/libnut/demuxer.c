@@ -28,14 +28,13 @@ static void flush_buf(input_buffer_t *bc) {
 static int ready_read_buf(input_buffer_t * bc, int amount) {
 	int pos = (bc->buf_ptr - bc->buf);
 	if (bc->read_len - pos < amount && !bc->is_mem) {
+		amount += 10; // ### + PREALLOC_SIZE ?
 		if (bc->write_len - pos < amount) {
 			bc->write_len = amount + pos + PREALLOC_SIZE;
 			bc->buf = realloc(bc->buf, bc->write_len);
 			bc->buf_ptr = bc->buf + pos;
 		}
-		// ### + PREALLOC_SIZE ?
-		bc->read_len +=
-			bc->isc.read(bc->isc.priv, amount - (bc->read_len - pos) + 10, bc->buf + bc->read_len);
+		bc->read_len += bc->isc.read(bc->isc.priv, amount - (bc->read_len - pos), bc->buf + bc->read_len);
 	}
 	return bc->read_len - (bc->buf_ptr - bc->buf);
 }
@@ -52,11 +51,11 @@ static void seek_buf(input_buffer_t * bc, long long pos, int whence) {
 		}
 	}
 	if (whence == SEEK_CUR) pos -= bc->read_len - (bc->buf_ptr - bc->buf);
-	printf("seeking %d ", (int)pos);
+	fprintf(stderr, "seeking %d ", (int)pos);
 	switch (whence) {
-		case SEEK_SET: printf("SEEK_SET\n"); break;
-		case SEEK_CUR: printf("SEEK_CUR\n"); break;
-		case SEEK_END: printf("SEEK_END\n"); break;
+		case SEEK_SET: fprintf(stderr, "SEEK_SET\n"); break;
+		case SEEK_CUR: fprintf(stderr, "SEEK_CUR\n"); break;
+		case SEEK_END: fprintf(stderr, "SEEK_END\n"); break;
 	}
 	bc->file_pos = bc->isc.seek(bc->isc.priv, pos, whence);
 	bc->buf_ptr = bc->buf;
@@ -185,7 +184,7 @@ static int get_vb(input_buffer_t * in, int * len, uint8_t ** buf) {
 }
 
 static int get_frame(nut_context_t * nut, nut_packet_t * fd, int n) {
-	int err = 0, coded_pts, size_lsb = 0, scrap, i;
+	int err = 0, coded_pts, size_lsb = 0, stream_flags = 0, scrap, i;
 	stream_context_t * sc;
 
 	if (!nut->ft[n].stream_plus1) GET_V(nut->i, fd->stream);
@@ -207,14 +206,20 @@ static int get_frame(nut_context_t * nut, nut_packet_t * fd, int n) {
 		fd->pts = sc->last_pts + nut->ft[n].pts_delta;
 	}
 
-	if (nut->ft[n].flags & 1) GET_V(nut->i, size_lsb);
+	if (nut->ft[n].flags & MSB_CODED_FLAG) GET_V(nut->i, size_lsb);
 	fd->len = size_lsb * nut->ft[n].mul + nut->ft[n].lsb;
-	fd->is_key = (nut->ft[n].flags & 2) ? 1 : 0;
+
+	if (nut->ft[n].flags & STREAM_CODED_FLAG) GET_V(nut->i, stream_flags);
+	fd->flags = nut->ft[n].stream_flags ^ stream_flags;
 
 	for (i = 0; i < nut->ft[n].reserved; i++) GET_V(nut->i, scrap);
 
 	sc->last_pts = fd->pts;
 	sc->last_dts = get_dts(sc->decode_delay, sc->pts_cache, fd->pts);
+	if (fd->flags & NUT_KEY_STREAM_FLAG && !sc->last_key) {
+		fprintf(stderr, "setting key stream %d pts %d\n", fd->stream, (int)fd->pts);
+		sc->last_key = fd->pts + 1;
+	}
 err_out:
 	return err;
 }
@@ -243,7 +248,7 @@ static int get_header(input_buffer_t * in, input_buffer_t * out, int len, int ch
 static int get_main_header(nut_context_t *nut, int len) {
 	input_buffer_t * tmp = new_mem_buffer();
 	int i, j, err = 0;
-	int flag, fields, timestamp = -1, mul = -1, stream = -1, size, count, reserved;
+	int flag, fields, timestamp = 0, mul = 1, stream = 0, sflag, size, count, reserved;
 
 	CHECK(get_header(nut->i, tmp, len, 1));
 
@@ -251,31 +256,31 @@ static int get_main_header(nut_context_t *nut, int len) {
 	ERROR(i != NUT_VERSION, -ERR_BAD_VERSION);
 	GET_V(tmp, nut->stream_count);
 	GET_V(tmp, nut->max_distance);
-	GET_V(tmp, nut->max_index_distance);
-	GET_V(tmp, nut->global_timebase.nom);
-	GET_V(tmp, nut->global_timebase.den);
 
 	for(i = 0; i < 256; ) {
 		int scrap;
 		GET_V(tmp, flag);
 		GET_V(tmp, fields);
-		if (fields > 0) GET_S(tmp, timestamp);
-		if (fields > 1) GET_V(tmp, mul);
-		if (fields > 2) GET_V(tmp, stream);
-		if (fields > 3) GET_V(tmp, size);
+		if (fields > 0) GET_V(tmp, sflag);
+		else sflag = 0;
+		if (fields > 1) GET_S(tmp, timestamp);
+		if (fields > 2) GET_V(tmp, mul);
+		if (fields > 3) GET_V(tmp, stream);
+		if (fields > 4) GET_V(tmp, size);
 		else size = 0;
-		if (fields > 4) GET_V(tmp, reserved);
+		if (fields > 5) GET_V(tmp, reserved);
 		else reserved = 0;
-		if (fields > 5) GET_V(tmp, count);
+		if (fields > 6) GET_V(tmp, count);
 		else count = mul - size;
 
-		for (j = 6; j < fields; j++) {
+		for (j = 7; j < fields; j++) {
 			GET_V(tmp, scrap);
 		}
 
 		for(j = 0; j < count && i < 256; j++, i++) {
-			assert(i != 'N' || flag == 4);
+			assert(i != 'N' || flag == INVALID_FLAG);
 			nut->ft[i].flags = flag;
+			nut->ft[i].stream_flags = sflag;
 			nut->ft[i].stream_plus1 = stream;
 			nut->ft[i].mul = mul;
 			nut->ft[i].lsb = size + j;
@@ -329,36 +334,68 @@ err_out:
 	return err;
 }
 
-static int add_syncpoint(nut_context_t * nut, syncpoint_t s) {
+static int add_syncpoint(nut_context_t * nut, syncpoint_t sp, uint64_t * pts) {
 	syncpoint_list_t * sl = &nut->syncpoints;
-	int i;
+	int i, j;
+
 	for (i = sl->len; i--; ) { // more often than not, we're adding at end of list
-		if (sl->s[i].pts == s.pts) return i; // syncpoint already in list
-		if (sl->s[i].pts < s.pts) break;
+		off_t pos = sl->s[i].pos >> 1;
+		if (pos > sp.pos) continue;
+		if (sp.pos < pos + 8) { // syncpoint already in list
+			sl->s[i].pos = (sp.pos << 1) | (sl->s[i].pos & 1);
+			if (pts) {
+				fprintf(stderr, "%d: %d %d", i, (int)sl->s[i].pos & 1, (int)sl->s[i].pos >> 1);
+				sl->s[i].pos |= 1;
+				for (j = 0; j < nut->stream_count; j++) {
+					fprintf(stderr, " (%d %d)", (int)sl->pts[i * nut->stream_count + j], (int)pts[j]);
+					assert(!sl->pts[i * nut->stream_count + j] || sl->pts[i * nut->stream_count + j] == pts[j]);
+					sl->pts[i * nut->stream_count + j] = pts[j];
+				}
+				fprintf(stderr, "\n");
+			}
+			return i;
+		}
+		break;
 	}
 	i++;
 	if (sl->len + 1 > sl->alloc_len) {
-		if (nut->dopts.cache_syncpoints) sl->alloc_len += PREALLOC_SIZE/4;
-		else sl->alloc_len += 4;
+		sl->alloc_len += PREALLOC_SIZE/4;
 		sl->s = realloc(sl->s, sl->alloc_len * sizeof(syncpoint_t));
+		sl->pts = realloc(sl->pts, sl->alloc_len * nut->stream_count * sizeof(uint64_t));
 	}
-	memmove(&sl->s[i] + 1, &sl->s[i], (sl->len - i) * sizeof(syncpoint_t));
-	sl->s[i] = s;
+	memmove(sl->s + i + 1, sl->s + i, (sl->len - i) * sizeof(syncpoint_t));
+	memmove(sl->pts + (i + 1) * nut->stream_count, sl->pts + i * nut->stream_count, (sl->len - i) * nut->stream_count * sizeof(uint64_t));
+
+	sl->s[i] = sp;
+	sl->s[i].pos <<= 1; // flag
+	if (pts) sl->s[i].pos |= 1;
+	for (j = 0; j < nut->stream_count; j++) sl->pts[i * nut->stream_count + j] = pts ? pts[j] : 0;
 	sl->len++;
-	printf("adding syncpoint (%d, %d, %d) pos %d\n", (int)s.pos, (int)s.pts, s.back_ptr&1, i);
+
+	fprintf(stderr, "adding syncpoint (%d, %d) pos %d", (int)sp.pos, (int)sp.pts, i);
+	if (pts) {
+		fprintf(stderr, " (");
+		for (j = 0; j < nut->stream_count; j++) fprintf(stderr, " %d", (int)pts[j]);
+		fprintf(stderr, " )");
+	}
+	fprintf(stderr, "\n");
 	return i;
 }
 
 static void set_global_pts(nut_context_t * nut, uint64_t pts) {
 	int i;
+	nut_timebase_t tb = nut->sc[pts % nut->stream_count].sh.timebase;
+	pts = pts / nut->stream_count;
+
 	for (i = 0; i < nut->stream_count; i++) {
-		nut->sc[i].last_pts = convert_ts(pts, nut->global_timebase, nut->sc[i].sh.timebase);
+		nut->sc[i].last_pts = convert_ts(pts, tb, nut->sc[i].sh.timebase);
 	}
 }
 
 static int get_syncpoint(nut_context_t * nut) {
 	int err = 0;
 	syncpoint_t s;
+	int after_seek = nut->last_syncpoint ? 0 : 1;
 
 	nut->last_syncpoint = s.pos = bctello(nut->i) - 8;
 
@@ -368,51 +405,84 @@ static int get_syncpoint(nut_context_t * nut) {
 
 	set_global_pts(nut, s.pts);
 
-	if (nut->dopts.cache_syncpoints) {
-		int tmp = add_syncpoint(nut, s);
-		if (tmp) nut->syncpoints.s[tmp - 1].back_ptr |= 1;
-	} else {
+	if (/*nut->dopts.cache_syncpoints*/1) {
+		int i;
+		uint64_t pts[nut->stream_count];
+		for (i = 0; i < nut->stream_count; i++) {
+			pts[i] = nut->sc[i].last_key;
+			nut->sc[i].last_key = 0;
+		}
+		i = add_syncpoint(nut, s, after_seek ? NULL : pts);
+		if (!after_seek) nut->syncpoints.s[i - 1].back_ptr |= 1;
+	} /*else {
 		if (!nut->syncpoints.len) add_syncpoint(nut, s);
-	}
+	}*/
 err_out:
 	return err;
 }
 
 static int get_index(nut_context_t * nut) {
 	input_buffer_t * tmp = new_mem_buffer();
-	index_context_t * idx;
 	int err = 0;
-	uint64_t startcode;
-	CHECK(get_bytes(nut->i, 8, &startcode));
-	while (startcode == INDEX_STARTCODE) {
-		int id, j, len, cur_pts = 0;
-		off_t cur_pos = 0;
+	syncpoint_list_t * sl = &nut->syncpoints;
+	uint64_t * p;
+	uint64_t x;
+	int i;
 
-		GET_V(nut->i, len);
-		CHECK(get_header(nut->i, tmp, len, 1));
-		GET_V(tmp, id);
-		ERROR(id > nut->stream_count, -1);
-		idx = &nut->sc[id].index;
+	CHECK(get_bytes(nut->i, 8, &x));
+	ERROR(x != INDEX_STARTCODE, -ERR_GENERAL_ERROR);
 
-		GET_V(tmp, nut->sc[id].sh.max_pts);
-		GET_V(tmp, idx->len);
-		idx->alloc_len = idx->len;
-		idx->ii = realloc(idx->ii, sizeof(index_item_t) * idx->len);
+	GET_V(nut->i, x);
+	CHECK(get_header(nut->i, tmp, x, 1));
 
-		for (j = 0; j < idx->len; j++) {
-			uint64_t tmps;
-			GET_V(tmp, tmps); cur_pts += tmps;
-			GET_V(tmp, tmps); cur_pos += tmps;
-			idx->ii[j].pts = cur_pts;
-			idx->ii[j].pos = cur_pos;
-		}
-
-		tmp->buf_ptr = tmp->buf;
-		tmp->read_len = 0;
-		printf("NUT index read successfully, %d chunks\n", idx->len);
-
-		CHECK(get_bytes(nut->i, 8, &startcode));
+	GET_V(tmp, x);
+	for (i = 0; i < nut->stream_count; i++) {
+		TO_PTS(max, x)
+		nut->sc[i].sh.max_pts = convert_ts(max_p, nut->sc[max_s].sh.timebase, nut->sc[i].sh.timebase);
 	}
+
+	GET_V(tmp, x);
+	sl->alloc_len = sl->len = x;
+	sl->s = realloc(sl->s, sl->alloc_len * sizeof(syncpoint_t));
+	p = sl->pts = realloc(sl->pts, sl->alloc_len * sizeof(uint64_t) * nut->stream_count);
+
+	for (i = 0; i < sl->len; i++) {
+		GET_V(tmp, x);
+		x *= 8;
+		sl->s[i].pos = (x << 1) + (i ? sl->s[i-1].pos : 1);
+		sl->s[i].back_ptr = 1;
+	}
+	for (i = 0; i < nut->stream_count; i++) {
+		int j;
+		uint64_t last_pts = 0;
+		for (j = 0; j < sl->len; ) {
+			int type, n, flag;
+			GET_V(tmp, x);
+			type = x & 1;
+			x >>= 1;
+			n = j;
+			if (type) {
+				flag = x & 1;
+				x >>= 1;
+				while (x--) p[n++ * nut->stream_count + i] = flag;
+				p[n++ * nut->stream_count + i] = !flag;
+			} else {
+				while (x != 1) {
+					p[n++ * nut->stream_count + i] = x & 1;
+					x >>= 1;
+				}
+			}
+			for(; j < n && j < sl->len; j++) {
+				if (!p[j * nut->stream_count + i]) continue;
+				GET_V(tmp, x);
+				last_pts += x;
+				p[j * nut->stream_count + i] = last_pts + 1;
+			}
+		}
+	}
+
+	fprintf(stderr, "NUT index read successfully, %d syncpoints\n", sl->len);
+
 err_out:
 	free_buffer(tmp);
 	return err;
@@ -439,7 +509,7 @@ int nut_read_next_packet(nut_context_t * nut, nut_packet_t * pd) {
 	}
 	ERROR(!nut->last_headers, -ERR_NO_HEADERS);
 	CHECK(get_bytes(nut->i, 1, &n)); // frame_code or 'N'
-	if (n != 'N' && !(nut->ft[n].flags & 4)) { // frame
+	if (n != 'N' && !(nut->ft[n].flags & INVALID_FLAG)) { // frame
 		pd->type = e_frame;
 		CHECK(get_frame(nut, pd, n));
 		goto err_out;
@@ -448,7 +518,7 @@ int nut_read_next_packet(nut_context_t * nut, nut_packet_t * pd) {
 	ERROR(n != 'N', -ERR_NOT_FRAME_NOT_N); // ###
 	CHECK(get_bytes(nut->i, 7, &tmp));
 	switch ((n << 56) | tmp) {
-		case KEYFRAME_STARTCODE:
+		case SYNCPOINT_STARTCODE:
 			CHECK(get_syncpoint(nut));
 			flush_buf(nut->i);
 			return nut_read_next_packet(nut, pd);
@@ -488,11 +558,9 @@ int nut_read_headers(nut_context_t * nut, nut_packet_t * pd, nut_stream_header_t
 		if (!nut->sc) {
 			nut->sc = malloc(sizeof(stream_context_t) * nut->stream_count);
 			for (i = 0; i < nut->stream_count; i++) {
-				nut->sc[i].index.len = 0;
-				nut->sc[i].index.alloc_len = 0;
-				nut->sc[i].index.ii = NULL;
 				nut->sc[i].last_pts = 0;
 				nut->sc[i].last_dts = 0;
+				nut->sc[i].last_key = 0;
 				nut->sc[i].sh.max_pts = 0;
 				nut->sc[i].sh.fourcc = NULL;
 				nut->sc[i].sh.codec_specific = NULL;
@@ -524,10 +592,10 @@ int nut_read_headers(nut_context_t * nut, nut_packet_t * pd, nut_stream_header_t
 			}
 			nut->seek_status = 1;
 			CHECK(get_bytes(nut->i, 8, &idx_ptr));
-			idx_ptr = nut->i->filesize - 8 - idx_ptr;
-			if (idx_ptr >= nut->i->filesize) nut->seek_status = 0; // invalid ptr
+			if (idx_ptr) idx_ptr = nut->i->filesize - 8 - idx_ptr;
+			if (!idx_ptr || idx_ptr >= nut->i->filesize) nut->dopts.read_index = 0; // invalid ptr
 		}
-		if (nut->seek_status) {
+		if (nut->dopts.read_index) {
 			if (nut->seek_status == 1) seek_buf(nut->i, idx_ptr, SEEK_SET);
 			nut->seek_status = 2;
 			// only EAGAIN from get_index is interesting
@@ -626,6 +694,7 @@ static int find_syncpoint(nut_context_t * nut, int backwards, syncpoint_t * res,
 	int read;
 	int err = 0;
 	uint64_t tmp;
+	uint8_t * ptr = NULL;
 	assert(!backwards || !stop); // can't have both
 
 	if (backwards) seek_buf(nut->i, -nut->max_distance, SEEK_CUR);
@@ -633,20 +702,26 @@ retry:
 	read = nut->max_distance;
 	if (stop) read = MIN(read, stop - bctello(nut->i));
 	read = ready_read_buf(nut->i, read);
+	if (stop) read = MIN(read, stop - bctello(nut->i));
 	tmp = 0;
 
-	printf("(%d -> %d)\n", (int)bctello(nut->i), (int)bctello(nut->i) + read);
-	fflush(stdout);
+	fprintf(stderr, "(%d -> %d)\n", (int)bctello(nut->i), (int)bctello(nut->i) + read);
 
 	while (nut->i->buf_ptr - nut->i->buf < read) {
 		tmp = (tmp << 8) | *(nut->i->buf_ptr++);
-		if (tmp != KEYFRAME_STARTCODE) continue;
+		if (tmp != SYNCPOINT_STARTCODE) continue;
 		if (res) {
 			res->pos = bctello(nut->i) - 8;
 			GET_V(nut->i, res->pts);
 			GET_V(nut->i, tmp);
-			res->back_ptr = (tmp * 8 + 7)<<1;
+			res->back_ptr = (tmp * 8 + 7) << 1;
 		}
+		if (!backwards) return 0;
+		else ptr = nut->i->buf_ptr;
+	}
+
+	if (ptr) {
+		nut->i->buf_ptr = ptr;
 		return 0;
 	}
 
@@ -671,103 +746,122 @@ err_out:
 	return err;
 }
 
-int nut_seek(nut_context_t * nut, double time_pos, int flags, int * active_streams) {
+static int find_basic_syncpoints(nut_context_t * nut) {
 	int i, err = 0;
 	syncpoint_list_t * sl = &nut->syncpoints;
 	syncpoint_t s;
-	int64_t pts = time_pos / nut->global_timebase.nom * nut->global_timebase.den;
-	uint64_t orig_pts = 0;
-	off_t hi, lo;
-	uint64_t hip, lop;
-
-	for (i = 0; i < nut->stream_count; i++)
-		orig_pts = MAX(orig_pts, convert_ts(nut->sc[i].last_dts, nut->sc[i].sh.timebase, nut->global_timebase));
-	if (flags & 1) pts += orig_pts;
-	printf("\nentered seek\n");
-
-	if (!nut->i->isc.seek) return -ERR_NOT_SEEKABLE;
-
-	if (!nut->before_seek) nut->before_seek = bctello(nut->i);
 
 	if (!sl->len) { // not even a single syncpoint, find first one.
-		printf("finding first syncpoint\n");
+		fprintf(stderr, "finding first syncpoint\n");
 		// the first syncpoint put in the cache is always always the BEGIN syncpoint
 		if (!nut->seek_status) seek_buf(nut->i, 0, SEEK_SET);
 		nut->seek_status = 1;
 		CHECK(find_syncpoint(nut, 0, &s, 0));
-		add_syncpoint(nut, s);
+		add_syncpoint(nut, s, NULL);
 		nut->seek_status = 0;
-		printf("first syncpoint found: %d\n", (int)s.pos);
+		fprintf(stderr, "first syncpoint found: %d\n", (int)s.pos);
 	}
 
 	// find last syncpoint if it's not already found
-	if (!(sl->s[sl->len - 1].back_ptr & 1)) {
-		printf("finding last syncpoint\n");
+	if (!(sl->s[sl->len-1].back_ptr & 1)) {
+		fprintf(stderr, "finding last syncpoint\n");
 		// searching bakwards from EOF
 		if (!nut->seek_status) seek_buf(nut->i, 0, SEEK_END);
 		nut->seek_status = 1;
 		CHECK(find_syncpoint(nut, 1, &s, 0));
-		s.back_ptr |= 1;
-		add_syncpoint(nut, s);
+		i = add_syncpoint(nut, s, NULL);
+		assert(i == sl->len-1);
+		sl->s[i].back_ptr |= 1;
 		nut->seek_status = 0;
-		printf("last syncpoint found: %d\n", (int)s.pos);
+		fprintf(stderr, "last syncpoint found: %d\n", (int)s.pos);
+	}
+err_out:
+	return err;
+}
+
+static void clear_dts_cache(nut_context_t * nut) {
+	int i;
+	for (i = 0; i < nut->stream_count; i++) {
+		int j;
+		for (j = 0; j < nut->sc[i].decode_delay; j++) nut->sc[i].pts_cache[j] = -1;
+		nut->sc[i].last_dts = -1;
+	}
+}
+
+static int binary_search_syncpoint(nut_context_t * nut, double time_pos, uint64_t * pts, off_t * start, off_t * end) {
+	int i, err = 0;
+	syncpoint_t s;
+	off_t hi, lo;
+	uint64_t hip, lop;
+	syncpoint_list_t * sl = &nut->syncpoints;
+	//uint64_t * p = NULL;
+
+	CHECK(find_basic_syncpoints(nut));
+	// sl->len MUST be >=2, which is the first and last syncpoints in the file
+	ERROR(sl->len < 2, -ERR_NOT_SEEKABLE);
+
+	for (i = 0; i < sl->len; i++) {
+		TO_PTS(tmp, sl->s[i].pts)
+		if ((pts[tmp_s] >> 1) <= tmp_p) break;
 	}
 
-	for (i = 0; i < sl->len; i++) if ((int64_t)sl->s[i].pts >= pts) break;
 	if (i == sl->len) { // there isn't any syncpoint bigger than requested
 		seek_buf(nut->i, 0, SEEK_END); // intentionally seeking to EOF
 		err = 1; // EOF
 		goto err_out;
 	}
 	if (i == 0) { // there isn't any syncpoint smaller than requested
-		seek_buf(nut->i, sl->s[0].pos, SEEK_SET); // seeking to first syncpoint
+		seek_buf(nut->i, (sl->s[0].pos >> 1), SEEK_SET); // seeking to first syncpoint
+		clear_dts_cache(nut);
+		nut->last_syncpoint = 0;
 		err = -ERR_NOT_SEEKABLE;
 		goto err_out;
 	}
-	// sl->len MUST be >=2, which is the first and last syncpoints in the file
-	ERROR(sl->len < 2, -ERR_NOT_SEEKABLE);
 
 	i--;
 
-	if (!nut->dopts.cache_syncpoints && sl->len == 4 && (i == 0 || i == 2)) {
+	/*if (!nut->dopts.cache_syncpoints && sl->len == 4 && (i == 0 || i == 2)) {
 		if (i == 2) sl->s[1] = sl->s[2];
 		else sl->s[1].back_ptr &= ~1;
 		sl->s[2] = sl->s[3];
 		i >>= 1;
 		sl->len = 3;
-	}
+	}*/
 
-	lo = sl->s[i].pos;
+	lo = sl->s[i].pos >> 1;
 	lop = sl->s[i].pts;
-	hi = sl->s[i+1].pos;
+	hi = sl->s[i+1].pos >> 1;
 	hip = sl->s[i+1].pts;
-
-	{int j;
-	for(j = 0; j < sl->len; j++) printf("%d: (%d, %d, %d)\n", j, (int)sl->s[j].pos, (int)sl->s[j].pts, sl->s[j].back_ptr&1);
-	}
-
-	printf("%d [ (%d,%d) .. %d .. (%d,%d) ]\n", i,
-				(int)lo, (int)lop, (int)pts, (int)hi, (int)hip);
-
 	if (nut->seek_status) hi = nut->seek_status;
 
+	if (0) {
+		int j;
+		for(j = 0; j < sl->len; j++) fprintf(stderr, "%d: (%d, %d, %d)\n", j, (int)sl->s[j].pos>>1, (int)sl->s[j].pts, sl->s[j].back_ptr&1);
+	}
+
+	fprintf(stderr, "%d [ (%d,%d) .. %d .. (%d,%d) ]\n", i, (int)lo, (int)lop, (int)pts[0], (int)hi, (int)hip);
+
+int a = 0;
 	while (!(sl->s[i].back_ptr & 1)) {
-		// start binary search between sl->s[i].pos to sl->s[i+1].pos ...
+		// start binary search between sl->s[i].pos (lo) to sl->s[i+1].pos (hi) ...
 		off_t guess;
+		int res;
+			TO_PTS(hi, hip)
+			TO_PTS(lo, lop)
+			double hi_pd = TO_DOUBLE(hi_s, hi_p);
+			double lo_pd = TO_DOUBLE(lo_s, lo_p);
+		a++;
 		if (hi - lo < nut->max_distance) guess = lo + 8;
 		else {
-			double a = (double)(hi - lo) / (hip - lop);
-			double b = hi - a * hip;
-			guess = a * pts + b;
-			if (hi - guess < nut->max_distance) guess = (lo + hi)/2;
+			double a = (double)(hi - lo) / (hi_pd - lo_pd);
+			guess = lo + a * (time_pos - lo_pd);
+			if (hi - guess < nut->max_distance) guess = hi - nut->max_distance; //(lo + hi)/2;
 		}
-		printf("[ (%d,%d) .. (%d,%d) .. (%d,%d) ] ",
-			(int)lo, (int)lop, (int)guess, (int)pts, (int)hi, (int)hip);
+		if (guess < lo + 8) guess = lo + 8;
+		fprintf(stderr, "%d [ (%d,%.3lf) .. (%d,%.3lf) .. (%d,%.3lf) ] ", i, (int)lo, lo_pd, (int)guess, time_pos, (int)hi, hi_pd);
 		if (!nut->seek_status) seek_buf(nut->i, guess, SEEK_SET);
-		if ((err = find_syncpoint(nut, 0, &s, hi))) {
-			nut->seek_status = hi; // so we know where to continue off...
-			goto err_out;
-		}
+		nut->seek_status = hi; // so we know where to continue off...
+		CHECK(find_syncpoint(nut, 0, &s, hi));
 		nut->seek_status = 0;
 
 		if (s.back_ptr == 1 || s.pos >= hi) { // we got back to 'hi'
@@ -777,57 +871,264 @@ int nut_seek(nut_context_t * nut, double time_pos, int flags, int * active_strea
 			continue;
 		}
 
-		if (nut->dopts.cache_syncpoints || sl->len == 2) {
-			int tmp = add_syncpoint(nut, s);
-			if (s.pts > pts) hi = s.pos;
-			else {
-				lo = s.pos;
-				i = tmp;
-			}
-		} else if (sl->len == 3) {
+		res = s.pts / nut->stream_count > (pts[s.pts % nut->stream_count] >> 1);
+		if (res) {
+			hi = s.pos;
+			hip = s.pts;
+		} else {
+			lo = s.pos;
+			lop = s.pts;
+		}
+		if (1/*nut->dopts.cache_syncpoints || sl->len == 2*/) {
+			int tmp = add_syncpoint(nut, s, NULL);
+			if (!res) i = tmp;
+		}/* else if (sl->len == 3) {
 			if (s.pts > pts) {
-				if (hi == sl->s[1].pos) sl->s[1] = s;
+				if (sl->s[1].pts > pts) sl->s[1] = s;
 				else add_syncpoint(nut, s);
-				hi = s.pos;
 			} else {
-				if (lo == sl->s[1].pos) sl->s[1] = s;
+				if (sl->s[1].pts <= pts) sl->s[1] = s;
 				else i = add_syncpoint(nut, s);
-				lo = s.pos;
 			}
 		} else {
-			if (s.pts > pts) {
-				hi = s.pos;
-				sl->s[2] = s;
-			} else {
-				lo = s.pos;
-				sl->s[1] = s;
+			if (s.pts > pts) sl->s[2] = s;
+			else sl->s[1] = s;
+		}*/
+	}
+
+	fprintf(stderr, "[ (%d,%d) .. %d .. (%d,%d) ] => %d (%d seeks) %d\n",
+		(int)lo, (int)lop, (int)pts[0], (int)hi, (int)hip, (int)(lo - (sl->s[i].back_ptr>>1)), a, sl->s[i].back_ptr);
+	// at this point, s[i].pts < P < s[i+1].pts, and s[i].flag is set
+	// meaning, there are no more syncpoints between s[i] to s[i+1]
+	*start = (sl->s[i].pos >> 1) - (sl->s[i].back_ptr>>1);
+	*end = sl->s[i].pos >> 1;
+err_out:
+	return err;
+}
+
+static int linear_search_seek(nut_context_t * nut, int backwards, uint64_t * pts, off_t start, off_t end) {
+	syncpoint_list_t * sl = &nut->syncpoints;
+	int i, err = 0;
+	off_t good_key[nut->stream_count], min_pos = 0;
+	uint64_t old_last_pts[nut->stream_count];
+
+	for (i = 0; i < nut->stream_count; i++) {
+		good_key[i] = nut->seek_state ? nut->seek_state[i].good_key : 0;
+		old_last_pts[i] = nut->seek_state ? nut->seek_state[i].old_last_pts : nut->sc[i].last_pts;
+	}
+
+	if (nut->seek_status <= 1) {
+		syncpoint_t s;
+		if (!nut->seek_status) seek_buf(nut->i, start, SEEK_SET);
+		nut->seek_status = 1;
+		// find closest syncpoint by linear search, SHOULD be one pointed by back_ptr...
+		CHECK(find_syncpoint(nut, 0, &s, 0));
+		if (1/*nut->dopts.cache_syncpoints*/) add_syncpoint(nut, s, NULL);
+		set_global_pts(nut, s.pts);
+		for (i = 0; i < nut->stream_count; i++) nut->sc[i].last_key = 0;
+		clear_dts_cache(nut);
+		if (s.pos > start + 7) goto err_out; // error condition, we didn't get the syncpoint we wanted
+		nut->seek_status = s.pos << 1;
+	}
+
+	if (!(nut->seek_status & 1)) while (bctello(nut->i) < end) {
+		uint64_t tmp;
+		nut_packet_t pd;
+		off_t begin = bctello(nut->i);
+		int read;
+		CHECK(get_bytes(nut->i, 1, &tmp)); // frame_code or 'N'
+		if (tmp != 'N' && !(nut->ft[tmp].flags & INVALID_FLAG)) { // frame
+			CHECK(get_frame(nut, &pd, tmp));
+			if (pts[pd.stream] & 1) {
+				printf("%lld %lld\n", pd.pts, pts[pd.stream]>>1);
+				if (pd.pts > pts[pd.stream]>>1) break; // we are done
+				if (pd.flags & NUT_KEY_STREAM_FLAG) {
+					printf("good: %d %d\n", (int)begin, (int)nut->before_seek);
+					good_key[pd.stream] = begin;
+				}
 			}
+			read = ready_read_buf(nut->i, pd.len);
+			ERROR(read < pd.len, buf_eof(nut->i));
+			nut->i->buf_ptr += pd.len;
+			continue;
+		}
+
+		ERROR(tmp != 'N', -ERR_NOT_FRAME_NOT_N);
+		CHECK(get_bytes(nut->i, 7, &tmp));
+
+		switch (((uint64_t)'N' << 56) | tmp) {
+			case SYNCPOINT_STARTCODE:
+				nut->i->buf_ptr -= 8;
+				flush_buf(nut->i); // flush at every syncpoint
+				nut->i->buf_ptr += 8;
+				CHECK(get_syncpoint(nut)); // FIXME we're counting on syncpoint cache!!
+				break;
+			case MAIN_STARTCODE:
+			case STREAM_STARTCODE:
+			case INFO_STARTCODE:
+				GET_V(nut->i, pd.len);
+				read = ready_read_buf(nut->i, pd.len);
+				ERROR(read < pd.len, buf_eof(nut->i));
+				nut->i->buf_ptr += pd.len;
+				break;
+			default:
+				err = -ERR_NOT_FRAME_NOT_N;
+				goto err_out;
 		}
 	}
 
-	printf("[ (%d,%d) .. %d .. (%d,%d) ] => %d\n",
-		(int)lo, (int)lop, (int)pts, (int)hi, (int)hip, (int)(hi - (sl->s[i].back_ptr>>1)));
-	// at this point, s[i].pts < P < s[i+1].pts, and s[i].flag is set
-	// meaning, there are no more syncpoints between s[i] to s[i+1]
-	if (!nut->seek_status) seek_buf(nut->i, sl->s[i].pos - (sl->s[i].back_ptr>>1), SEEK_SET);
-	nut->seek_status = 1;
-	CHECK(find_syncpoint(nut, 0, &s, 0)); // find closest syncpoint by linear search
-					      // SHOULD be one pointed by back_ptr...
-	nut->seek_status = 0;
-	if (nut->dopts.cache_syncpoints) add_syncpoint(nut, s);
-
-	if (pts > orig_pts && orig_pts > s.pts) {
-		// after ALL this, we ended up in a worse position than where we were...
-		seek_buf(nut->i, nut->before_seek, SEEK_SET);
-		err = -ERR_NOT_SEEKABLE;
-	} else {
-		nut->last_syncpoint = s.pos;
-		set_global_pts(nut, s.pts);
+	for (i = 0; i < nut->stream_count; i++) {
+		if (!(pts[i] & 1)) continue;
+		if (good_key[i] && (!min_pos || good_key[i] < min_pos)) min_pos = good_key[i];
 	}
-	nut->before_seek = 0;
+
+	// after ALL this, we ended up in a worse position than where we were...
+	ERROR(!backwards && min_pos < nut->before_seek, -ERR_NOT_SEEKABLE);
+
+	// FIXME we're counting on syncpoint cache
+	for (i = 1; i < sl->len; i++) if ((sl->s[i].pos >> 1) > min_pos) break;
+	i--;
+	if (!(nut->seek_status & 1)) seek_buf(nut->i, (sl->s[i].pos >> 1) + 8, SEEK_SET);
+	nut->seek_status |= 1;
+
+	nut->last_syncpoint = 0;
+	clear_dts_cache(nut);
+	CHECK(get_syncpoint(nut));
+	while (bctello(nut->i) < min_pos) {
+		uint64_t tmp;
+		nut_packet_t pd;
+		int read;
+		CHECK(get_bytes(nut->i, 1, &tmp)); // frame_code or 'N'
+		if (tmp != 'N' && !(nut->ft[tmp].flags & INVALID_FLAG)) { // frame
+			CHECK(get_frame(nut, &pd, tmp));
+		} else { // should never be a syncpoint!
+			CHECK(get_bytes(nut->i, 7, &tmp));
+			GET_V(nut->i, pd.len);
+		}
+		read = ready_read_buf(nut->i, pd.len);
+		ERROR(read < pd.len, buf_eof(nut->i));
+		nut->i->buf_ptr += pd.len;
+	}
+
 err_out:
-	if (err != 2) flush_buf(nut->i); // unless EAGAIN
-	else nut->i->buf_ptr = nut->i->buf; // rewind
+	if (err != 2) { // unless EAGAIN
+		if (err) { // some NUT error, let's just go back to last good syncpoint
+			if (err == -ERR_NOT_SEEKABLE) { // unless it's a failed seek - then go back to the very begginning
+				for (i = 0; i < nut->stream_count; i++) {
+					nut->sc[i].last_pts = old_last_pts[i];
+				}
+				seek_buf(nut->i, nut->before_seek, SEEK_SET);
+			} else {
+				err = 0;
+				seek_buf(nut->i, nut->seek_status >> 1, SEEK_SET);
+			}
+			nut->last_syncpoint = 0;
+			clear_dts_cache(nut);
+		}
+		nut->seek_status = 0;
+		free(nut->seek_state);
+		nut->seek_state = NULL;
+	} else {
+		// for EAGAIN, store state
+		if (!nut->seek_state) nut->seek_state = malloc(nut->stream_count * 2 * sizeof(*nut->seek_state));
+		for (i = 0; i < nut->stream_count; i++) {
+			nut->seek_state[i].good_key = good_key[i];
+			nut->seek_state[i].old_last_pts = old_last_pts[i];
+		}
+		nut->i->buf_ptr = nut->i->buf; // rewind
+	}
+	return err;
+}
+
+static void req_to_pts(nut_context_t * nut, double * time_pos, int flags, uint64_t * pts, const int * active_streams) {
+	uint64_t orig_pts = 0;
+	int orig_stream = 0;
+	int i;
+
+	for (i = 0; i < nut->stream_count; i++) pts[i] = 0;
+	if (active_streams) for (i = 0; active_streams[i] != -1; i++) pts[active_streams[i]] = 1;
+	else for (i = 0; i < nut->stream_count; i++) pts[i] = 1;
+
+	if (flags & 1) {
+		for (i = 0; i < nut->stream_count; i++) {
+			if (!pts[i]) continue;
+			if (compare_ts(orig_pts, nut->sc[orig_stream].sh.timebase, nut->sc[i].last_dts, nut->sc[i].sh.timebase) < 0) {
+				orig_pts = nut->sc[i].last_dts;
+				orig_stream = i;
+			}
+		}
+		*time_pos += TO_DOUBLE(orig_stream, orig_pts);
+	}
+
+	for (i = 0; i < nut->stream_count; i++) {
+		//pts[i] = (flags & 1) ? convert_ts(orig_pts, nut->sc[orig_stream].sh.timebase, nut->sc[i].sh.timebase) : 0;
+		pts[i] |= (uint64_t)(*time_pos / nut->sc[i].sh.timebase.nom * nut->sc[i].sh.timebase.den) << 1;
+	}
+}
+
+int nut_seek(nut_context_t * nut, double time_pos, int flags, const int * active_streams) {
+	int err = 0;
+	off_t start = 0, end = 0;
+	uint64_t pts[nut->stream_count];
+	int backwards = flags & 1 ? time_pos < 0 : 1;
+
+	if (!nut->i->isc.seek) return -ERR_NOT_SEEKABLE;
+
+	req_to_pts(nut, &time_pos, flags, pts, active_streams);
+
+	if (!nut->before_seek) nut->before_seek = bctello(nut->i);
+
+	if (nut->syncpoints.len) {
+		syncpoint_list_t * sl = &nut->syncpoints;
+		int i, j;
+		int sync[nut->stream_count];
+		int good_sync = -2;
+		for (j = 0; j < nut->stream_count; j++) sync[j] = -1;
+
+		for (i = 1; i < sl->len; i++) {
+			int n = 0;
+			if (!(sl->s[i].pos & 1)) continue;
+			for (j = 0; j < nut->stream_count; j++) {
+				uint64_t tmp = sl->pts[i * nut->stream_count + j];
+				if (pts[j]&1 && tmp--) if ((pts[j] >> 1) < tmp) n = 1;
+			}
+			if (n) break;
+			for (j = 0; j < nut->stream_count; j++) {
+				uint64_t tmp = sl->pts[i * nut->stream_count + j];
+				if (pts[j]&1 && tmp--) if ((pts[j] >> 1) >= tmp) sync[j] = (i-1);
+			}
+		}
+		for (j = 0; j < nut->stream_count; j++) {
+			if (!(pts[j] & 1)) continue;
+			if (good_sync == -2 || good_sync > sync[j]) good_sync = sync[j];
+		}
+
+		printf("%d %d %d %d (%d %d)\n", sl->s[sl->len-1].back_ptr, i, good_sync, sl->len, sync[0], sync[1]);
+		if ((sl->s[sl->len-1].back_ptr & 1) && i != sl->len && good_sync != -1) {
+			fprintf(stderr, "checking from syncpoint %d (%d,%d) to %d (%d,%d) (%d)\n",
+				good_sync, (int)sl->s[good_sync].pos, (int)sl->s[good_sync].pts,
+				i, (int)sl->s[i].pos, (int)sl->s[i].pts,
+				sl->len);
+			for (j = good_sync; j <= i; j++) if (!(sl->s[j].pos & 1)) break;
+			if (j != i+1) good_sync = -1;
+		} else good_sync = -1;
+		if (good_sync >= 0) {
+			start = sl->s[good_sync].pos >> 1;
+			end = sl->s[++good_sync].pos >> 1;
+			printf("i expect to find: %lld %lld\n", sl->pts[good_sync * nut->stream_count], sl->pts[good_sync * nut->stream_count + 1]);
+			printf("i want: %lld %lld\n", pts[0] >> 1, pts[1] >> 1);
+		}
+	}
+
+	if (start == 0) CHECK(binary_search_syncpoint(nut, time_pos, pts, &start, &end));
+	else printf("============= NO BINARY SEARCH\n");
+
+	CHECK(linear_search_seek(nut, backwards, pts, start, end));
+err_out:
+	if (err != 2) { // unless EAGAIN
+		flush_buf(nut->i);
+		nut->before_seek = 0;
+	}
 	return err;
 }
 
@@ -839,6 +1140,7 @@ nut_context_t * nut_demuxer_init(nut_demuxer_opts_t * dopts) {
 	nut->syncpoints.len = 0;
 	nut->syncpoints.alloc_len = 0;
 	nut->syncpoints.s = NULL;
+	nut->syncpoints.pts = NULL;
 
 	nut->fti = NULL;
 	nut->sc = NULL;
@@ -848,6 +1150,7 @@ nut_context_t * nut_demuxer_init(nut_demuxer_opts_t * dopts) {
 	nut->seek_status = 0;
 	nut->before_seek = 0;
 	nut->last_syncpoint = 0;
+	nut->seek_state = NULL;
 	return nut;
 }
 
@@ -855,14 +1158,15 @@ void nut_demuxer_uninit(nut_context_t * nut) {
 	int i;
 	if (!nut) return;
 	for (i = 0; i < nut->stream_count; i++) {
-		free(nut->sc[i].index.ii);
 		free(nut->sc[i].sh.fourcc);
 		free(nut->sc[i].sh.codec_specific);
 		free(nut->sc[i].pts_cache);
 	}
 
 	free(nut->syncpoints.s);
+	free(nut->syncpoints.pts);
 	free(nut->sc);
+	free(nut->seek_state);
 	free_buffer(nut->i);
 	free(nut);
 }

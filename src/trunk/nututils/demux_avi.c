@@ -1,3 +1,6 @@
+#define N 0
+
+
 #include "nutmerge.h"
 #include <string.h>
 
@@ -142,11 +145,12 @@ static int mk_riff_tree(FILE * in, riff_tree_t * tree) {
 			while (left > 0) {
 				int err;
 				tree->tree =
-					realloc(tree->tree, sizeof(riff_tree_t) * ++tree->amount);
-				if ((err = mk_riff_tree(in, &tree->tree[tree->amount - 1])))
+					realloc(tree->tree, sizeof(riff_tree_t) * (tree->amount+1));
+				if ((err = mk_riff_tree(in, &tree->tree[tree->amount])))
 					return err;
-				left -= (tree->tree[tree->amount - 1].len + 8);
-				if (tree->tree[tree->amount - 1].len & 1) left--;
+				left -= (tree->tree[tree->amount].len + 8);
+				if (tree->tree[tree->amount].len & 1) left--;
+				tree->amount++;
 			}
 			break;
 		default:
@@ -209,7 +213,7 @@ static int avi_read_stream_header(AVIStreamContext * stream, riff_tree_t * tree)
 			break;
 		}
 	}
-	if (i == tree->amount) return 2;
+	if (i == tree->amount) return 3;
 
 	for(i = 2; i < 12; i++) FIXENDIAN32(((uint32_t*)stream->strh)[i]);
 
@@ -218,7 +222,7 @@ static int avi_read_stream_header(AVIStreamContext * stream, riff_tree_t * tree)
 			int len = tree->tree[i].len;
 			switch(strFOURCC(stream->strh->fccType)) {
 				case mmioFOURCC('v','i','d','s'):
-					if (len < 40) return 2;
+					if (len < 40) return 4;
 					stream->type = 0;
 					stream->video = (BITMAPINFOHEADER*)tree->tree[i].data;
 					for(j = 0; j < 3; j++)  FIXENDIAN32(((uint32_t*)stream->video)[j]);
@@ -228,7 +232,7 @@ static int avi_read_stream_header(AVIStreamContext * stream, riff_tree_t * tree)
 					if (len > 40) stream->extra = (uint8_t*)tree->tree[i].data + 40;
 					break;
 				case mmioFOURCC('a','u','d','s'):
-					if (len < 18) return 2;
+					if (len < 18) return 5;
 					stream->type = 1;
 					stream->audio = (WAVEFORMATEX *)tree->tree[i].data;
 					for(j = 1; j < 2; j++) FIXENDIAN16(((uint16_t*)stream->audio)[j]);
@@ -238,12 +242,12 @@ static int avi_read_stream_header(AVIStreamContext * stream, riff_tree_t * tree)
 					if (len > 18) stream->extra = (uint8_t*)tree->tree[i].data + 18;
 					break;
 				default:
-					return 3;
+					return 6;
 			}
 			break;
 		}
 	}
-	if (i == tree->amount) return 2;
+	if (i == tree->amount) return 7;
 
 	return 0;
 }
@@ -255,16 +259,16 @@ static int avi_read_main_header(AVIContext * avi, const riff_tree_t * tree) {
 
 	for (i = 0; i < tree->amount; i++) {
 		if (tree->tree[i].type == 1 && !strncmp(tree->tree[i].name, "avih", 4)) {
-			if (tree->tree[i].len != 56) return 2;
+			if (tree->tree[i].len != 56) return 8;
 			avi->avih = (MainAVIHeader*)tree->tree[i].data;
 			break;
 		}
 	}
-	if (i == tree->amount) return 2;
+	if (i == tree->amount) return 9;
 
 	for(i = 0; i < 14; i++) FIXENDIAN32(((uint32_t*)avi->avih)[i]);
 
-	if (avi->avih->dwStreams > 200) return 2;
+	if (avi->avih->dwStreams > 200) return 10;
 	avi->stream = malloc(avi->avih->dwStreams * sizeof(AVIStreamContext));
 	for (i = 0; i < avi->avih->dwStreams; i++) {
 		avi->stream[i].video = NULL;
@@ -278,7 +282,7 @@ static int avi_read_main_header(AVIContext * avi, const riff_tree_t * tree) {
 			if ((err = avi_read_stream_header(&avi->stream[tmp++], &tree->tree[i]))) return err;
 		}
 	}
-	if (tmp != avi->avih->dwStreams) return 2;
+	if (tmp != avi->avih->dwStreams) return 11;
 	return 0;
 }
 
@@ -287,16 +291,16 @@ static int avi_read_headers(AVIContext * avi) {
 	int i, err;
 	if ((err = get_full_riff_tree(avi->in, avi->riff))) return err;
 	tree = &avi->riff->tree[0];
-	if (tree->type != 0) return 2;
-	if (strncmp(tree->name, "RIFF", 4)) return 2;
-	if (strncmp(tree->listname, "AVI ", 4)) return 2;
+	if (tree->type != 0) return 12;
+	if (strncmp(tree->name, "RIFF", 4)) return 13;
+	if (strncmp(tree->listname, "AVI ", 4)) return 14;
 	for (i = 0; i < tree->amount; i++) {
 		if (tree->tree[i].type == 0 && !strncmp(tree->tree[i].listname, "hdrl", 4)) {
 			if ((err = avi_read_main_header(avi, &tree->tree[i]))) return err;
 			break;
 		}
 	}
-	if (i == tree->amount) return 2;
+	if (i == tree->amount) return 15;
 	for (i = 0; i < avi->riff->amount; i++) {
 		int j;
 		tree = &avi->riff->tree[i];
@@ -314,14 +318,14 @@ static int avi_read_headers(AVIContext * avi) {
 		}
 		if (j != tree->amount) break;
 	}
-	if (i == avi->riff->amount) return 2;
+	if (i == avi->riff->amount) return 16;
 	for (i = 0; i < tree->amount; i++) {
 		if (tree->tree[i].type == 0 && !strncmp(tree->tree[i].listname, "movi", 4)) {
 			fseek(avi->in, tree->tree[i].offset + 12, SEEK_SET);
 			break;
 		}
 	}
-	if (i == tree->amount) return 2;
+	if (i == tree->amount) return 17;
 	return 0;
 }
 
@@ -352,7 +356,7 @@ static int read_headers(void * priv, nut_stream_header_t ** nut_streams) {
 	nut_stream_header_t * s;
 	int i;
 	if ((i = avi_read_headers(avi))) return i;
-	*nut_streams = s = malloc(sizeof(nut_stream_header_t) * (avi->avih->dwStreams + 1));
+	*nut_streams = s = malloc(sizeof(nut_stream_header_t) * (avi->avih->dwStreams + 1 + N));
 	for (i = 0; i < avi->avih->dwStreams; i++) {
 		s[i].type = avi->stream[i].type;
 		s[i].timebase.den = avi->stream[i].strh->dwRate;
@@ -378,6 +382,7 @@ static int read_headers(void * priv, nut_stream_header_t ** nut_streams) {
 			s[i].channel_count = avi->stream[i].audio->nChannels;
 		}
 	}
+	while (i < N + 2) s[i++] = s[0];
 	s[i].type = -1;
 	return 0;
 }
@@ -385,6 +390,7 @@ static int read_headers(void * priv, nut_stream_header_t ** nut_streams) {
 static int find_frame_type(FILE * in, int len, int * type) {
 	uint8_t buf[len];
 	int i;
+	if (!len) { *type = 1; return 0; }
 	FREAD(in, len, buf);
 	fseek(in, -len, SEEK_CUR);
 	for (i = 0; i < len; i++) {
@@ -407,12 +413,24 @@ static int get_packet(void * priv, nut_packet_t * p, uint8_t ** buf) {
 
 	if (avi->cur >= avi->packets) return -1;
 
+	if ((avi->stream[0].last_pts % 100) < N && avi->buf) {
+		p->next_pts = 0;
+		p->len = 5;
+		p->flags = NUT_KEY_STREAM_FLAG;
+		p->stream = 2 + (avi->stream[0].last_pts % 100);
+		p->pts = avi->stream[0].last_pts;
+		*buf = (void*)avi;
+		free(avi->buf);
+		avi->buf = NULL;
+		return 0;
+	}
+
 	FREAD(avi->in, 4, fourcc);
 	FREAD(avi->in, 4, &len);
 	FIXENDIAN32(len);
 	p->next_pts = 0;
 	p->len = len;
-	p->is_key = !!(avi->index[avi->cur++].dwFlags & 0x10);
+	p->flags = (avi->index[avi->cur++].dwFlags & 0x10) ? NUT_KEY_STREAM_FLAG : 0;
 	p->stream = s = (fourcc[0] - '0') * 10 + (fourcc[1] - '0');
 	if (s == 0) { // 1 frame of video
 		int type;
@@ -421,8 +439,8 @@ static int get_packet(void * priv, nut_packet_t * p, uint8_t ** buf) {
 		if (stats) fprintf(stats, "%c", type==0?'I':type==1?'P':type==2?'B':'S');
 		switch (type) {
 			case 0: // I
-				if (!p->is_key) printf("Error detected stream %d frame %d\n", s, p->pts);
-				p->is_key = 1;
+				if (!(p->flags & NUT_KEY_STREAM_FLAG)) printf("Error detected stream %d frame %d\n", s, (int)p->pts);
+				p->flags |= NUT_KEY_STREAM_FLAG;
 				break;
 			case 3: // S
 				printf("S-Frame %d\n", (int)ftell(avi->in));
@@ -452,8 +470,8 @@ static int get_packet(void * priv, nut_packet_t * p, uint8_t ** buf) {
 	} else if (s < avi->avih->dwStreams) { // 0.5 secs of audio or a single packet
 		int samplesize = avi->stream[s].strh->dwSampleSize;
 
-		if (!p->is_key) printf("Error detected stream %d frame %d\n", s, p->pts);
-		p->is_key = 1;
+		if (!(p->flags & NUT_KEY_STREAM_FLAG)) printf("Error detected stream %d frame %d\n", s, (int)p->pts);
+		p->flags |= NUT_KEY_STREAM_FLAG;
 
 		p->pts = avi->stream[s].last_pts;
 		if (samplesize) avi->stream[s].last_pts += p->len / samplesize;
@@ -595,6 +613,7 @@ int main(int argc, char * argv []) {
 			printf("  cbSize: %u\n", avi->stream[i].audio->cbSize);
 		}
 	}
+	printf("\nNum packets: %d\n", avi->packets);
 
 err_out:
 	uninit(avi);

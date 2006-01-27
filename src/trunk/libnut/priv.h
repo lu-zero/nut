@@ -12,20 +12,22 @@
 #define ID_STRING "nut/multimedia container"
 
 #if 0
-#define     MAIN_STARTCODE (0x7A561F5F04ADULL + (((uint64_t)('N'<<8) + 'M')<<48))
-#define   STREAM_STARTCODE (0x11405BF2F9DBULL + (((uint64_t)('N'<<8) + 'S')<<48))
-#define KEYFRAME_STARTCODE (0xE4ADEECA4569ULL + (((uint64_t)('N'<<8) + 'K')<<48))
-#define    INDEX_STARTCODE (0xDD672F23E64EULL + (((uint64_t)('N'<<8) + 'X')<<48))
-#define     INFO_STARTCODE (0xAB68B596BA78ULL + (((uint64_t)('N'<<8) + 'I')<<48))
+#define      MAIN_STARTCODE (0x7A561F5F04ADULL + (((uint64_t)('N'<<8) + 'M')<<48))
+#define    STREAM_STARTCODE (0x11405BF2F9DBULL + (((uint64_t)('N'<<8) + 'S')<<48))
+#define SYNCPOINT_STARTCODE (0xE4ADEECA4569ULL + (((uint64_t)('N'<<8) + 'K')<<48))
+#define     INDEX_STARTCODE (0xDD672F23E64EULL + (((uint64_t)('N'<<8) + 'X')<<48))
+#define      INFO_STARTCODE (0xAB68B596BA78ULL + (((uint64_t)('N'<<8) + 'I')<<48))
 #else
-#define     MAIN_STARTCODE 0x4E4D7A561F5F04ADULL
-#define   STREAM_STARTCODE 0x4E5311405BF2F9DBULL
-#define KEYFRAME_STARTCODE 0x4E4BE4ADEECA4569ULL
-#define    INDEX_STARTCODE 0x4E58DD672F23E64EULL
-#define     INFO_STARTCODE 0x4E49AB68B596BA78ULL
+#define      MAIN_STARTCODE 0x4E4D7A561F5F04ADULL
+#define    STREAM_STARTCODE 0x4E5311405BF2F9DBULL
+#define SYNCPOINT_STARTCODE 0x4E4BE4ADEECA4569ULL
+#define     INDEX_STARTCODE 0x4E58DD672F23E64EULL
+#define      INFO_STARTCODE 0x4E49AB68B596BA78ULL
 #endif
 
-// FIXME subtitles
+#define MSB_CODED_FLAG 1
+#define STREAM_CODED_FLAG 2
+#define INVALID_FLAG 4
 
 #define PREALLOC_SIZE 4096
 
@@ -47,8 +49,8 @@ enum errors {
 typedef struct {
 	nut_input_stream_t isc;
 	int is_mem;
-	uint8_t *buf;
-	uint8_t *buf_ptr;
+	uint8_t * buf;
+	uint8_t * buf_ptr;
 	int write_len; // memory allocated
 	int read_len;  // data in memory
 	off_t file_pos;
@@ -58,14 +60,15 @@ typedef struct {
 typedef struct {
 	nut_output_stream_t osc;
         int is_mem;
-	uint8_t *buf;
-	uint8_t *buf_ptr;
+	uint8_t * buf;
+	uint8_t * buf_ptr;
 	int write_len; // memory allocated
 	off_t file_pos;
 } output_buffer_t;
 
 typedef struct {
 	int flags;
+	int stream_flags;
 	int stream_plus1;
 	int pts_delta;
 	int lsb;
@@ -74,26 +77,16 @@ typedef struct {
 } frame_table_t;
 
 typedef struct {
-	uint64_t pts;
-	off_t pos;
-} index_item_t;
-
-typedef struct {
-	int len;
-	int alloc_len;
-	index_item_t * ii;
-} index_context_t;
-
-typedef struct {
-	uint64_t pts;
-	off_t pos;
-	int back_ptr;
+	off_t pos; // << 1, flag is "is pts correct" (in cache)
+	uint64_t pts; // coded in '% stream_count'
+	int back_ptr; // << 1, flag says if there is another syncpoint between this and next
 } syncpoint_t;
 
 typedef struct {
 	int len;
 	int alloc_len;
 	syncpoint_t * s;
+	uint64_t * pts; // each elem is stream_count items, +1 to real pts, 0 means there is no key
 } syncpoint_list_t;
 
 typedef struct {
@@ -103,15 +96,14 @@ typedef struct {
 } reorder_packet_t;
 
 typedef struct {
-	int last_key; // muxer.c, re-set to 0 on every keyframe
-	int last_pts;
-	int last_dts;
+	uint64_t last_key; // muxer.c, re-set to 0 on every keyframe
+	uint64_t last_pts;
+	int64_t last_dts;
 	int msb_pts_shift;
-	int decode_delay; // FIXME
-	index_context_t index;
+	int decode_delay;
 	nut_stream_header_t sh;
 	int64_t * pts_cache;
-	off_t back_ptr;
+	int eor;
 	// reorder.c
 	int next_pts;
 	reorder_packet_t * packets;
@@ -124,13 +116,14 @@ typedef struct {
 } stream_context_t;
 
 typedef struct {
-	int tmp_flag;      // 1 => use msb, 2 => is keyframe, 4 => invalid
+	int tmp_flag;      // 1 => use msb, 2 => coded sflags, 4 => invalid
 	int tmp_fields;
-	int tmp_pts;       // tmp_fields = 1
-	int tmp_mul;       // tmp_fields = 2
-	int tmp_stream;    // tmp_fields = 3
-	int tmp_size;      // tmp_fields = 4
-	int count;         // tmp_fields = 6 (5 is reserved)
+	int tmp_sflag;     // tmp_fields = 1
+	int tmp_pts;       // tmp_fields = 2
+	int tmp_mul;       // tmp_fields = 3
+	int tmp_stream;    // tmp_fields = 4
+	int tmp_size;      // tmp_fields = 5
+	int count;         // tmp_fields = 7 (6 is reserved)
 } frame_table_input_t;
 
 struct nut_context_s {
@@ -143,8 +136,6 @@ struct nut_context_s {
 	stream_context_t * sc;
 
 	int max_distance;
-	int max_index_distance;
-	nut_timebase_t global_timebase;
 	frame_table_input_t * fti;
 	frame_table_t ft[256];
 
@@ -153,6 +144,10 @@ struct nut_context_s {
 
 	off_t before_seek; // position before any seek mess
 	off_t seek_status;
+	struct {
+		off_t good_key;
+		uint64_t old_last_pts;
+	} * seek_state; // for linear search, so we can go back as if nothing happenned
 
 	syncpoint_list_t syncpoints;
 
@@ -200,7 +195,12 @@ static inline uint64_t convert_ts(uint64_t sn, nut_timebase_t from, nut_timebase
 	return (ln / d1 * sn + (ln%d1) * sn / d1) / d2;
 }
 
-static inline int get_dts(int d, uint64_t * pts_cache, int pts) {
+static inline int compare_ts(uint64_t a, nut_timebase_t at, uint64_t b, nut_timebase_t bt) {
+	a = convert_ts(a, at, bt);
+	return a - b;
+}
+
+static inline int get_dts(int d, int64_t * pts_cache, int pts) {
 	while (d--) {
 		int64_t t = pts_cache[d];
 		if (t < pts) {
@@ -212,5 +212,11 @@ static inline int get_dts(int d, uint64_t * pts_cache, int pts) {
 }
 
 #define bctello(bc) ((bc)->file_pos + ((bc)->buf_ptr - (bc)->buf))
+
+#define TO_PTS(prefix, pts) \
+	int prefix##_s = (pts) % nut->stream_count; \
+	uint64_t prefix##_p = (pts)  / nut->stream_count;
+
+#define TO_DOUBLE(stream, pts) ((double)(pts) / nut->sc[(stream)].sh.timebase.den * nut->sc[(stream)].sh.timebase.nom)
 
 #endif // _NUT_PRIV_H

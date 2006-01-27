@@ -61,7 +61,7 @@ void nut_muxer_uninit_reorder(nut_context_t * nut) {
 	flushcheck_frames(nut);
 
 	for (i = 0; i < nut->stream_count; i++) {
-		assert(!nut->sc[i].num_packets);
+		//assert(!nut->sc[i].num_packets);
 		free(nut->sc[i].packets);
 		nut->sc[i].packets = NULL;
 	}

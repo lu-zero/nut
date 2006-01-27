@@ -4,48 +4,32 @@
 #include "nut.h"
 #include "priv.h"
 
-/*frame_table_input_t ft_default[] = {
-	//{ flag, fields, pts, mul, stream, size, count }
-	  {    1,      6,   1,   1,      2,    0,     1 },
-	  {    3,      4,   1,  74,      2,    0,     0 },
-	  {    3,      6,   0,   1,      2,    0,     1 },
-	  {    3,      6,   1,   1,      1,    0,     1 },
-	  {    3,      6,   0,   1,      1,    0,     1 },
-	  {    4,      2,   0,   1,      0,    0,     0 }, // 'N', invalid
-	  {    1,      4,   1, 175,      1,    0,     1 },
-	  {    1,      6,   0,   1,      0,    0,     1 },
-	  {    3,      6,   0,   1,      0,    0,     1 },
-	  {   -1,      0,   0,   0,      0,    0,     0 } // end
-
-	// There must be atleast 2 safety nets, one for keyframe and one for non keyframe
-	// { 1, 6, 0, 1, 0, 0, 1 },
-	// { 3, 6, 0, 1, 0, 0, 1 },
-};*/
-
 frame_table_input_t ft_default[] = {
-	//{ flag, fields, pts, mul, stream, size, count }
-	  {    1,      6,   1,   1,      2,    0,     1 },
-	  {    2,      4,   1, 418,      2,  417,     0 },
-	  {    2,      4,   1, 366,      2,  365,     0 },
-	  {    2,      4,   1, 523,      2,  522,     0 },
-	  {    2,      4,   1, 314,      2,  313,     0 },
-	  {    2,      4,   1, 627,      2,  626,     0 },
-	  {    2,      4,   1, 105,      2,  104,     0 },
-	  {    2,      4,   2,  68,      1,    0,     0 },
-//	  {    2,      4,   1, 385,      2,  384,     0 },
-//	  {    1,      4,   1,  73,      1,    0,     0 },
-	  {    3,      6,   0,   1,      2,    0,     1 },
-	  {    3,      6,   1,   1,      1,    0,     1 },
-	  {    3,      6,   0,   1,      1,    0,     1 },
-	  {    4,      2,   0,   1,      0,    0,     0 }, // 'N', invalid
-	  {    2,      4,  16, 275,      1,  100,     1 },
-	  {    1,      6,   0,   1,      0,    0,     1 },
-	  {    3,      6,   0,   1,      0,    0,     1 },
-	  {   -1,      0,   0,   0,      0,    0,     0 } // end
-
-	// There must be atleast 2 safety nets, one for keyframe and one for non keyframe
-	// { 1, 6, 0, 1, 0, 0, 1 },
-	// { 3, 6, 0, 1, 0, 0, 1 },
+	// There must be atleast this safety net:
+	//{    3,      3,     0,   0,   1,      0,    0,     0 },
+	//{ flag, fields, sflag, pts, mul, stream, size, count }
+	  {    4,      0,     0,   0,   1,      0,    0,     0 }, // invalid 0x00
+	  {    1,      1,     1,   0,   1,      0,    0,     0 }, // safety net non key frame
+	  {    1,      0,     0,   0,   1,      0,    0,     0 }, // safety net key frame
+	  {    3,      0,     0,   0,   1,      0,    0,     0 }, // one more safety net
+	  {    0,      5,     1,   1, 337,      2,  336,     0 }, // used 82427 times
+	  {    0,      5,     1,   1, 385,      2,  384,     0 }, // used 56044 times
+	  {    0,      5,     0,   2,   7,      1,    6,     0 }, // used 20993 times
+	  {    0,      5,     0,   1,   7,      1,    6,     0 }, // used 10398 times
+	  {    0,      5,     1,   1, 481,      2,  480,     0 }, // used 3527 times
+	  {    0,      5,     1,   1, 289,      2,  288,     0 }, // used 2042 times
+	  {    0,      5,     1,   1, 577,      2,  576,     0 }, // used 1480 times
+	  {    0,      5,     1,   1, 673,      2,  672,     0 }, // used 862 times
+	  {    0,      5,     1,   1, 769,      2,  768,     0 }, // used 433 times
+	  {    0,      5,     1,   1, 961,      2,  960,     0 }, // used 191 times
+	  {    1,      7,     0,   2, 104,      1,    0,    64 }, // "1.2.0" => 14187
+	  {    4,      3,     0,   0,   1,      0,    0,     0 }, // invalid 'N'
+	  {    1,      5,     0,   2, 104,      1,   64,     0 },
+	  {    1,      4,     0,  -1,  42,      1,    0,     0 }, // "1.-1.0" => 5707
+	  {    1,      4,     0,   1,  83,      1,    0,     0 }, // "1.1.0" => 11159
+	  {    1,      4,     1,   1,  11,      1,    0,     0 }, // "1.1.1" => 1409
+	  {    4,      3,     0,   0,   1,      0,    0,     0 }, // invalid 0xFF
+	  {   -1,      0,     0,   0,   0,      0,    0,     0 }, // end
 };
 
 static int stream_write(void * priv, size_t len, const uint8_t * buf) {
@@ -146,7 +130,7 @@ static void put_vb(output_buffer_t * bc, int len, uint8_t * data) {
 	put_data(bc, len, data);
 }
 
-static void put_frame(nut_context_t * nut, const nut_packet_t * fd, const uint8_t * data) {
+static int frame_header(nut_context_t * nut, const nut_packet_t * fd, int * rftnum) {
 	int i, ftnum = -1, size = 0, coded_pts, pts_delta;
 	stream_context_t * sc = &nut->sc[fd->stream];
 	pts_delta = fd->pts - sc->last_pts;
@@ -157,29 +141,50 @@ static void put_frame(nut_context_t * nut, const nut_packet_t * fd, const uint8_
 		coded_pts = fd->pts + (1 << sc->msb_pts_shift);
 	for (i = 0; i < 256; i++) {
 		int len = 1;
-		if (nut->ft[i].flags & 4) continue;
+		if (nut->ft[i].flags & INVALID_FLAG) continue;
 		if (nut->ft[i].stream_plus1 && nut->ft[i].stream_plus1 - 1 != fd->stream) continue;
 		if (nut->ft[i].pts_delta && nut->ft[i].pts_delta != pts_delta) continue;
-		if ((nut->ft[i].flags & 2) != (fd->is_key ? 2 : 0)) continue;
-		if (nut->ft[i].flags & 1) {
+		if (nut->ft[i].flags & MSB_CODED_FLAG) {
 			if ((fd->len - nut->ft[i].lsb) % nut->ft[i].mul) continue;
 		} else {
 			if (nut->ft[i].lsb != fd->len) continue;
 		}
+		if (!(nut->ft[i].flags & STREAM_CODED_FLAG) && (fd->flags & 3) != nut->ft[i].stream_flags) continue;
 		len += nut->ft[i].stream_plus1 ? 0 : v_len(fd->stream);
 		len += nut->ft[i].pts_delta ? 0 : v_len(coded_pts);
-		len += nut->ft[i].flags & 1 ? v_len((fd->len - nut->ft[i].lsb) / nut->ft[i].mul) : 0;
+		len += nut->ft[i].flags & MSB_CODED_FLAG ? v_len((fd->len - nut->ft[i].lsb) / nut->ft[i].mul) : 0;
+		len += nut->ft[i].flags & STREAM_CODED_FLAG ? v_len((fd->flags & 3) ^ nut->ft[i].stream_flags) : 0;
 		if (!size || len < size) { ftnum = i; size = len; }
 	}
 	assert(ftnum != -1);
+	if (rftnum) *rftnum = ftnum;
+	return size;
+}
+
+static void put_frame(nut_context_t * nut, const nut_packet_t * fd, const uint8_t * data) {
+	int ftnum = -1, size = 0, coded_pts, pts_delta;
+	stream_context_t * sc = &nut->sc[fd->stream];
+
+	pts_delta = fd->pts - sc->last_pts;
+	// ### check lsb pts
+	if (MAX(pts_delta, -pts_delta) < (1 << (sc->msb_pts_shift - 1)) - 1)
+		coded_pts = fd->pts & ((1 << sc->msb_pts_shift) - 1);
+	else
+		coded_pts = fd->pts + (1 << sc->msb_pts_shift);
+
+	size = frame_header(nut, fd, &ftnum);
 	sc->total_frames++;
 	sc->overhead += size;
 	sc->tot_size += fd->len;
 	put_bytes(nut->o, 1, ftnum); // frame_code
+
 	if (!nut->ft[ftnum].stream_plus1) put_v(nut->o, fd->stream);
-	if (!nut->ft[ftnum].pts_delta)   put_v(nut->o, coded_pts);
-	if (nut->ft[ftnum].flags & 1)
+	if (!nut->ft[ftnum].pts_delta)    put_v(nut->o, coded_pts);
+	if (nut->ft[ftnum].flags & MSB_CODED_FLAG)
 		put_v(nut->o, (fd->len - nut->ft[ftnum].lsb) / nut->ft[ftnum].mul);
+	if (nut->ft[ftnum].flags & STREAM_CODED_FLAG)
+		put_v(nut->o, (fd->flags & 3) ^ nut->ft[ftnum].stream_flags);
+
 	put_data(nut->o, fd->len, data);
 	sc->last_pts = fd->pts;
 	sc->last_dts = get_dts(sc->decode_delay, sc->pts_cache, fd->pts);
@@ -203,30 +208,30 @@ static void put_header(output_buffer_t * bc, output_buffer_t * tmp, uint64_t sta
 static void put_main_header(nut_context_t * nut) {
 	output_buffer_t *tmp = new_mem_buffer();
 	int i, j, n;
-	int flag, fields, timestamp = -1, mul = -1, stream = -1, size, count;
+	int flag, fields, sflag, timestamp = 0, mul = 1, stream = 0, size, count;
 
 	put_v(tmp, NUT_VERSION);
 	put_v(tmp, nut->stream_count);
 	put_v(tmp, nut->max_distance);
-	put_v(tmp, nut->max_index_distance);
-	put_v(tmp, nut->global_timebase.nom);
-	put_v(tmp, nut->global_timebase.den);
 	for(n=i=0; i < 256; n++) {
 		assert(nut->fti[n].tmp_flag != -1);
 		put_v(tmp, flag = nut->fti[n].tmp_flag);
 		put_v(tmp, fields = nut->fti[n].tmp_fields);
-		if (fields > 0) put_s(tmp, timestamp = nut->fti[n].tmp_pts);
-		if (fields > 1) put_v(tmp, mul = nut->fti[n].tmp_mul);
-		if (fields > 2) put_v(tmp, stream = nut->fti[n].tmp_stream);
-		if (fields > 3) put_v(tmp, size = nut->fti[n].tmp_size);
+		if (fields > 0) put_v(tmp, sflag = nut->fti[n].tmp_sflag);
+		else sflag = 0;
+		if (fields > 1) put_s(tmp, timestamp = nut->fti[n].tmp_pts);
+		if (fields > 2) put_v(tmp, mul = nut->fti[n].tmp_mul);
+		if (fields > 3) put_v(tmp, stream = nut->fti[n].tmp_stream);
+		if (fields > 4) put_v(tmp, size = nut->fti[n].tmp_size);
 		else size = 0;
-		if (fields > 4) put_v(tmp, 0); // reserved
-		if (fields > 5) put_v(tmp, count = nut->fti[n].count);
+		if (fields > 5) put_v(tmp, 0); // reserved
+		if (fields > 6) put_v(tmp, count = nut->fti[n].count);
 		else count = mul - size;
 
 		for(j = 0; j < count && i < 256; j++, i++) {
-			assert(i != 'N' || flag == 4);
+			assert(i != 'N' || flag == INVALID_FLAG);
 			nut->ft[i].flags = flag;
+			nut->ft[i].stream_flags = sflag;
 			nut->ft[i].stream_plus1 = stream;
 			nut->ft[i].mul = mul;
 			nut->ft[i].lsb = size + j;
@@ -272,82 +277,129 @@ static void put_stream_header(nut_context_t * nut, int id) {
 	free_buffer(tmp);
 }
 
-static void put_syncpoint(nut_context_t *nut) {
+static void put_syncpoint(nut_context_t * nut) {
 	int i;
 	uint64_t pts = 0;
-	off_t back_ptr = 0;
+	int stream = 0;
+	int back_ptr = 0;
+	int keys[nut->stream_count];
+	syncpoint_list_t * s = &nut->syncpoints;
 
 	nut->last_syncpoint = bctello(nut->o);
 
 	for (i = 0; i < nut->stream_count; i++) {
-		pts = MAX(pts, convert_ts(nut->sc[i].last_dts, nut->sc[i].sh.timebase, nut->global_timebase));
-		if (nut->sc[i].back_ptr) {
-			if (back_ptr) back_ptr = MIN(back_ptr, nut->sc[i].back_ptr);
-			else back_ptr = nut->sc[i].back_ptr;
+		if (nut->sc[i].last_dts > 0 && compare_ts(nut->sc[i].last_dts, nut->sc[i].sh.timebase, pts, nut->sc[stream].sh.timebase) > 0) {
+			pts = nut->sc[i].last_dts;
+			stream = i;
 		}
 	}
-	if (back_ptr) back_ptr = (nut->last_syncpoint - back_ptr) / 8;
 
-	put_bytes(nut->o, 8, KEYFRAME_STARTCODE);
-	put_v(nut->o, pts);
+	if (s->alloc_len <= s->len) {
+		s->alloc_len += PREALLOC_SIZE;
+		s->s = realloc(s->s, s->alloc_len * sizeof(syncpoint_t));
+		s->pts = realloc(s->pts, s->alloc_len * nut->stream_count * sizeof(uint64_t));
+	}
+
+	for (i = 0; i < nut->stream_count; i++) s->pts[s->len * nut->stream_count + i] = nut->sc[i].last_key;
+	s->s[s->len].pos = nut->last_syncpoint;
+	s->len++;
+
+	for (i = 0; i < nut->stream_count; i++) keys[i] = nut->sc[i].eor;
+	for (i = s->len; --i; ) {
+		int j;
+		int n = 1;
+		for (j = 0; j < nut->stream_count; j++) {
+			if (keys[j]) continue;
+			if (!s->pts[i * nut->stream_count + j]) continue;
+			if (compare_ts(s->pts[i * nut->stream_count + j] - 1, nut->sc[j].sh.timebase, pts, nut->sc[stream].sh.timebase) <= 0) keys[j] = 1;
+		}
+		for (j = 0; j < nut->stream_count; j++) n &= keys[j];
+		if (n) { i--; break; }
+	}
+	back_ptr = (nut->last_syncpoint - s->s[i].pos) / 8;
+
+	put_bytes(nut->o, 8, SYNCPOINT_STARTCODE);
+	put_v(nut->o, pts * nut->stream_count + stream);
 	put_v(nut->o, back_ptr);
 
 	for (i = 0; i < nut->stream_count; i++) {
-		nut->sc[i].last_pts = convert_ts(pts, nut->global_timebase, nut->sc[i].sh.timebase);
+		nut->sc[i].last_pts = convert_ts(pts, nut->sc[stream].sh.timebase, nut->sc[i].sh.timebase);
+		nut->sc[i].last_key = 0;
 	}
 
 	nut->sync_overhead += bctello(nut->o) - nut->last_syncpoint;
-	nut->syncpoints.len++;
 }
 
 static void put_headers(nut_context_t * nut) {
 	int i;
 	nut->last_headers = bctello(nut->o);
+
 	put_main_header(nut);
-	for (i = 0; i < nut->stream_count; i++) {
-		put_stream_header(nut, i);
-	}
+	for (i = 0; i < nut->stream_count; i++) put_stream_header(nut, i);
 	put_syncpoint(nut);
 }
 
 static void put_index(nut_context_t * nut) {
-	// ### check index writing
 	off_t start = bctello(nut->o);
+	output_buffer_t * tmp = new_mem_buffer();
+	syncpoint_list_t * s = &nut->syncpoints;
 	int i;
+	uint64_t max_pts = 0;
+	int stream = 0;
+
 	for (i = 0; i < nut->stream_count; i++) {
-		output_buffer_t * tmp = new_mem_buffer();
-		index_context_t * idx = &nut->sc[i].index;
-		int j, count;
-		int max = nut->max_index_distance;
-		int last_pos, last_pts;
-		int ipos[idx->len];
+		if (compare_ts(nut->sc[i].sh.max_pts, nut->sc[i].sh.timebase, max_pts, nut->sc[stream].sh.timebase) > 0) {
+			max_pts = nut->sc[i].last_dts;
+			stream = i;
+		}
+	}
+	put_v(tmp, max_pts * nut->stream_count + stream);
 
-		put_v(tmp, i); // stream_id
-		put_v(tmp, nut->sc[i].sh.max_pts);
+	put_v(tmp, s->len);
+	for (i = 0; i < s->len; i++) {
+		off_t pos = s->s[i].pos / 8;
+		off_t last_pos = i ? s->s[i-1].pos / 8 : 0;
+		put_v(tmp, pos - last_pos);
+	}
 
-		last_pos = 0;
-		count = 0;
-		for (j = 0; j < idx->len; j++) {
-			if (j == 0 || j == idx->len - 1 || idx->ii[j+1].pos - last_pos > max) {
-				ipos[count++] = j;
-				last_pos = idx->ii[j].pos;
+	for (i = 0; i < nut->stream_count; i++) {
+		uint64_t a, last = 0;
+		int j;
+		for (j = 0; j < s->len; ) {
+			int k;
+			a = 0;
+			for (k = 0; k < 5 && j+k < s->len; k++) a |= !!s->pts[(j + k) * nut->stream_count + i] << k;
+			if (a == 0 || a == ((1 << k) - 1)) {
+				int flag = a & 2;
+				for (k = 0; j+k < s->len; k++) if (!s->pts[(j+k) * nut->stream_count + i] != !flag) break;
+				put_v(tmp, k << 2 | flag | 1);
+				if (j+k < s->len) k++;
+			} else {
+				for (; k+7 < 62 && j+k < s->len; ) {
+					uint64_t b = 0;
+					int tmp2;
+					for (tmp2 = 0; tmp2 < 7 && j+k+tmp2 < s->len; tmp2++) {
+						b |= !!s->pts[(j + k + tmp2) * nut->stream_count + i] << tmp2;
+					}
+					if (b == 0 || b == ((1 << tmp2) - 1)) break;
+					a |= b << k;
+					k += tmp2;
+				}
+				put_v(tmp, ((1LL << k) | a) << 1);
+			}
+			assert(k > 4 || j+k == s->len);
+			j += k;
+			for (k = j - k; k < j; k++) {
+				if (!s->pts[k * nut->stream_count + i]) continue;
+				put_v(tmp, s->pts[k * nut->stream_count + i] - last - 1);
+				last = s->pts[k * nut->stream_count + i] - 1;
 			}
 		}
-
-		put_v(tmp, count);
-
-		last_pos = 0;
-		last_pts = 0;
-		for (j = 0; j < count; j++) {
-			put_v(tmp, idx->ii[ipos[j]].pts - last_pts);
-			put_v(tmp, idx->ii[ipos[j]].pos - last_pos);
-			last_pts = idx->ii[ipos[j]].pts;
-			last_pos = idx->ii[ipos[j]].pos;
-		}
-
-		put_header(nut->o, tmp, INDEX_STARTCODE, 1);
-		free_buffer(tmp);
 	}
+
+	put_header(nut->o, tmp, INDEX_STARTCODE, 1);
+	free_buffer(tmp);
+
 	put_bytes(nut->o, 8, bctello(nut->o) - start);
 }
 
@@ -368,6 +420,8 @@ void nut_write_info(nut_context_t * nut, const nut_info_packet_t info []) {
 			put_vb(tmp, strlen(info[i].name) + 1, info[i].name);
 		if (!strcmp(type, "v"))
 			put_v(tmp, info[i].val);
+		else if (!strcmp(type, "s"))
+			put_s(tmp, info[i].val);
 		else
 			put_vb(tmp, info[i].val, info[i].data);
 	}
@@ -377,10 +431,8 @@ void nut_write_info(nut_context_t * nut, const nut_info_packet_t info []) {
 }
 
 void nut_write_frame(nut_context_t * nut, const nut_packet_t * fd, const uint8_t * buf) {
-	int wrote_syncpoint = 0;
 	stream_context_t * sc = &nut->sc[fd->stream];
-
-	if (fd->is_key) sc->back_ptr = 0; // hint for put_syncpoint
+	int wrote_syncpoint = 0;
 
 	if (bctello(nut->o) > (1 << 23)) { // main header repetition
 		int i = 23; // ### magic value for header repetition
@@ -390,97 +442,69 @@ void nut_write_frame(nut_context_t * nut, const nut_packet_t * fd, const uint8_t
 		}
 		if (nut->last_headers < (1 << i)) {
 			put_headers(nut);
+			wrote_syncpoint = 1;
 		}
 	}
-	if (bctello(nut->o) - nut->last_syncpoint + fd->len > nut->max_distance) {
-		// distance syncpoints
-		put_syncpoint(nut);
-		wrote_syncpoint = 1;
+	// distance syncpoints
+	if (!wrote_syncpoint) {
+		if (bctello(nut->o) - nut->last_syncpoint + fd->len + frame_header(nut, fd, NULL) > nut->max_distance) put_syncpoint(nut);
 	}
-	if (fd->is_key) { // syncpoints after keyframes
-		index_context_t * idx = &sc->index;
-
-		if (sc->last_key > 5) { // ### magic value for keyframes
-			sc->last_key = -1;
-			if (!wrote_syncpoint) put_syncpoint(nut);
-		} else if (sc->last_key > 0)
-			sc->last_key++;
-			// for an all-keyframe stream last_key will never grow posotive.
-		else sc->last_key--;
-
-		// index handling
-		if (idx->len == idx->alloc_len) {
-			idx->alloc_len += PREALLOC_SIZE;
-			idx->ii = realloc(idx->ii, sizeof(index_item_t) * idx->alloc_len);
-		}
-		idx->ii[idx->len].pts = fd->pts;
-		idx->ii[idx->len].pos = bctello(nut->o);
-		idx->len++;
-
-		// reset back_ptr
-		sc->back_ptr = nut->last_syncpoint;
-	} else if (sc->last_key > 0)
-		sc->last_key++;
-	else
-		sc->last_key *= -1;
 
 	put_frame(nut, fd, buf);
+
+	if ((fd->flags & NUT_KEY_STREAM_FLAG) && !sc->last_key) sc->last_key = fd->pts + 1;
+	if (fd->flags & NUT_EOR_STREAM_FLAG) sc->eor = 1;
+	else sc->eor = 0;
 }
 
 nut_context_t * nut_muxer_init(const nut_muxer_opts_t * mopts, const nut_stream_header_t s[]) {
-	int i;
 	nut_context_t * nut = malloc(sizeof(nut_context_t));
+	int i;
 	// TODO check that all input is valid
 
 	nut->o = new_output_buffer(mopts->output);
 	nut->max_distance = 32768; // TODO
-	//nut->max_index_distance = 32768; // TODO
-	nut->max_index_distance = 524288; // TODO
-	nut->global_timebase.nom = 1; // TODO
-	nut->global_timebase.den = 1000; // TODO
 	nut->fti = ft_default; // TODO
 	nut->mopts = *mopts;
 
 	nut->sync_overhead = 0;
-	nut->syncpoints.len = 0;
 
-	for (i = 0; s[i].type >= 0; i++);
-	nut->stream_count = i;
+	nut->syncpoints.len = 0;
+	nut->syncpoints.alloc_len = 0;
+	nut->syncpoints.s = NULL;
+	nut->syncpoints.pts = NULL;
+
+	for (nut->stream_count = 0; s[nut->stream_count].type >= 0; nut->stream_count++);
 
 	nut->sc = malloc(sizeof(stream_context_t) * nut->stream_count);
 
 	for (i = 0; i < nut->stream_count; i++) {
 		int j;
-		nut->sc[i].index.len = 0;
-		nut->sc[i].index.alloc_len = PREALLOC_SIZE;
-		nut->sc[i].index.ii = malloc(sizeof(index_item_t) * nut->sc[i].index.alloc_len);
-
-		nut->sc[i].last_key = -1;
+		nut->sc[i].last_key = 0;
 		nut->sc[i].last_pts = 0;
+		nut->sc[i].last_dts = -1;
 		nut->sc[i].msb_pts_shift = 7; // TODO
-		nut->sc[i].decode_delay = 0; // ### TODO
-		nut->sc[i].back_ptr = 0;
+		nut->sc[i].decode_delay = !i; // ### TODO
+		nut->sc[i].eor = 0;
 		nut->sc[i].sh = s[i];
 		nut->sc[i].sh.max_pts = 0;
 
-		if (s[i].fourcc_len) {
-			nut->sc[i].sh.fourcc = malloc(s[i].fourcc_len);
-			memcpy(nut->sc[i].sh.fourcc, s[i].fourcc, s[i].fourcc_len);
-		} else nut->sc[i].sh.fourcc = NULL;
-		if (s[i].codec_specific_len) {
-			nut->sc[i].sh.codec_specific = malloc(s[i].codec_specific_len);
-			memcpy(nut->sc[i].sh.codec_specific, s[i].codec_specific, s[i].codec_specific_len);
-		} else nut->sc[i].sh.codec_specific = NULL;
+		nut->sc[i].sh.fourcc = malloc(s[i].fourcc_len);
+		memcpy(nut->sc[i].sh.fourcc, s[i].fourcc, s[i].fourcc_len);
 
+		nut->sc[i].sh.codec_specific = malloc(s[i].codec_specific_len);
+		memcpy(nut->sc[i].sh.codec_specific, s[i].codec_specific, s[i].codec_specific_len);
+
+		nut->sc[i].pts_cache = malloc(nut->sc[i].decode_delay * sizeof(int64_t));
+
+		// reorder.c
+		nut->sc[i].reorder_pts_cache = malloc(nut->sc[i].decode_delay * sizeof(int64_t));
+		for (j = 0; j < nut->sc[i].decode_delay; j++) nut->sc[i].reorder_pts_cache[j] = nut->sc[i].pts_cache[j] = -1;
 		nut->sc[i].next_pts = 0;
 		nut->sc[i].packets = NULL;
 		nut->sc[i].num_packets = 0;
 
-		nut->sc[i].pts_cache = malloc(nut->sc[i].decode_delay * sizeof(int64_t));
-		nut->sc[i].reorder_pts_cache = malloc(nut->sc[i].decode_delay * sizeof(int64_t));
-		for (j = 0; j < nut->sc[i].decode_delay; j++)
-			nut->sc[i].reorder_pts_cache[j] = nut->sc[i].pts_cache[j] = -1;
-
+		// debug
 		nut->sc[i].total_frames = 0;
 		nut->sc[i].overhead = 0;
 		nut->sc[i].tot_size = 0;
@@ -513,15 +537,18 @@ void nut_muxer_uninit(nut_context_t * nut) {
 		fprintf(stderr, "packet size: %.2lf ", (double)nut->sc[i].tot_size / nut->sc[i].total_frames);
 		fprintf(stderr, "packet overhead: %.2lf\n", (double)nut->sc[i].overhead / nut->sc[i].total_frames);
 
-		free(nut->sc[i].index.ii);
 		free(nut->sc[i].sh.fourcc);
 		free(nut->sc[i].sh.codec_specific);
 		free(nut->sc[i].pts_cache);
 		free(nut->sc[i].reorder_pts_cache);
 	}
+	free(nut->sc);
+
 	fprintf(stderr, "Syncpoints: %d size: %d\n", nut->syncpoints.len, nut->sync_overhead);
 
-	free(nut->sc);
+	free(nut->syncpoints.s);
+	free(nut->syncpoints.pts);
+
 	free_buffer(nut->o); // flushes file
 	fprintf(stderr, "TOTAL: %d bytes data, %d bytes overhead, %.2lf%% overhead\n", total,
 		(int)ftell(nut->mopts.output.priv) - total, (double)(ftell(nut->mopts.output.priv) - total) / total*100);

@@ -6,6 +6,9 @@
 #define NUT_VIDEO_CLASS 0
 #define NUT_AUDIO_CLASS 1
 
+#define NUT_KEY_STREAM_FLAG 1
+#define NUT_EOR_STREAM_FLAG 1
+
 typedef struct {
 	void * priv;
 	size_t (*read)(void * priv, size_t len, uint8_t * buf);
@@ -53,14 +56,14 @@ typedef struct {
 typedef struct {
 	nut_input_stream_t input;
 	int read_index;
-	int cache_syncpoints;
+	//int cache_syncpoints;
 } nut_demuxer_opts_t;
 
 typedef struct {
 	int id; // 0 means end
 	char * type;
 	char * name;
-	int val; // val is length if type is not "v"
+	int val; // val is length if type is not "v" or "s"
 	uint8_t * data;
 } nut_info_packet_t;
 
@@ -70,10 +73,10 @@ typedef struct {
 	int len;
 	// only used if type is e_frame
 	int stream;
-	int pts;
-	int is_key;
+	uint64_t pts;
+	int flags; // 1 - keyframe, 2 - EOR
 	// not manditory, for reorderer
-	int next_pts;
+	uint64_t next_pts;
 } nut_packet_t;
 
 struct nut_context_s;
@@ -165,7 +168,7 @@ After nut_seek, nut_read_next_packet should be called to get the next frame.
 active_streams is a -1 terminated list of all streams that are active...
 if NULL, all streams are active.
 */
-int nut_seek(nut_context_t * nut, double time_pos, int type, int * active_streams);
+int nut_seek(nut_context_t * nut, double time_pos, int flags, const int * active_streams);
 
 
 /**

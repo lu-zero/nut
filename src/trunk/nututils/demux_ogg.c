@@ -261,7 +261,7 @@ static int vorbis_read_headers(ogg_t * ogg, int stream) {
 
 	os->time_base_denom = sample_rate / gcd(sample_rate, i);
 	os->time_base_nom = i / gcd(sample_rate, i);
-	os->fixed_fps = 1;
+	os->fixed_fps = 0;
 	os->codec_specific_len = 0;
 	os->codec_specific = NULL;
 	os->samplerate_nom = sample_rate;
@@ -568,7 +568,7 @@ static int get_packet(void * priv, nut_packet_t * p, uint8_t ** buf) {
 
 	p->next_pts = 0;
 	p->stream = stream;
-	p->is_key = os->oc->is_key ? os->oc->is_key(os) : 1;
+	p->flags = os->oc->is_key ? os->oc->is_key(os) : NUT_KEY_STREAM_FLAG;
 	p->pts = os->oc->get_pts(os);
 
 	*buf = os->buf + os->buf_pos;
@@ -623,7 +623,7 @@ int main(int argc, char *argv[]) {
 	}
 	printf("\n");
 	while (!(err = get_packet(ogg, &p, &buf))) {
-		printf("pos: 0x%X stream: %d pts: %d len: %d key: %d\n", (int)ftell(in), p.stream, p.pts, p.len, p.is_key);
+		printf("pos: 0x%X stream: %d pts: %d len: %d key: %d\n", (int)ftell(in), p.stream, (int)p.pts, p.len, p.flags);
 	}
 	uninit(ogg);
 	fclose(in);

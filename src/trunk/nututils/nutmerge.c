@@ -60,17 +60,19 @@ int main(int argc, char * argv []) {
 	nut = nut_muxer_init(&mopts, nut_stream);
 
 	for (i = 0; nut_stream[i].type >= 0; i++);
+
 	{
 	int pts[i];
 	int * frames[i];
 	int frames_pos[i];
 	int frames_alloc[i];
+
 	for (i = 0; nut_stream[i].type >= 0; i++) {
 		frames_alloc[i] = frames_pos[i] = pts[i] = 0;
 		frames[i] = NULL;
 	}
 
-	if (stats) fprintf(stats, "%10s%10s%10s%10s\n", "stream", "len", "pts_diff", "is_key");
+	if (stats) fprintf(stats, "%10s%10s%10s%10s\n", "stream", "len", "pts_diff", "flags");
 	while (!(err = demuxer->get_packet(demuxer_priv, &p, &buf))) {
 		int s = p.stream;
 		nut_write_frame_reorder(nut, &p, buf);
@@ -79,8 +81,14 @@ int main(int argc, char * argv []) {
 			frames[s] = realloc(frames[s], sizeof(int) * frames_alloc[s]);
 		}
 		frames[s][frames_pos[s] - 1] = p.len;
-		if (stats) fprintf(stats, "%10d%10d%10d%10d\n", p.stream, p.len, p.pts - pts[s], p.is_key);
+		if (stats) fprintf(stats, "%10d%10d%10d%10d\n", p.stream, p.len, (int)p.pts - pts[s], p.flags);
 		pts[s] = p.pts;
+		if (!(p.pts % 5000)) {
+			for (i = 0; nut_stream[i].type >= 0; i++) {
+				fprintf(stderr, "%d: %5d ", i, frames_pos[i]);
+			}
+			fprintf(stderr, "\r");
+		}
 	}
 	if (err == -1) err = 0;
 	nut_muxer_uninit_reorder(nut);
