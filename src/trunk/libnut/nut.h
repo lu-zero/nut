@@ -160,9 +160,10 @@ void nut_free_info(nut_info_packet_t info []);
 const char * nut_error(int error);
 
 /** Seeks to requested position in seconds
-if (type & 1), time_pos is relative to current position, otherwise absoloute.
-if (type & 2), the seek should go backwards instead of forwards
-	when looking for nearest keyframe
+if (flags & 1), time_pos is relative to current position, otherwise absoloute.
+if (flags & 2), the seek should go forwards when seeking, and find
+                the nearest keyframe after target pts.
+                No percise seeking is preformed.
 if it returns (non fatal) error, no seek is preformed.
 After nut_seek, nut_read_next_packet should be called to get the next frame.
 active_streams is a -1 terminated list of all streams that are active...

@@ -216,15 +216,18 @@ static void demux_seek_nut(demuxer_t * demuxer, float time_pos, int flags) {
 	sh_audio_t * sh_audio = demuxer->audio->sh;
 	int nutflags = 0;
 	int ret;
+	const int tmp[] = { 0, -1 };
 
-	if (!(flags & 1)) nutflags |= 1; // relative
-	if (time_pos < 0) nutflags |= 2; // backwards
+	if (!(flags & 1)) {
+		nutflags |= 1; // relative
+		if (time_pos > 0) nutflags |= 2; // forwards
+	}
 
 	if (flags & 2) // percent
 		time_pos *= priv->s[0].max_pts *
 				(double)priv->s[0].timebase.nom / priv->s[0].timebase.den;
 
-	ret = nut_seek(nut, time_pos, nutflags, NULL);
+	ret = nut_seek(nut, time_pos, nutflags, tmp);
 	if (ret < 0) mp_msg(MSGT_HEADER, MSGL_ERR, "NUT error: %s\n", nut_error(-ret));
 	if (sh_audio) resync_audio_stream(sh_audio);
 }

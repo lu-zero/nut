@@ -931,7 +931,7 @@ static int linear_search_seek(nut_context_t * nut, int backwards, uint64_t * pts
 		nut->seek_status = s.pos << 1;
 	}
 
-	if (!(nut->seek_status & 1)) while (bctello(nut->i) < end) {
+	if (!(nut->seek_status & 1)) while (bctello(nut->i) < end || !end) {
 		uint64_t tmp;
 		nut_packet_t pd;
 		off_t begin = bctello(nut->i);
@@ -940,11 +940,15 @@ static int linear_search_seek(nut_context_t * nut, int backwards, uint64_t * pts
 		if (tmp != 'N' && !(nut->ft[tmp].flags & INVALID_FLAG)) { // frame
 			CHECK(get_frame(nut, &pd, tmp));
 			if (pts[pd.stream] & 1) {
-				printf("%lld %lld\n", pd.pts, pts[pd.stream]>>1);
-				if (pd.pts > pts[pd.stream]>>1) break; // we are done
+				if (end && pd.pts > pts[pd.stream]>>1) break; // we are done
 				if (pd.flags & NUT_KEY_STREAM_FLAG) {
 					printf("good: %d %d\n", (int)begin, (int)nut->before_seek);
 					good_key[pd.stream] = begin;
+					if (!end && pd.pts >= pts[pd.stream]>>1) {
+						// forward seek end
+						seek_buf(nut->i, begin, SEEK_SET);
+						break;
+					}
 				}
 			}
 			read = ready_read_buf(nut->i, pd.len);
@@ -966,6 +970,7 @@ static int linear_search_seek(nut_context_t * nut, int backwards, uint64_t * pts
 			case MAIN_STARTCODE:
 			case STREAM_STARTCODE:
 			case INFO_STARTCODE:
+			case INDEX_STARTCODE:
 				GET_V(nut->i, pd.len);
 				read = ready_read_buf(nut->i, pd.len);
 				ERROR(read < pd.len, buf_eof(nut->i));
@@ -976,6 +981,7 @@ static int linear_search_seek(nut_context_t * nut, int backwards, uint64_t * pts
 				goto err_out;
 		}
 	}
+	if (!end) goto err_out; // forward seek
 
 	for (i = 0; i < nut->stream_count; i++) {
 		if (!(pts[i] & 1)) continue;
@@ -985,7 +991,7 @@ static int linear_search_seek(nut_context_t * nut, int backwards, uint64_t * pts
 	// after ALL this, we ended up in a worse position than where we were...
 	ERROR(!backwards && min_pos < nut->before_seek, -ERR_NOT_SEEKABLE);
 
-	// FIXME we're counting on syncpoint cache
+	// FIXME we're counting on syncpoint cache dopts.cache_syncpoints
 	for (i = 1; i < sl->len; i++) if ((sl->s[i].pos >> 1) > min_pos) break;
 	i--;
 	if (!(nut->seek_status & 1)) seek_buf(nut->i, (sl->s[i].pos >> 1) + 8, SEEK_SET);
@@ -1012,13 +1018,13 @@ static int linear_search_seek(nut_context_t * nut, int backwards, uint64_t * pts
 
 err_out:
 	if (err != 2) { // unless EAGAIN
-		if (err) { // some NUT error, let's just go back to last good syncpoint
-			if (err == -ERR_NOT_SEEKABLE) { // unless it's a failed seek - then go back to the very begginning
+		if (err) {
+			if (err == -ERR_NOT_SEEKABLE) { // a failed seek - then go back to before everything started
 				for (i = 0; i < nut->stream_count; i++) {
 					nut->sc[i].last_pts = old_last_pts[i];
 				}
 				seek_buf(nut->i, nut->before_seek, SEEK_SET);
-			} else {
+			} else { // some NUT error, let's just go back to last good syncpoint
 				err = 0;
 				seek_buf(nut->i, nut->seek_status >> 1, SEEK_SET);
 			}
@@ -1080,50 +1086,51 @@ int nut_seek(nut_context_t * nut, double time_pos, int flags, const int * active
 
 	if (nut->syncpoints.len) {
 		syncpoint_list_t * sl = &nut->syncpoints;
-		int i, j;
+		int i;
 		int sync[nut->stream_count];
 		int good_sync = -2;
-		for (j = 0; j < nut->stream_count; j++) sync[j] = -1;
+		int last_sync = 0;
+		for (i = 0; i < nut->stream_count; i++) sync[i] = -1;
 
 		for (i = 1; i < sl->len; i++) {
-			int n = 0;
+			int j;
 			if (!(sl->s[i].pos & 1)) continue;
 			for (j = 0; j < nut->stream_count; j++) {
 				uint64_t tmp = sl->pts[i * nut->stream_count + j];
-				if (pts[j]&1 && tmp--) if ((pts[j] >> 1) < tmp) n = 1;
-			}
-			if (n) break;
-			for (j = 0; j < nut->stream_count; j++) {
-				uint64_t tmp = sl->pts[i * nut->stream_count + j];
-				if (pts[j]&1 && tmp--) if ((pts[j] >> 1) >= tmp) sync[j] = (i-1);
+				if (pts[j]&1 && tmp--) {
+					if ((pts[j] >> 1) < tmp) {
+						if (!last_sync) last_sync = i;
+					} else sync[j] = (i-1);
+				}
 			}
 		}
-		for (j = 0; j < nut->stream_count; j++) {
-			if (!(pts[j] & 1)) continue;
-			if (good_sync == -2 || good_sync > sync[j]) good_sync = sync[j];
+		for (i = 0; i < nut->stream_count; i++) {
+			if (!(pts[i] & 1)) continue;
+			if (good_sync == -2 || good_sync > sync[i]) good_sync = sync[i];
 		}
 
-		printf("%d %d %d %d (%d %d)\n", sl->s[sl->len-1].back_ptr, i, good_sync, sl->len, sync[0], sync[1]);
-		if ((sl->s[sl->len-1].back_ptr & 1) && i != sl->len && good_sync != -1) {
-			fprintf(stderr, "checking from syncpoint %d (%d,%d) to %d (%d,%d) (%d)\n",
+		if ((sl->s[sl->len-1].back_ptr & 1) && last_sync && good_sync != -1) {
+			fprintf(stderr, "checking from syncpoint %d (%d,%d) to %d (%d,%d)\n",
 				good_sync, (int)sl->s[good_sync].pos, (int)sl->s[good_sync].pts,
-				i, (int)sl->s[i].pos, (int)sl->s[i].pts,
-				sl->len);
-			for (j = good_sync; j <= i; j++) if (!(sl->s[j].pos & 1)) break;
-			if (j != i+1) good_sync = -1;
+				last_sync, (int)sl->s[last_sync].pos, (int)sl->s[last_sync].pts);
+			for (i = good_sync; i <= last_sync; i++) if (!(sl->s[i].pos & 1)) break;
+			if (i != last_sync+1 && good_sync <= last_sync) good_sync = -1;
 		} else good_sync = -1;
 		if (good_sync >= 0) {
 			start = sl->s[good_sync].pos >> 1;
 			end = sl->s[++good_sync].pos >> 1;
-			printf("i expect to find: %lld %lld\n", sl->pts[good_sync * nut->stream_count], sl->pts[good_sync * nut->stream_count + 1]);
-			printf("i want: %lld %lld\n", pts[0] >> 1, pts[1] >> 1);
+			if (flags & 2) end = sl->s[last_sync - 1].pos >> 1; // for forward seek
 		}
 	}
 
 	if (start == 0) CHECK(binary_search_syncpoint(nut, time_pos, pts, &start, &end));
 	else printf("============= NO BINARY SEARCH\n");
 
-	CHECK(linear_search_seek(nut, backwards, pts, start, end));
+	if (!(flags & 2)) { // regular seek
+		CHECK(linear_search_seek(nut, backwards, pts, start, end));
+	} else { // forwards seek, find keyframe
+		CHECK(linear_search_seek(nut, backwards, pts, end, 0));
+	}
 err_out:
 	if (err != 2) { // unless EAGAIN
 		flush_buf(nut->i);
