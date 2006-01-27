@@ -911,6 +911,7 @@ static int linear_search_seek(nut_context_t * nut, int backwards, uint64_t * pts
 	int i, err = 0;
 	off_t good_key[nut->stream_count], min_pos = 0;
 	uint64_t old_last_pts[nut->stream_count];
+	uint8_t * buf_before = NULL;
 
 	for (i = 0; i < nut->stream_count; i++) {
 		good_key[i] = nut->seek_state ? nut->seek_state[i].good_key : 0;
@@ -936,6 +937,7 @@ static int linear_search_seek(nut_context_t * nut, int backwards, uint64_t * pts
 		nut_packet_t pd;
 		off_t begin = bctello(nut->i);
 		int read;
+		buf_before = nut->i->buf_ptr;
 		CHECK(get_bytes(nut->i, 1, &tmp)); // frame_code or 'N'
 		if (tmp != 'N' && !(nut->ft[tmp].flags & INVALID_FLAG)) { // frame
 			CHECK(get_frame(nut, &pd, tmp));
@@ -944,9 +946,8 @@ static int linear_search_seek(nut_context_t * nut, int backwards, uint64_t * pts
 				if (pd.flags & NUT_KEY_STREAM_FLAG) {
 					fprintf(stderr, "good: %d %d\n", (int)begin, (int)nut->before_seek);
 					good_key[pd.stream] = begin;
-					if (!end && pd.pts >= pts[pd.stream]>>1) {
-						// forward seek end
-						seek_buf(nut->i, begin, SEEK_SET);
+					if (!end && pd.pts >= pts[pd.stream]>>1) { // forward seek end
+						nut->i->buf_ptr = buf_before;
 						break;
 					}
 				}
@@ -965,6 +966,7 @@ static int linear_search_seek(nut_context_t * nut, int backwards, uint64_t * pts
 				nut->i->buf_ptr -= 8;
 				flush_buf(nut->i); // flush at every syncpoint
 				nut->i->buf_ptr += 8;
+				// dopts.cache_syncpoints
 				CHECK(get_syncpoint(nut)); // FIXME we're counting on syncpoint cache!!
 				break;
 			case MAIN_STARTCODE:
@@ -995,11 +997,13 @@ static int linear_search_seek(nut_context_t * nut, int backwards, uint64_t * pts
 	for (i = 1; i < sl->len; i++) if ((sl->s[i].pos >> 1) > min_pos) break;
 	i--;
 	if (!(nut->seek_status & 1)) seek_buf(nut->i, (sl->s[i].pos >> 1) + 8, SEEK_SET);
-	nut->seek_status |= 1;
 
+	buf_before = nut->i->buf_ptr;
+	nut->seek_status |= 1;
 	nut->last_syncpoint = 0;
 	clear_dts_cache(nut);
 	CHECK(get_syncpoint(nut));
+
 	while (bctello(nut->i) < min_pos) {
 		uint64_t tmp;
 		nut_packet_t pd;
@@ -1041,7 +1045,7 @@ err_out:
 			nut->seek_state[i].good_key = good_key[i];
 			nut->seek_state[i].old_last_pts = old_last_pts[i];
 		}
-		nut->i->buf_ptr = nut->i->buf; // rewind
+		if (buf_before) nut->i->buf_ptr = buf_before; // rewind
 	}
 	return err;
 }
