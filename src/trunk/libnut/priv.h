@@ -196,8 +196,9 @@ static inline uint64_t convert_ts(uint64_t sn, nut_timebase_t from, nut_timebase
 }
 
 static inline int compare_ts(uint64_t a, nut_timebase_t at, uint64_t b, nut_timebase_t bt) {
-	a = convert_ts(a, at, bt);
-	return a - b;
+	if (convert_ts(a, at, bt) < b) return -1;
+	if (convert_ts(b, bt, at) < a) return  1;
+	return 0;
 }
 
 static inline int get_dts(int d, int64_t * pts_cache, int pts) {
