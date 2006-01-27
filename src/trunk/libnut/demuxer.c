@@ -942,7 +942,7 @@ static int linear_search_seek(nut_context_t * nut, int backwards, uint64_t * pts
 			if (pts[pd.stream] & 1) {
 				if (end && pd.pts > pts[pd.stream]>>1) break; // we are done
 				if (pd.flags & NUT_KEY_STREAM_FLAG) {
-					printf("good: %d %d\n", (int)begin, (int)nut->before_seek);
+					fprintf(stderr, "good: %d %d\n", (int)begin, (int)nut->before_seek);
 					good_key[pd.stream] = begin;
 					if (!end && pd.pts >= pts[pd.stream]>>1) {
 						// forward seek end
@@ -1124,7 +1124,7 @@ int nut_seek(nut_context_t * nut, double time_pos, int flags, const int * active
 	}
 
 	if (start == 0) CHECK(binary_search_syncpoint(nut, time_pos, pts, &start, &end));
-	else printf("============= NO BINARY SEARCH\n");
+	else fprintf(stderr, "============= NO BINARY SEARCH\n");
 
 	if (!(flags & 2)) { // regular seek
 		CHECK(linear_search_seek(nut, backwards, pts, start, end));
