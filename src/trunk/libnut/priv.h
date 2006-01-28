@@ -216,8 +216,10 @@ static inline int get_dts(int d, int64_t * pts_cache, int pts) {
 
 #define TO_PTS(prefix, pts) \
 	int prefix##_s = (pts) % nut->stream_count; \
-	uint64_t prefix##_p = (pts)  / nut->stream_count;
+	uint64_t prefix##_p = (pts) / nut->stream_count;
 
 #define TO_DOUBLE(stream, pts) ((double)(pts) / nut->sc[(stream)].sh.timebase.den * nut->sc[(stream)].sh.timebase.nom)
+
+#define TO_DOUBLE_PTS(pts) ((double)((pts) / nut->stream_count) / nut->sc[(pts) % nut->stream_count].sh.timebase.den * nut->sc[(pts) % nut->stream_count].sh.timebase.nom)
 
 #endif // _NUT_PRIV_H

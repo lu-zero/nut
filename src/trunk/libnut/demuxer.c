@@ -774,7 +774,7 @@ static int binary_search_syncpoint(nut_context_t * nut, double time_pos, uint64_
 	off_t hi, lo;
 	uint64_t hip, lop;
 	syncpoint_list_t * sl = &nut->syncpoints;
-	//uint64_t * p = NULL;
+	int a = 0;
 
 	CHECK(find_basic_syncpoints(nut));
 	// sl->len MUST be >=2, which is the first and last syncpoints in the file
@@ -814,23 +814,21 @@ static int binary_search_syncpoint(nut_context_t * nut, double time_pos, uint64_
 	hip = sl->s[i+1].pts;
 	if (nut->seek_status) hi = nut->seek_status;
 
-int a = 0;
 	while (!(sl->s[i].back_ptr & 1)) {
 		// start binary search between sl->s[i].pos (lo) to sl->s[i+1].pos (hi) ...
 		off_t guess;
 		int res;
+		double hi_pd = TO_DOUBLE_PTS(hip);
+		double lo_pd = TO_DOUBLE_PTS(lop);
 		a++;
 		if (hi - lo < nut->max_distance) guess = lo + 8;
-		else {
-			TO_PTS(hi, hip)
-			TO_PTS(lo, lop)
-			double hi_pd = TO_DOUBLE(hi_s, hi_p);
-			double lo_pd = TO_DOUBLE(lo_s, lo_p);
+		else { // linear interpolation
 			double a = (double)(hi - lo) / (hi_pd - lo_pd);
 			guess = lo + a * (time_pos - lo_pd);
 			if (hi - guess < nut->max_distance) guess = hi - nut->max_distance; //(lo + hi)/2;
 		}
 		if (guess < lo + 8) guess = lo + 8;
+		fprintf(stderr, "%d [ (%d,%.3f) .. (%d,%.3f) .. (%d,%.3f) ] ", i, (int)lo, lo_pd, (int)guess, time_pos, (int)hi, hi_pd);
 		if (!nut->seek_status) seek_buf(nut->i, guess, SEEK_SET);
 		nut->seek_status = hi; // so we know where to continue off...
 		CHECK(find_syncpoint(nut, 0, &s, hi));
@@ -868,7 +866,7 @@ int a = 0;
 		}*/
 	}
 
-	fprintf(stderr, "[ (%d,%d) .. %d .. (%d,%d) ] => %d (%d seeks) %d\n",
+	fprintf(stderr, "\n[ (%d,%d) .. %d .. (%d,%d) ] => %d (%d seeks) %d\n",
 		(int)lo, (int)lop, (int)pts[0], (int)hi, (int)hip, (int)(lo - (sl->s[i].back_ptr>>1)), a, sl->s[i].back_ptr);
 	// at this point, s[i].pts < P < s[i+1].pts, and s[i].flag is set
 	// meaning, there are no more syncpoints between s[i] to s[i+1]
