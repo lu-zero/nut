@@ -187,17 +187,17 @@ static inline uint32_t adler32(uint8_t * buf, int len) {
 	return (b << 16) | a;
 }
 
-static inline uint64_t convert_ts(uint64_t sn, nut_timebase_t from, nut_timebase_t to) {
+static inline uint64_t convert_ts(nut_context_t * nut, uint64_t sn, int from, int to) {
 	uint64_t ln, d1, d2;
-	ln = (uint64_t)from.nom * to.den;
-	d1 = from.den;
-	d2 = to.nom;
+	ln = (uint64_t)nut->sc[from].sh.timebase.nom * nut->sc[to].sh.timebase.den;
+	d1 = nut->sc[from].sh.timebase.den;
+	d2 = nut->sc[to].sh.timebase.nom;
 	return (ln / d1 * sn + (ln%d1) * sn / d1) / d2;
 }
 
-static inline int compare_ts(uint64_t a, nut_timebase_t at, uint64_t b, nut_timebase_t bt) {
-	if (convert_ts(a, at, bt) < b) return -1;
-	if (convert_ts(b, bt, at) < a) return  1;
+static inline int compare_ts(nut_context_t * nut, uint64_t a, int at, uint64_t b, int bt) {
+	if (convert_ts(nut, a, at, bt) < b) return -1;
+	if (convert_ts(nut, b, bt, at) < a) return  1;
 	return 0;
 }
 

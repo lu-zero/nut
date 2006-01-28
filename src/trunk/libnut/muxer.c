@@ -288,7 +288,7 @@ static void put_syncpoint(nut_context_t * nut) {
 	nut->last_syncpoint = bctello(nut->o);
 
 	for (i = 0; i < nut->stream_count; i++) {
-		if (nut->sc[i].last_dts > 0 && compare_ts(nut->sc[i].last_dts, nut->sc[i].sh.timebase, pts, nut->sc[stream].sh.timebase) > 0) {
+		if (nut->sc[i].last_dts > 0 && compare_ts(nut, nut->sc[i].last_dts, i, pts, stream) > 0) {
 			pts = nut->sc[i].last_dts;
 			stream = i;
 		}
@@ -311,7 +311,7 @@ static void put_syncpoint(nut_context_t * nut) {
 		for (j = 0; j < nut->stream_count; j++) {
 			if (keys[j]) continue;
 			if (!s->pts[i * nut->stream_count + j]) continue;
-			if (compare_ts(s->pts[i * nut->stream_count + j] - 1, nut->sc[j].sh.timebase, pts, nut->sc[stream].sh.timebase) <= 0) keys[j] = 1;
+			if (compare_ts(nut, s->pts[i * nut->stream_count + j] - 1, j, pts, stream) <= 0) keys[j] = 1;
 		}
 		for (j = 0; j < nut->stream_count; j++) n &= keys[j];
 		if (n) { i--; break; }
@@ -323,7 +323,7 @@ static void put_syncpoint(nut_context_t * nut) {
 	put_v(nut->o, back_ptr);
 
 	for (i = 0; i < nut->stream_count; i++) {
-		nut->sc[i].last_pts = convert_ts(pts, nut->sc[stream].sh.timebase, nut->sc[i].sh.timebase);
+		nut->sc[i].last_pts = convert_ts(nut, pts, stream, i);
 		nut->sc[i].last_key = 0;
 	}
 
@@ -348,7 +348,7 @@ static void put_index(nut_context_t * nut) {
 	int stream = 0;
 
 	for (i = 0; i < nut->stream_count; i++) {
-		if (compare_ts(nut->sc[i].sh.max_pts, nut->sc[i].sh.timebase, max_pts, nut->sc[stream].sh.timebase) > 0) {
+		if (compare_ts(nut, nut->sc[i].sh.max_pts, i, max_pts, stream) > 0) {
 			max_pts = nut->sc[i].last_dts;
 			stream = i;
 		}

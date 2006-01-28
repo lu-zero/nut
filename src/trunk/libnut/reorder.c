@@ -36,7 +36,7 @@ static void flushcheck_frames(nut_context_t * nut) {
 				else pts = nut->sc[j].next_pts;
 
 				if (pts != -1) {
-					pts = convert_ts(pts, nut->sc[j].sh.timebase, nut->sc[i].sh.timebase);
+					pts = convert_ts(nut, pts, j, i);
 					min = MIN(min, pts);
 					if (min == -1) min = pts;
 				}
