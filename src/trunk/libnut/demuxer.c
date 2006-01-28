@@ -437,6 +437,7 @@ static int get_index(nut_context_t * nut) {
 		x *= 8;
 		sl->s[i].pos = (x << 1) + (i ? sl->s[i-1].pos : 1);
 		sl->s[i].back_ptr = 1;
+		sl->s[i].pts = 0;
 	}
 	for (i = 0; i < nut->stream_count; i++) {
 		int j;
@@ -1076,7 +1077,6 @@ static void req_to_pts(nut_context_t * nut, double * time_pos, int flags, uint64
 	}
 
 	for (i = 0; i < nut->stream_count; i++) {
-		//pts[i] = (flags & 1) ? convert_ts(orig_pts, nut->sc[orig_stream].sh.timebase, nut->sc[i].sh.timebase) : 0;
 		pts[i] |= (uint64_t)(*time_pos / nut->sc[i].sh.timebase.nom * nut->sc[i].sh.timebase.den) << 1;
 	}
 }
