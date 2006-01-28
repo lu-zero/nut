@@ -53,9 +53,9 @@ static void seek_buf(input_buffer_t * bc, long long pos, int whence) {
 	if (whence == SEEK_CUR) pos -= bc->read_len - (bc->buf_ptr - bc->buf);
 	fprintf(stderr, "seeking %d ", (int)pos);
 	switch (whence) {
-		case SEEK_SET: fprintf(stderr, "SEEK_SET\n"); break;
-		case SEEK_CUR: fprintf(stderr, "SEEK_CUR\n"); break;
-		case SEEK_END: fprintf(stderr, "SEEK_END\n"); break;
+		case SEEK_SET: fprintf(stderr, "SEEK_SET   "); break;
+		case SEEK_CUR: fprintf(stderr, "SEEK_CUR   "); break;
+		case SEEK_END: fprintf(stderr, "SEEK_END   "); break;
 	}
 	bc->file_pos = bc->isc.seek(bc->isc.priv, pos, whence);
 	bc->buf_ptr = bc->buf;
@@ -451,7 +451,7 @@ static int get_index(nut_context_t * nut) {
 				flag = x & 1;
 				x >>= 1;
 				while (x--) p[n++ * nut->stream_count + i] = flag;
-				p[n++ * nut->stream_count + i] = !flag;
+				if (n < sl->len-1) p[n++ * nut->stream_count + i] = !flag;
 			} else {
 				while (x != 1) {
 					p[n++ * nut->stream_count + i] = x & 1;
@@ -823,12 +823,14 @@ static int binary_search_syncpoint(nut_context_t * nut, double time_pos, uint64_
 		a++;
 		if (hi - lo < nut->max_distance) guess = lo + 8;
 		else { // linear interpolation
+#define INTERPOLATE_WEIGHT (7./8)
 			double a = (double)(hi - lo) / (hi_pd - lo_pd);
 			guess = lo + a * (time_pos - lo_pd);
-			if (hi - guess < nut->max_distance) guess = hi - nut->max_distance; //(lo + hi)/2;
+			guess = guess * INTERPOLATE_WEIGHT + (lo+hi)/2 * (1 - INTERPOLATE_WEIGHT);
+			if (hi - guess < nut->max_distance*2) guess = hi - nut->max_distance*2; //(lo + hi)/2;
 		}
 		if (guess < lo + 8) guess = lo + 8;
-		fprintf(stderr, "%d [ (%d,%.3f) .. (%d,%.3f) .. (%d,%.3f) ] ", i, (int)lo, lo_pd, (int)guess, time_pos, (int)hi, hi_pd);
+		fprintf(stderr, "\n%d [ (%d,%.3f) .. (%d,%.3f) .. (%d,%.3f) ] ", i, (int)lo, lo_pd, (int)guess, time_pos, (int)hi, hi_pd);
 		if (!nut->seek_status) seek_buf(nut->i, guess, SEEK_SET);
 		nut->seek_status = hi; // so we know where to continue off...
 		CHECK(find_syncpoint(nut, 0, &s, hi));
