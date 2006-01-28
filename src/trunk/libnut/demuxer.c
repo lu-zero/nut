@@ -216,10 +216,7 @@ static int get_frame(nut_context_t * nut, nut_packet_t * fd, int n) {
 
 	sc->last_pts = fd->pts;
 	sc->last_dts = get_dts(sc->decode_delay, sc->pts_cache, fd->pts);
-	if (fd->flags & NUT_KEY_STREAM_FLAG && !sc->last_key) {
-		fprintf(stderr, "setting key stream %d pts %d\n", fd->stream, (int)fd->pts);
-		sc->last_key = fd->pts + 1;
-	}
+	if (fd->flags & NUT_KEY_STREAM_FLAG && !sc->last_key) sc->last_key = fd->pts + 1;
 err_out:
 	return err;
 }
@@ -344,14 +341,11 @@ static int add_syncpoint(nut_context_t * nut, syncpoint_t sp, uint64_t * pts) {
 		if (sp.pos < pos + 8) { // syncpoint already in list
 			sl->s[i].pos = (sp.pos << 1) | (sl->s[i].pos & 1);
 			if (pts) {
-				fprintf(stderr, "%d: %d %d", i, (int)sl->s[i].pos & 1, (int)sl->s[i].pos >> 1);
 				sl->s[i].pos |= 1;
 				for (j = 0; j < nut->stream_count; j++) {
-					fprintf(stderr, " (%d %d)", (int)sl->pts[i * nut->stream_count + j], (int)pts[j]);
 					assert(!sl->pts[i * nut->stream_count + j] || sl->pts[i * nut->stream_count + j] == pts[j]);
 					sl->pts[i * nut->stream_count + j] = pts[j];
 				}
-				fprintf(stderr, "\n");
 			}
 			return i;
 		}
@@ -371,14 +365,6 @@ static int add_syncpoint(nut_context_t * nut, syncpoint_t sp, uint64_t * pts) {
 	if (pts) sl->s[i].pos |= 1;
 	for (j = 0; j < nut->stream_count; j++) sl->pts[i * nut->stream_count + j] = pts ? pts[j] : 0;
 	sl->len++;
-
-	fprintf(stderr, "adding syncpoint (%d, %d) pos %d", (int)sp.pos, (int)sp.pts, i);
-	if (pts) {
-		fprintf(stderr, " (");
-		for (j = 0; j < nut->stream_count; j++) fprintf(stderr, " %d", (int)pts[j]);
-		fprintf(stderr, " )");
-	}
-	fprintf(stderr, "\n");
 	return i;
 }
 
@@ -705,8 +691,6 @@ retry:
 	if (stop) read = MIN(read, stop - bctello(nut->i));
 	tmp = 0;
 
-	fprintf(stderr, "(%d -> %d)\n", (int)bctello(nut->i), (int)bctello(nut->i) + read);
-
 	while (nut->i->buf_ptr - nut->i->buf < read) {
 		tmp = (tmp << 8) | *(nut->i->buf_ptr++);
 		if (tmp != SYNCPOINT_STARTCODE) continue;
@@ -752,19 +736,16 @@ static int find_basic_syncpoints(nut_context_t * nut) {
 	syncpoint_t s;
 
 	if (!sl->len) { // not even a single syncpoint, find first one.
-		fprintf(stderr, "finding first syncpoint\n");
 		// the first syncpoint put in the cache is always always the BEGIN syncpoint
 		if (!nut->seek_status) seek_buf(nut->i, 0, SEEK_SET);
 		nut->seek_status = 1;
 		CHECK(find_syncpoint(nut, 0, &s, 0));
 		add_syncpoint(nut, s, NULL);
 		nut->seek_status = 0;
-		fprintf(stderr, "first syncpoint found: %d\n", (int)s.pos);
 	}
 
 	// find last syncpoint if it's not already found
 	if (!(sl->s[sl->len-1].back_ptr & 1)) {
-		fprintf(stderr, "finding last syncpoint\n");
 		// searching bakwards from EOF
 		if (!nut->seek_status) seek_buf(nut->i, 0, SEEK_END);
 		nut->seek_status = 1;
@@ -773,7 +754,6 @@ static int find_basic_syncpoints(nut_context_t * nut) {
 		assert(i == sl->len-1);
 		sl->s[i].back_ptr |= 1;
 		nut->seek_status = 0;
-		fprintf(stderr, "last syncpoint found: %d\n", (int)s.pos);
 	}
 err_out:
 	return err;
@@ -788,7 +768,7 @@ static void clear_dts_cache(nut_context_t * nut) {
 	}
 }
 
-static int binary_search_syncpoint(nut_context_t * nut, double time_pos, uint64_t * pts, off_t * start, off_t * end) {
+static int binary_search_syncpoint(nut_context_t * nut, double time_pos, uint64_t * pts, off_t * start, off_t * end, syncpoint_t * stopper) {
 	int i, err = 0;
 	syncpoint_t s;
 	off_t hi, lo;
@@ -834,31 +814,23 @@ static int binary_search_syncpoint(nut_context_t * nut, double time_pos, uint64_
 	hip = sl->s[i+1].pts;
 	if (nut->seek_status) hi = nut->seek_status;
 
-	if (0) {
-		int j;
-		for(j = 0; j < sl->len; j++) fprintf(stderr, "%d: (%d, %d, %d)\n", j, (int)sl->s[j].pos>>1, (int)sl->s[j].pts, sl->s[j].back_ptr&1);
-	}
-
-	fprintf(stderr, "%d [ (%d,%d) .. %d .. (%d,%d) ]\n", i, (int)lo, (int)lop, (int)pts[0], (int)hi, (int)hip);
-
 int a = 0;
 	while (!(sl->s[i].back_ptr & 1)) {
 		// start binary search between sl->s[i].pos (lo) to sl->s[i+1].pos (hi) ...
 		off_t guess;
 		int res;
+		a++;
+		if (hi - lo < nut->max_distance) guess = lo + 8;
+		else {
 			TO_PTS(hi, hip)
 			TO_PTS(lo, lop)
 			double hi_pd = TO_DOUBLE(hi_s, hi_p);
 			double lo_pd = TO_DOUBLE(lo_s, lo_p);
-		a++;
-		if (hi - lo < nut->max_distance) guess = lo + 8;
-		else {
 			double a = (double)(hi - lo) / (hi_pd - lo_pd);
 			guess = lo + a * (time_pos - lo_pd);
 			if (hi - guess < nut->max_distance) guess = hi - nut->max_distance; //(lo + hi)/2;
 		}
 		if (guess < lo + 8) guess = lo + 8;
-		fprintf(stderr, "%d [ (%d,%.3lf) .. (%d,%.3lf) .. (%d,%.3lf) ] ", i, (int)lo, lo_pd, (int)guess, time_pos, (int)hi, hi_pd);
 		if (!nut->seek_status) seek_buf(nut->i, guess, SEEK_SET);
 		nut->seek_status = hi; // so we know where to continue off...
 		CHECK(find_syncpoint(nut, 0, &s, hi));
@@ -901,17 +873,19 @@ int a = 0;
 	// at this point, s[i].pts < P < s[i+1].pts, and s[i].flag is set
 	// meaning, there are no more syncpoints between s[i] to s[i+1]
 	*start = (sl->s[i].pos >> 1) - (sl->s[i].back_ptr>>1);
-	*end = sl->s[i].pos >> 1;
+	*end = sl->s[i+1].pos >> 1;
+	*stopper = sl->s[i+1];
 err_out:
 	return err;
 }
 
-static int linear_search_seek(nut_context_t * nut, int backwards, uint64_t * pts, off_t start, off_t end) {
+static int linear_search_seek(nut_context_t * nut, int backwards, uint64_t * pts, off_t start, off_t end, syncpoint_t * stopper) {
 	syncpoint_list_t * sl = &nut->syncpoints;
 	int i, err = 0;
 	off_t good_key[nut->stream_count], min_pos = 0;
 	uint64_t old_last_pts[nut->stream_count];
 	uint8_t * buf_before = NULL;
+	off_t stopper_syncpoint = 0;
 
 	for (i = 0; i < nut->stream_count; i++) {
 		good_key[i] = nut->seek_state ? nut->seek_state[i].good_key : 0;
@@ -932,6 +906,13 @@ static int linear_search_seek(nut_context_t * nut, int backwards, uint64_t * pts
 		nut->seek_status = s.pos << 1;
 	}
 
+	if (stopper) for (i = 1; i < sl->len; i++) {
+		if ((sl->s[i].pos >> 1) > (stopper->pos >> 1) - (stopper->back_ptr>>1) + 7) {
+			if (sl->s[i-1].back_ptr & 1) stopper_syncpoint = sl->s[i].pos >> 1;
+			break;
+		}
+	}
+
 	if (!(nut->seek_status & 1)) while (bctello(nut->i) < end || !end) {
 		uint64_t tmp;
 		nut_packet_t pd;
@@ -944,11 +925,22 @@ static int linear_search_seek(nut_context_t * nut, int backwards, uint64_t * pts
 			if (pts[pd.stream] & 1) {
 				if (end && pd.pts > pts[pd.stream]>>1) break; // we are done
 				if (pd.flags & NUT_KEY_STREAM_FLAG) {
-					fprintf(stderr, "good: %d %d\n", (int)begin, (int)nut->before_seek);
 					good_key[pd.stream] = begin;
 					if (!end && pd.pts >= pts[pd.stream]>>1) { // forward seek end
 						nut->i->buf_ptr = buf_before;
 						break;
+					}
+				}
+			} else if (stopper) {
+				TO_PTS(stopper, stopper->pts)
+				if (compare_ts(stopper_p, nut->sc[stopper_s].sh.timebase, pd.pts, nut->sc[pd.stream].sh.timebase) > 0) {
+					good_key[pd.stream] = begin;
+					if (stopper_syncpoint) {
+						int n = 1;
+						for (i = 0; i < nut->stream_count; i++) {
+							if (!(pts[i] & 1) && good_key[i] < stopper_syncpoint) n = 0;
+						}
+						if (n) break; // smart linear search stop
 					}
 				}
 			}
@@ -962,13 +954,25 @@ static int linear_search_seek(nut_context_t * nut, int backwards, uint64_t * pts
 		CHECK(get_bytes(nut->i, 7, &tmp));
 
 		switch (((uint64_t)'N' << 56) | tmp) {
-			case SYNCPOINT_STARTCODE:
+			case SYNCPOINT_STARTCODE: {
+				int dont_flush = 0;
 				nut->i->buf_ptr -= 8;
-				flush_buf(nut->i); // flush at every syncpoint
+				if (stopper) {
+					if (!stopper_syncpoint && bctello(nut->i) > (stopper->pos >> 1) - (stopper->back_ptr>>1) + 7) {
+						int n = 1;
+						stopper_syncpoint = bctello(nut->i);
+						for (i = 0; i < nut->stream_count; i++) if (!(pts[i] & 1)) n = 0;
+						if (n) break; // no inactive streams, stop now
+					}
+					// give it a chance, we might be able to do this in a single seek
+					if (stopper_syncpoint == bctello(nut->i)) dont_flush = 1;
+				}
+				if (!dont_flush) flush_buf(nut->i); // flush at every syncpoint
 				nut->i->buf_ptr += 8;
 				// dopts.cache_syncpoints
 				CHECK(get_syncpoint(nut)); // FIXME we're counting on syncpoint cache!!
 				break;
+			}
 			case MAIN_STARTCODE:
 			case STREAM_STARTCODE:
 			case INFO_STARTCODE:
@@ -989,6 +993,7 @@ static int linear_search_seek(nut_context_t * nut, int backwards, uint64_t * pts
 		if (!(pts[i] & 1)) continue;
 		if (good_key[i] && (!min_pos || good_key[i] < min_pos)) min_pos = good_key[i];
 	}
+	if (!min_pos) min_pos = start + 7;
 
 	// after ALL this, we ended up in a worse position than where we were...
 	ERROR(!backwards && min_pos < nut->before_seek, -ERR_NOT_SEEKABLE);
@@ -1081,6 +1086,7 @@ int nut_seek(nut_context_t * nut, double time_pos, int flags, const int * active
 	off_t start = 0, end = 0;
 	uint64_t pts[nut->stream_count];
 	int backwards = flags & 1 ? time_pos < 0 : 1;
+	syncpoint_t stopper = { 0, 0, 0 };
 
 	if (!nut->i->isc.seek) return -ERR_NOT_SEEKABLE;
 
@@ -1114,9 +1120,6 @@ int nut_seek(nut_context_t * nut, double time_pos, int flags, const int * active
 		}
 
 		if ((sl->s[sl->len-1].back_ptr & 1) && last_sync && good_sync != -1) {
-			fprintf(stderr, "checking from syncpoint %d (%d,%d) to %d (%d,%d)\n",
-				good_sync, (int)sl->s[good_sync].pos, (int)sl->s[good_sync].pts,
-				last_sync, (int)sl->s[last_sync].pos, (int)sl->s[last_sync].pts);
 			for (i = good_sync; i <= last_sync; i++) if (!(sl->s[i].pos & 1)) break;
 			if (i != last_sync+1 && good_sync <= last_sync) good_sync = -1;
 		} else good_sync = -1;
@@ -1127,13 +1130,13 @@ int nut_seek(nut_context_t * nut, double time_pos, int flags, const int * active
 		}
 	}
 
-	if (start == 0) CHECK(binary_search_syncpoint(nut, time_pos, pts, &start, &end));
+	if (start == 0) CHECK(binary_search_syncpoint(nut, time_pos, pts, &start, &end, &stopper));
 	else fprintf(stderr, "============= NO BINARY SEARCH\n");
 
 	if (!(flags & 2)) { // regular seek
-		CHECK(linear_search_seek(nut, backwards, pts, start, end));
+		CHECK(linear_search_seek(nut, backwards, pts, start, end, stopper.pos ? &stopper : NULL));
 	} else { // forwards seek, find keyframe
-		CHECK(linear_search_seek(nut, backwards, pts, end, 0));
+		CHECK(linear_search_seek(nut, backwards, pts, end, 0, NULL));
 	}
 err_out:
 	if (err != 2) { // unless EAGAIN
