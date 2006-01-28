@@ -14,6 +14,7 @@ typedef struct {
 	size_t (*read)(void * priv, size_t len, uint8_t * buf);
 	off_t (*seek)(void * priv, long long pos, int whence);
 	int (*eof)(void * priv);
+	off_t file_pos;
 } nut_input_stream_t;
 
 typedef struct {

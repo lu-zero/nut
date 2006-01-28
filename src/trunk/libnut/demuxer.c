@@ -13,10 +13,6 @@ static off_t stream_seek(void * priv, long long pos, int whence) {
 	return ftello(priv);
 }
 
-static int stream_eof(void * priv) {
-	return 1;
-}
-
 static void flush_buf(input_buffer_t *bc) {
 	assert(!bc->is_mem);
 	bc->file_pos += bc->buf_ptr - bc->buf;
@@ -84,10 +80,11 @@ static input_buffer_t * new_input_buffer(nut_input_stream_t isc) {
 	input_buffer_t * bc = new_mem_buffer();
 	bc->is_mem = 0;
 	bc->isc = isc;
+	bc->file_pos = isc.file_pos;
 	if (!bc->isc.read) {
 		bc->isc.read = stream_read;
 		bc->isc.seek = stream_seek;
-		bc->isc.eof = stream_eof;
+		bc->isc.eof = NULL;
 	}
 	return bc;
 }

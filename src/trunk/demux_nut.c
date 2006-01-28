@@ -39,6 +39,20 @@ static off_t mp_seek(void * h, long long pos, int whence) {
 	return pos;
 }
 
+#define ID_STRING "nut/multimedia container"
+#define ID_LENGTH (strlen(ID_STRING) + 1)
+
+static int nut_check_file(demuxer_t * demuxer) {
+	uint8_t buf[ID_LENGTH];
+	nut_priv_t * priv = demuxer->priv = calloc(1, sizeof(nut_priv_t));
+
+	if (stream_read(demuxer->stream, buf, ID_LENGTH) != ID_LENGTH) return 0;
+
+	if (memcmp(buf, ID_STRING, ID_LENGTH)) return 0;
+
+	return DEMUXER_TYPE_NUT;
+}
+
 static demuxer_t * demux_open_nut(demuxer_t * demuxer) {
 	nut_demuxer_opts_t dopts = {
 		.input = {
@@ -46,10 +60,11 @@ static demuxer_t * demux_open_nut(demuxer_t * demuxer) {
 			.seek = mp_seek,
 			.read = mp_read,
 			.eof = NULL,
+			.file_pos = ID_LENGTH,
 		},
 		.read_index = 1
 	};
-	nut_priv_t * priv = demuxer->priv = calloc(1, sizeof(nut_priv_t));
+	nut_priv_t * priv = demuxer->priv;
 	nut_context_t * nut = priv->nut = nut_demuxer_init(&dopts);
 	nut_packet_t pd;
 	nut_stream_header_t * s;
@@ -264,8 +279,8 @@ demuxer_desc_t demuxer_desc_nut = {
 	"Oded Shimon (ods15)",
 	"NUT demuxer, requires libnut",
 	DEMUXER_TYPE_NUT,
-	0, // Check after other demuxer
-	NULL, // check
+	1, // safe check demuxer
+	nut_check_file,
 	demux_nut_fill_buffer,
 	demux_open_nut,
 	demux_close_nut,
