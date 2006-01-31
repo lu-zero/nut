@@ -8,7 +8,8 @@ typedef struct nutmerge_nut_s {
 
 static void * init(FILE * in) {
 	nutmerge_nut_t * nut = malloc(sizeof(nutmerge_nut_t));
-	nut->nut = nut_demuxer_init(&(nut_demuxer_opts_t){ { in, NULL, NULL, NULL, 0 } , 0});
+	nut_demuxer_opts_t dopts = { { in, NULL, NULL, NULL, 0 } , 0};
+	nut->nut = nut_demuxer_init(&dopts);
 	nut->buf = NULL;
 	return nut;
 }
