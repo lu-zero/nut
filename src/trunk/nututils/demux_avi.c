@@ -470,12 +470,12 @@ static int get_packet(void * priv, nut_packet_t * p, uint8_t ** buf) {
 	} else if (s < avi->avih->dwStreams) { // 0.5 secs of audio or a single packet
 		int samplesize = avi->stream[s].strh->dwSampleSize;
 
-		if (!(p->flags & NUT_KEY_STREAM_FLAG)) printf("Error detected stream %d frame %d\n", s, (int)p->pts);
-		p->flags |= NUT_KEY_STREAM_FLAG;
-
 		p->pts = avi->stream[s].last_pts;
 		if (samplesize) avi->stream[s].last_pts += p->len / samplesize;
 		else avi->stream[s].last_pts++;
+
+		if (!(p->flags & NUT_KEY_STREAM_FLAG)) printf("Error detected stream %d frame %d\n", s, (int)p->pts);
+		p->flags |= NUT_KEY_STREAM_FLAG;
 	} else {
 		printf("%d %4.4s\n", avi->cur, fourcc);
 		err = 10;
