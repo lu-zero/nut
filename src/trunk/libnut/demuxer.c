@@ -448,14 +448,14 @@ static int get_index(nut_context_t * nut) {
 				flag = x & 1;
 				x >>= 1;
 				while (x--) p[n++ * nut->stream_count + i] = flag;
-				if (n < sl->len-1) p[n++ * nut->stream_count + i] = !flag;
+				if (n < sl->len) p[n++ * nut->stream_count + i] = !flag;
 			} else {
 				while (x != 1) {
 					p[n++ * nut->stream_count + i] = x & 1;
 					x >>= 1;
 				}
 			}
-			for(; j < n && j < sl->len; j++) {
+			for(; j < n; j++) {
 				if (!p[j * nut->stream_count + i]) continue;
 				GET_V(tmp, x);
 				last_pts += x;
