@@ -160,23 +160,18 @@ static int frame_header(nut_context_t * nut, const nut_packet_t * fd, int * rftn
 	if (rftnum) *rftnum = ftnum;
 	return size;
 }
-
-static void put_frame(nut_context_t * nut, const nut_packet_t * fd, const uint8_t * data) {
-	int ftnum = -1, size = 0, coded_pts, pts_delta;
+static void put_frame_header(nut_context_t * nut, output_buffer_t * bc, const nut_packet_t * fd) {
 	stream_context_t * sc = &nut->sc[fd->stream];
+	int ftnum = -1, coded_pts, pts_delta = fd->pts - sc->last_pts;
 
-	pts_delta = fd->pts - sc->last_pts;
-	// ### check lsb pts
-	if (MAX(pts_delta, -pts_delta) < (1 << (sc->msb_pts_shift - 1)) - 1)
+	if (ABS(pts_delta) < (1 << (sc->msb_pts_shift - 1)) - 1)
 		coded_pts = fd->pts & ((1 << sc->msb_pts_shift) - 1);
 	else
 		coded_pts = fd->pts + (1 << sc->msb_pts_shift);
 
-	size = frame_header(nut, fd, &ftnum);
-	sc->total_frames++;
-	sc->overhead += size;
-	sc->tot_size += fd->len;
-	put_bytes(nut->o, 1, ftnum); // frame_code
+	frame_header(nut, fd, &ftnum);
+
+	put_bytes(bc, 1, ftnum); // frame_code
 
 	if (!nut->ft[ftnum].stream_plus1) put_v(nut->o, fd->stream);
 	if (!nut->ft[ftnum].pts_delta)    put_v(nut->o, coded_pts);
@@ -184,6 +179,17 @@ static void put_frame(nut_context_t * nut, const nut_packet_t * fd, const uint8_
 		put_v(nut->o, (fd->len - nut->ft[ftnum].lsb) / nut->ft[ftnum].mul);
 	if (nut->ft[ftnum].flags & STREAM_CODED_FLAG)
 		put_v(nut->o, (fd->flags & 3) ^ nut->ft[ftnum].stream_flags);
+}
+
+static void put_frame(nut_context_t * nut, const nut_packet_t * fd, const uint8_t * data) {
+	off_t start = bctello(nut->o);
+	stream_context_t * sc = &nut->sc[fd->stream];
+
+	put_frame_header(nut, nut->o, fd);
+
+	sc->total_frames++;
+	sc->overhead += bctello(nut->o) - start;
+	sc->tot_size += fd->len;
 
 	put_data(nut->o, fd->len, data);
 	sc->last_pts = fd->pts;
@@ -277,7 +283,7 @@ static void put_stream_header(nut_context_t * nut, int id) {
 	free_buffer(tmp);
 }
 
-static void put_syncpoint(nut_context_t * nut) {
+static void put_syncpoint(nut_context_t * nut, const nut_packet_t * fd) {
 	int i;
 	uint64_t pts = 0;
 	int stream = 0;
@@ -304,7 +310,7 @@ static void put_syncpoint(nut_context_t * nut) {
 	s->s[s->len].pos = nut->last_syncpoint;
 	s->len++;
 
-	for (i = 0; i < nut->stream_count; i++) keys[i] = nut->sc[i].eor;
+	for (i = 0; i < nut->stream_count; i++) keys[i] = nut->sc[i].eor; // FIXME for eor in delayed streams
 	for (i = s->len; --i; ) {
 		int j;
 		int n = 1;
@@ -336,7 +342,6 @@ static void put_headers(nut_context_t * nut) {
 
 	put_main_header(nut);
 	for (i = 0; i < nut->stream_count; i++) put_stream_header(nut, i);
-	put_syncpoint(nut);
 }
 
 static void put_index(nut_context_t * nut) {
@@ -432,7 +437,6 @@ void nut_write_info(nut_context_t * nut, const nut_info_packet_t info []) {
 
 void nut_write_frame(nut_context_t * nut, const nut_packet_t * fd, const uint8_t * buf) {
 	stream_context_t * sc = &nut->sc[fd->stream];
-	int wrote_syncpoint = 0;
 
 	if (bctello(nut->o) > (1 << 23)) { // main header repetition
 		int i = 23; // ### magic value for header repetition
@@ -442,13 +446,11 @@ void nut_write_frame(nut_context_t * nut, const nut_packet_t * fd, const uint8_t
 		}
 		if (nut->last_headers < (1 << i)) {
 			put_headers(nut);
-			wrote_syncpoint = 1;
 		}
 	}
 	// distance syncpoints
-	if (!wrote_syncpoint) {
-		if (bctello(nut->o) - nut->last_syncpoint + fd->len + frame_header(nut, fd, NULL) > nut->max_distance) put_syncpoint(nut);
-	}
+	if (nut->last_syncpoint < nut->last_headers ||
+		bctello(nut->o) - nut->last_syncpoint + fd->len + frame_header(nut, fd, NULL) > nut->max_distance) put_syncpoint(nut, fd);
 
 	put_frame(nut, fd, buf);
 
@@ -473,6 +475,7 @@ nut_context_t * nut_muxer_init(const nut_muxer_opts_t * mopts, const nut_stream_
 	nut->syncpoints.alloc_len = 0;
 	nut->syncpoints.s = NULL;
 	nut->syncpoints.pts = NULL;
+	nut->last_syncpoint = 0;
 
 	for (nut->stream_count = 0; s[nut->stream_count].type >= 0; nut->stream_count++);
 
