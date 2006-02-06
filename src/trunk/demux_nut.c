@@ -29,6 +29,8 @@ static size_t mp_read(void * h, size_t len, uint8_t * buf) {
 static off_t mp_seek(void * h, long long pos, int whence) {
 	stream_t * stream = (stream_t*)h;
 
+	if (stream->end_pos < stream_tell(stream)) stream->end_pos = stream_tell(stream);
+
 	if (whence == SEEK_CUR) pos += stream_tell(stream);
 	else if (whence == SEEK_END) pos += stream->end_pos;
 	else if (whence != SEEK_SET) return -1;
