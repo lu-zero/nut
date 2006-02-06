@@ -184,12 +184,22 @@ static void put_frame_header(nut_context_t * nut, output_buffer_t * bc, const nu
 static void put_frame(nut_context_t * nut, const nut_packet_t * fd, const uint8_t * data) {
 	off_t start = bctello(nut->o);
 	stream_context_t * sc = &nut->sc[fd->stream];
+	int i;
 
 	put_frame_header(nut, nut->o, fd);
 
 	sc->total_frames++;
 	sc->overhead += bctello(nut->o) - start;
 	sc->tot_size += fd->len;
+
+        for (i = 0; i < nut->stream_count; i++) {
+		if (nut->sc[i].last_dts == -1) continue;
+		if (compare_ts(nut, fd->pts, fd->stream, nut->sc[i].last_dts, i) < 0)
+			fprintf(stderr, "%lld %d (%f) %lld %d (%f) \n",
+				fd->pts, fd->stream, TO_DOUBLE(fd->stream, fd->pts),
+				nut->sc[i].last_dts, i, TO_DOUBLE(i, nut->sc[i].last_dts));
+		assert(compare_ts(nut, fd->pts, fd->stream, nut->sc[i].last_dts, i) >= 0);
+	}
 
 	put_data(nut->o, fd->len, data);
 	sc->last_pts = fd->pts;
@@ -354,7 +364,7 @@ static void put_index(nut_context_t * nut) {
 
 	for (i = 0; i < nut->stream_count; i++) {
 		if (compare_ts(nut, nut->sc[i].sh.max_pts, i, max_pts, stream) > 0) {
-			max_pts = nut->sc[i].last_dts;
+			max_pts = nut->sc[i].sh.max_pts;
 			stream = i;
 		}
 	}

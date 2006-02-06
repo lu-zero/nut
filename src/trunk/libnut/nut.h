@@ -77,7 +77,7 @@ typedef struct {
 	uint64_t pts;
 	int flags; // 1 - keyframe, 2 - EOR
 	// not manditory, for reorderer
-	uint64_t next_pts;
+	int64_t next_pts;
 } nut_packet_t;
 
 struct nut_context_s;

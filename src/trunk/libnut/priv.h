@@ -40,8 +40,10 @@ enum errors {
 	ERR_BAD_VERSION = 2,
 	ERR_NOT_FRAME_NOT_N = 3,
 	ERR_BAD_CHECKSUM = 4,
+	ERR_MAX_DISTANCE = 5,
 	ERR_NO_HEADERS = 6,
 	ERR_NOT_SEEKABLE = 7,
+	ERR_OUT_OF_ORDER = 8,
 	ERR_BAD_STREAM_ORDER = 11,
 	ERR_NOSTREAM_STARTCODE = 12,
 	ERR_BAD_EOF = 13,
@@ -106,7 +108,7 @@ typedef struct {
 	int64_t * pts_cache;
 	int eor;
 	// reorder.c
-	int next_pts;
+	int64_t next_pts;
 	reorder_packet_t * packets;
 	int num_packets;
 	int64_t * reorder_pts_cache;

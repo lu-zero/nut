@@ -10,7 +10,7 @@ static void shift_frames(nut_context_t * nut, stream_context_t * s, int amount) 
 		nut_write_frame(nut, &s->packets[i].p, s->packets[i].buf);
 		free(s->packets[i].buf); // FIXME
 	}
-	s->next_pts = s->packets[i - 1].p.next_pts;
+	if (s->next_pts != -2) s->next_pts = s->packets[i - 1].p.next_pts;
 	s->num_packets -= amount;
 
 	memmove(s->packets, s->packets + amount, s->num_packets * sizeof(reorder_packet_t));
@@ -26,22 +26,23 @@ static void flushcheck_frames(nut_context_t * nut) {
 	do {
 		change = 0;
 		for (i = 0; i < nut->stream_count; i++) {
-			int j, min = -1;
+			int j;
+			int64_t min = -1;
 			if (!nut->sc[i].num_packets) continue; // no packets pending in this stream
 			for (j = 0; j < nut->stream_count; j++) {
-				int pts;
+				int64_t pts;
 				if (i == j) continue;
 
-				if (nut->sc[j].num_packets) pts = nut->sc[j].packets[0].p.pts;
+				if (nut->sc[j].num_packets) pts = nut->sc[j].packets[0].dts; // CANT USE p.pts;
 				else pts = nut->sc[j].next_pts;
 
-				if (pts != -1) {
+				if (pts >= 0) {
 					pts = convert_ts(nut, pts, j, i);
-					min = MIN(min, pts);
-					if (min == -1) min = pts;
+					if (min > pts || min == -1) min = pts;
 				}
 			}
 			// MN rule, (i < j) && (i.dts <= j.pts)
+			// actually, strict DTS.
 			if (min == -1 || nut->sc[i].packets[0].dts <= min) {
 				for (j = 1; j < nut->sc[i].num_packets; j++) {
 					if (min != -1 && nut->sc[i].packets[j].dts > min) break;
@@ -57,11 +58,11 @@ void nut_muxer_uninit_reorder(nut_context_t * nut) {
 	int i;
 	if (!nut) return;
 
-	for (i = 0; i < nut->stream_count; i++) nut->sc[i].next_pts = -1;
-	flushcheck_frames(nut);
+	for (i = 0; i < nut->stream_count; i++) nut->sc[i].next_pts = -2;
 
+	flushcheck_frames(nut);
 	for (i = 0; i < nut->stream_count; i++) {
-		//assert(!nut->sc[i].num_packets);
+		assert(!nut->sc[i].num_packets);
 		free(nut->sc[i].packets);
 		nut->sc[i].packets = NULL;
 	}
