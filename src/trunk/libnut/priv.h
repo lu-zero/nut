@@ -11,19 +11,11 @@
 
 #define ID_STRING "nut/multimedia container"
 
-#if 0
 #define      MAIN_STARTCODE (0x7A561F5F04ADULL + (((uint64_t)('N'<<8) + 'M')<<48))
 #define    STREAM_STARTCODE (0x11405BF2F9DBULL + (((uint64_t)('N'<<8) + 'S')<<48))
 #define SYNCPOINT_STARTCODE (0xE4ADEECA4569ULL + (((uint64_t)('N'<<8) + 'K')<<48))
 #define     INDEX_STARTCODE (0xDD672F23E64EULL + (((uint64_t)('N'<<8) + 'X')<<48))
 #define      INFO_STARTCODE (0xAB68B596BA78ULL + (((uint64_t)('N'<<8) + 'I')<<48))
-#else
-#define      MAIN_STARTCODE 0x4E4D7A561F5F04ADULL
-#define    STREAM_STARTCODE 0x4E5311405BF2F9DBULL
-#define SYNCPOINT_STARTCODE 0x4E4BE4ADEECA4569ULL
-#define     INDEX_STARTCODE 0x4E58DD672F23E64EULL
-#define      INFO_STARTCODE 0x4E49AB68B596BA78ULL
-#endif
 
 #define MSB_CODED_FLAG 1
 #define STREAM_CODED_FLAG 2
