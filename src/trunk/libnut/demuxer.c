@@ -202,7 +202,7 @@ static int get_header(input_buffer_t * in, input_buffer_t * out, int len, int ch
 
 	if (checksum) {
 		if (get_bytes(in, 4, &code)) return buf_eof(in); // checksum
-		if (code != adler32(out->buf, len)) return -ERR_BAD_CHECKSUM;
+		if (code != crc32(out->buf, len)) return -ERR_BAD_CHECKSUM;
 	}
 	return 0;
 }
@@ -272,6 +272,7 @@ static int get_stream_header(nut_context_t * nut, int id) {
 	GET_V(tmp, sc->sh.timebase.nom);
 	GET_V(tmp, sc->sh.timebase.den);
 	GET_V(tmp, sc->msb_pts_shift);
+	GET_V(tmp, sc->max_pts_distance);
 	GET_V(tmp, sc->decode_delay);
 	CHECK(get_bytes(tmp, 1, &a));
 	sc->sh.fixed_fps = a & 1;
@@ -439,6 +440,15 @@ err_out:
 	return err;
 }
 
+static void clear_dts_cache(nut_context_t * nut) {
+	int i;
+	for (i = 0; i < nut->stream_count; i++) {
+		int j;
+		for (j = 0; j < nut->sc[i].decode_delay; j++) nut->sc[i].pts_cache[j] = -1;
+		nut->sc[i].last_dts = -1;
+	}
+}
+
 static int get_packet(nut_context_t * nut, nut_packet_t * pd, int * saw_syncpoint) {
 	int err = 0;
 	int after_sync = 0;
@@ -514,9 +524,9 @@ static int get_packet(nut_context_t * nut, nut_packet_t * pd, int * saw_syncpoin
 	for (i = 0; i < nut->ft[tmp].reserved; i++) { int scrap; GET_V(nut->i, scrap); }
 
 	// error checking - max distance
-	if (!after_sync && bctello(nut->i) + pd->len - nut->last_syncpoint > nut->max_distance)
-		fprintf(stderr, "%d %d %d %d\n", after_sync, (int)bctello(nut->i), pd->len, (int)nut->last_syncpoint);
 	ERROR(!after_sync && bctello(nut->i) + pd->len - nut->last_syncpoint > nut->max_distance, -ERR_MAX_DISTANCE);
+	// error checking - max pts distance
+	ERROR(!after_sync && ABS((int64_t)pd->pts - (int64_t)nut->sc[pd->stream].last_pts) > nut->sc[pd->stream].max_pts_distance, -ERR_MAX_PTS_DISTANCE);
 	// error checking - out of order dts
 	for (i = 0; i < nut->stream_count; i++) {
 		if (nut->sc[i].last_dts == -1) continue;
@@ -524,7 +534,7 @@ static int get_packet(nut_context_t * nut, nut_packet_t * pd, int * saw_syncpoin
 			fprintf(stderr, "%lld %d (%f) %lld %d (%f) \n",
 				pd->pts, pd->stream, TO_DOUBLE(pd->stream, pd->pts),
 				nut->sc[i].last_dts, i, TO_DOUBLE(i, nut->sc[i].last_dts));
-		//ERROR(compare_ts(nut, pd->pts, pd->stream, nut->sc[i].last_dts, i) < 0, -ERR_OUT_OF_ORDER);
+		ERROR(compare_ts(nut, pd->pts, pd->stream, nut->sc[i].last_dts, i) < 0, -ERR_OUT_OF_ORDER);
 	}
 
 	if (saw_syncpoint) *saw_syncpoint = after_sync;
@@ -537,6 +547,60 @@ static void push_frame(nut_context_t * nut, nut_packet_t * pd) {
 	sc->last_pts = pd->pts;
 	sc->last_dts = get_dts(sc->decode_delay, sc->pts_cache, pd->pts);
 	if (pd->flags & NUT_KEY_STREAM_FLAG && !sc->last_key) sc->last_key = pd->pts + 1;
+}
+
+static int find_syncpoint(nut_context_t * nut, int backwards, syncpoint_t * res, off_t stop) {
+	int read;
+	int err = 0;
+	uint64_t tmp;
+	uint8_t * ptr = NULL;
+	assert(!backwards || !stop); // can't have both
+
+	if (backwards) seek_buf(nut->i, -nut->max_distance, SEEK_CUR);
+retry:
+	read = nut->max_distance;
+	if (stop) read = MIN(read, stop - bctello(nut->i));
+	read = ready_read_buf(nut->i, read);
+	if (stop) read = MIN(read, stop - bctello(nut->i));
+	tmp = 0;
+
+	while (nut->i->buf_ptr - nut->i->buf < read) {
+		tmp = (tmp << 8) | *(nut->i->buf_ptr++);
+		if (tmp != SYNCPOINT_STARTCODE) continue;
+		if (res) {
+			res->pos = bctello(nut->i) - 8;
+			GET_V(nut->i, res->pts);
+			GET_V(nut->i, tmp);
+			res->back_ptr = (tmp * 8 + 7) << 1;
+		}
+		if (!backwards) return 0;
+		else ptr = nut->i->buf_ptr;
+	}
+
+	if (ptr) {
+		nut->i->buf_ptr = ptr;
+		return 0;
+	}
+
+	if (stop && bctello(nut->i) >= stop) {
+		if (res) res->back_ptr = 1;
+		return 0;
+	}
+
+	if (read < nut->max_distance) return buf_eof(nut->i); // too little read
+
+	if (backwards) {
+		nut->i->buf_ptr = nut->i->buf;
+		seek_buf(nut->i, -(nut->max_distance - 7), SEEK_CUR);
+	} else {
+		nut->i->buf_ptr -= 7; // repeat on last 7 bytes
+		if (nut->i->buf_ptr < nut->i->buf) nut->i->buf_ptr = nut->i->buf;
+		flush_buf(nut->i);
+	}
+
+	goto retry;
+err_out:
+	return err;
 }
 
 int nut_read_next_packet(nut_context_t * nut, nut_packet_t * pd) {
@@ -559,7 +623,28 @@ int nut_read_next_packet(nut_context_t * nut, nut_packet_t * pd) {
 		} while (bctello(nut->i) < 4096);
 	}
 	ERROR(!nut->last_headers, -ERR_NO_HEADERS);
+
+	if (nut->seek_status) { // in error mode!
+		syncpoint_t s;
+		CHECK(find_syncpoint(nut, 0, &s, 0));
+		nut->i->buf_ptr -= bctello(nut->i) - s.pos; // go back to begginning of syncpoint
+		flush_buf(nut->i);
+		clear_dts_cache(nut);
+		nut->last_syncpoint = 0;
+		nut->seek_status = 0;
+	}
+
 	err = get_packet(nut, pd, NULL);
+	if (err < 0) { // some error occured!
+		fprintf(stderr, "NUT: %s\n", nut_error(-err));
+		// rewind as much as possible
+		if (nut->i->isc.seek) seek_buf(nut->i, nut->last_syncpoint + 8, SEEK_SET);
+		else nut->i->buf_ptr = nut->i->buf;
+
+		nut->seek_status = 1; // enter error mode
+		return nut_read_next_packet(nut, pd);
+	}
+
 	if (!err) push_frame(nut, pd);
 err_out:
 	if (err != 2) flush_buf(nut->i); // unless EAGAIN
@@ -702,60 +787,6 @@ void nut_free_info(nut_info_packet_t info []) {
 	// FIXME ...
 }
 
-static int find_syncpoint(nut_context_t * nut, int backwards, syncpoint_t * res, off_t stop) {
-	int read;
-	int err = 0;
-	uint64_t tmp;
-	uint8_t * ptr = NULL;
-	assert(!backwards || !stop); // can't have both
-
-	if (backwards) seek_buf(nut->i, -nut->max_distance, SEEK_CUR);
-retry:
-	read = nut->max_distance;
-	if (stop) read = MIN(read, stop - bctello(nut->i));
-	read = ready_read_buf(nut->i, read);
-	if (stop) read = MIN(read, stop - bctello(nut->i));
-	tmp = 0;
-
-	while (nut->i->buf_ptr - nut->i->buf < read) {
-		tmp = (tmp << 8) | *(nut->i->buf_ptr++);
-		if (tmp != SYNCPOINT_STARTCODE) continue;
-		if (res) {
-			res->pos = bctello(nut->i) - 8;
-			GET_V(nut->i, res->pts);
-			GET_V(nut->i, tmp);
-			res->back_ptr = (tmp * 8 + 7) << 1;
-		}
-		if (!backwards) return 0;
-		else ptr = nut->i->buf_ptr;
-	}
-
-	if (ptr) {
-		nut->i->buf_ptr = ptr;
-		return 0;
-	}
-
-	if (stop && bctello(nut->i) >= stop) {
-		if (res) res->back_ptr = 1;
-		return 0;
-	}
-
-	if (read < nut->max_distance) return buf_eof(nut->i); // too little read
-
-	if (backwards) {
-		nut->i->buf_ptr = nut->i->buf;
-		seek_buf(nut->i, -(nut->max_distance - 7), SEEK_CUR);
-	} else {
-		nut->i->buf_ptr -= 7; // repeat on last 7 bytes
-		if (nut->i->buf_ptr < nut->i->buf) nut->i->buf_ptr = nut->i->buf;
-		flush_buf(nut->i);
-	}
-
-	goto retry;
-err_out:
-	return err;
-}
-
 static int find_basic_syncpoints(nut_context_t * nut) {
 	int i, err = 0;
 	syncpoint_list_t * sl = &nut->syncpoints;
@@ -783,15 +814,6 @@ static int find_basic_syncpoints(nut_context_t * nut) {
 	}
 err_out:
 	return err;
-}
-
-static void clear_dts_cache(nut_context_t * nut) {
-	int i;
-	for (i = 0; i < nut->stream_count; i++) {
-		int j;
-		for (j = 0; j < nut->sc[i].decode_delay; j++) nut->sc[i].pts_cache[j] = -1;
-		nut->sc[i].last_dts = -1;
-	}
 }
 
 static int binary_search_syncpoint(nut_context_t * nut, double time_pos, uint64_t * pts, off_t * start, off_t * end, syncpoint_t * stopper) {
@@ -849,7 +871,7 @@ static int binary_search_syncpoint(nut_context_t * nut, double time_pos, uint64_
 		a++;
 		if (hi - lo < nut->max_distance*2) guess = lo + 8;
 		else { // linear interpolation
-#define INTERPOLATE_WEIGHT (7./8)
+#define INTERPOLATE_WEIGHT (19./20)
 			double a = (double)(hi - lo) / (hi_pd - lo_pd);
 			guess = lo + a * (time_pos - lo_pd);
 			guess = guess * INTERPOLATE_WEIGHT + (lo+hi)/2 * (1 - INTERPOLATE_WEIGHT);
@@ -1075,6 +1097,7 @@ static void req_to_pts(nut_context_t * nut, double * time_pos, int flags, uint64
 	if (flags & 1) {
 		for (i = 0; i < nut->stream_count; i++) {
 			uint64_t dts = nut->sc[i].last_dts != -1 ? nut->sc[i].last_dts : nut->sc[i].last_pts;
+			int FIXME; // this is completely wrong with EAGAIN
 			if (!pts[i]) continue;
 			if (compare_ts(nut, orig_pts, orig_stream, dts, i) < 0) {
 				orig_pts = dts;
@@ -1207,6 +1230,7 @@ const char * nut_error(int error) {
 		case ERR_NO_HEADERS: return "No headers found!";
 		case ERR_NOT_SEEKABLE: return "Cannot seek to that position.";
 		case ERR_OUT_OF_ORDER: return "out of order dts";
+		case ERR_MAX_PTS_DISTANCE: return "Pts difference higher than max_pts_distance.";
 		case ERR_BAD_STREAM_ORDER: return "Stream headers are stored in wrong order.";
 		case ERR_NOSTREAM_STARTCODE: return "Expected stream startcode not found.";
 		case ERR_BAD_EOF: return "Invalid forward_ptr!";

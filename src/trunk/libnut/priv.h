@@ -44,6 +44,7 @@ enum errors {
 	ERR_NO_HEADERS = 6,
 	ERR_NOT_SEEKABLE = 7,
 	ERR_OUT_OF_ORDER = 8,
+	ERR_MAX_PTS_DISTANCE = 9,
 	ERR_BAD_STREAM_ORDER = 11,
 	ERR_NOSTREAM_STARTCODE = 12,
 	ERR_BAD_EOF = 13,
@@ -103,6 +104,7 @@ typedef struct {
 	uint64_t last_pts;
 	int64_t last_dts;
 	int msb_pts_shift;
+	int max_pts_distance;
 	int decode_delay;
 	nut_stream_header_t sh;
 	int64_t * pts_cache;
@@ -177,17 +179,14 @@ static const struct { char * name, * type; } info_table [] = {
         {"Disposition"          , "UTF8"},
 };
 
-static inline uint32_t adler32(uint8_t * buf, int len) {
-	unsigned long a = 1, b = 0;
-	int k;
-	while (len > 0) {
-		k = MIN(len, 5552);
-		len -= k;
-		while (k--) b += (a += *buf++);
-		a %= 65521;
-		b %= 65521;
+static inline uint32_t crc32(uint8_t * buf, int len){
+	uint32_t crc = 0;
+	int i;
+	while (len--) {
+		crc ^= *buf++ << 24;
+		for(i = 0; i < 8; i++) crc = (crc<<1) ^ (0x1EDC6F41 & (crc>>31));
 	}
-	return (b << 16) | a;
+	return crc;
 }
 
 static inline uint64_t convert_ts(nut_context_t * nut, uint64_t sn, int from, int to) {

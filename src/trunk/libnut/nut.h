@@ -7,7 +7,7 @@
 #define NUT_AUDIO_CLASS 1
 
 #define NUT_KEY_STREAM_FLAG 1
-#define NUT_EOR_STREAM_FLAG 1
+#define NUT_EOR_STREAM_FLAG 2
 
 typedef struct {
 	void * priv;

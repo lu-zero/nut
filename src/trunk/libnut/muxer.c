@@ -218,7 +218,7 @@ static void put_header(output_buffer_t * bc, output_buffer_t * tmp, uint64_t sta
 	put_bytes(bc, 8, startcode);
 	put_v(bc, forward_ptr);
 	put_data(bc, tmp->buf_ptr - tmp->buf, tmp->buf);
-	if (checksum) put_bytes(bc, 4, adler32(tmp->buf, tmp->buf_ptr - tmp->buf));
+	if (checksum) put_bytes(bc, 4, crc32(tmp->buf, tmp->buf_ptr - tmp->buf));
 }
 
 static void put_main_header(nut_context_t * nut) {
@@ -270,6 +270,7 @@ static void put_stream_header(nut_context_t * nut, int id) {
 	put_v(tmp, sc->sh.timebase.nom);
 	put_v(tmp, sc->sh.timebase.den);
 	put_v(tmp, sc->msb_pts_shift);
+	put_v(tmp, sc->max_pts_distance);
 	put_v(tmp, sc->decode_delay);
 	put_bytes(tmp, 1, sc->sh.fixed_fps ? 1 : 0);
 	put_vb(tmp, sc->sh.codec_specific_len, sc->sh.codec_specific);
@@ -320,7 +321,7 @@ static void put_syncpoint(nut_context_t * nut, const nut_packet_t * fd) {
 	s->s[s->len].pos = nut->last_syncpoint;
 	s->len++;
 
-	for (i = 0; i < nut->stream_count; i++) keys[i] = nut->sc[i].eor; // FIXME for eor in delayed streams
+	for (i = 0; i < nut->stream_count; i++) keys[i] = !!nut->sc[i].eor; // FIXME for eor in index
 	for (i = s->len; --i; ) {
 		int j;
 		int n = 1;
@@ -459,13 +460,15 @@ void nut_write_frame(nut_context_t * nut, const nut_packet_t * fd, const uint8_t
 		}
 	}
 	// distance syncpoints
-	if (nut->last_syncpoint < nut->last_headers ||
+	if (ABS((int64_t)fd->pts - (int64_t)sc->last_pts) > sc->max_pts_distance)
+		fprintf(stderr, "%d - %d > %d   \n", (int)fd->pts, (int)sc->last_pts, sc->max_pts_distance);
+	if (nut->last_syncpoint < nut->last_headers || ABS((int64_t)fd->pts - (int64_t)sc->last_pts) > sc->max_pts_distance ||
 		bctello(nut->o) - nut->last_syncpoint + fd->len + frame_header(nut, fd, NULL) > nut->max_distance) put_syncpoint(nut, fd);
 
 	put_frame(nut, fd, buf);
 
 	if ((fd->flags & NUT_KEY_STREAM_FLAG) && !sc->last_key) sc->last_key = fd->pts + 1;
-	if (fd->flags & NUT_EOR_STREAM_FLAG) sc->eor = 1;
+	if (fd->flags & NUT_EOR_STREAM_FLAG) sc->eor = fd->pts + 1;
 	else sc->eor = 0;
 }
 
@@ -497,6 +500,7 @@ nut_context_t * nut_muxer_init(const nut_muxer_opts_t * mopts, const nut_stream_
 		nut->sc[i].last_pts = 0;
 		nut->sc[i].last_dts = -1;
 		nut->sc[i].msb_pts_shift = 7; // TODO
+		nut->sc[i].max_pts_distance = (s[i].timebase.den + s[i].timebase.nom - 1) / s[i].timebase.nom; // TODO
 		nut->sc[i].decode_delay = !i; // ### TODO
 		nut->sc[i].eor = 0;
 		nut->sc[i].sh = s[i];
