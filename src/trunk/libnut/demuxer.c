@@ -654,7 +654,6 @@ err_out:
 
 int nut_read_headers(nut_context_t * nut, nut_packet_t * pd, nut_stream_header_t * s []) {
 	int i, err = 0;
-	off_t headers_pos = bctello(nut->i);
 	*s = NULL;
 	if (!nut->last_headers) { // we already have headers, we were called just for index
 		CHECK(get_main_header(nut, pd->len));
@@ -684,7 +683,7 @@ int nut_read_headers(nut_context_t * nut, nut_packet_t * pd, nut_stream_header_t
 					nut->sc[i].pts_cache[j] = -1;
 			}
 		}
-		nut->last_headers = headers_pos;
+		nut->last_headers = 1;
 	}
 
 	if (nut->dopts.read_index && nut->i->isc.seek) {
