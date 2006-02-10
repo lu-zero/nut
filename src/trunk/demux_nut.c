@@ -56,6 +56,7 @@ static int nut_check_file(demuxer_t * demuxer) {
 }
 
 static demuxer_t * demux_open_nut(demuxer_t * demuxer) {
+	extern int index_mode;
 	nut_demuxer_opts_t dopts = {
 		.input = {
 			.priv = demuxer->stream,
@@ -64,7 +65,7 @@ static demuxer_t * demux_open_nut(demuxer_t * demuxer) {
 			.eof = NULL,
 			.file_pos = ID_LENGTH,
 		},
-		.read_index = 1
+		.read_index = index_mode
 	};
 	nut_priv_t * priv = demuxer->priv;
 	nut_context_t * nut = priv->nut = nut_demuxer_init(&dopts);
