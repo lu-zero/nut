@@ -575,10 +575,25 @@ retry:
 		tmp = (tmp << 8) | *(nut->i->buf_ptr++);
 		if (tmp != SYNCPOINT_STARTCODE) continue;
 		if (res) {
+			int i, scrap;
 			res->pos = bctello(nut->i) - 8;
 			GET_V(nut->i, res->pts);
 			GET_V(nut->i, tmp);
 			res->back_ptr = (tmp * 8 + 7) << 1;
+
+			CHECK(get_bytes(nut->i, 1, &tmp));
+			if (!nut->ft[tmp].stream_plus1) GET_V(nut->i, scrap);
+			if (!nut->ft[tmp].pts_delta) GET_V(nut->i, scrap);
+			if (nut->ft[tmp].flags & MSB_CODED_FLAG) GET_V(nut->i, scrap);
+			if (nut->ft[tmp].flags & STREAM_CODED_FLAG) GET_V(nut->i, scrap);
+			for (i = 0; i < nut->ft[tmp].reserved; i++) GET_V(nut->i, scrap);
+			CHECK(get_bytes(nut->i, 4, &tmp));
+
+			if (tmp != crc32(nut->i->buf_ptr - (bctello(nut->i) - res->pos - 8), bctello(nut->i) - 4 - res->pos - 8)) {
+				tmp = 0;
+				nut->i->buf_ptr -= bctello(nut->i) - res->pos - 8; // rewind to right after the startcode
+				continue;
+			}
 		}
 		if (!backwards) return 0;
 		else ptr = nut->i->buf_ptr;
