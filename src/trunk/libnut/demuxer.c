@@ -186,24 +186,24 @@ static int get_vb(input_buffer_t * in, int * len, uint8_t ** buf) {
 	return 0;
 }
 
-static int get_header(input_buffer_t * in, input_buffer_t * out, int len, int checksum) {
+static int get_header(input_buffer_t * in, input_buffer_t * out, int len) {
 	uint64_t code;
 
 	assert(out->is_mem);
 	assert(out->buf == out->buf_ptr);
 
-	if (checksum) len -= 4;
+	len -= 4; // checksum
 
-	out->write_len = len;
-	free(out->buf);
-	out->buf_ptr = out->buf = malloc(out->write_len);
+	if (out->write_len < len) {
+		out->write_len = len;
+		out->buf_ptr = out->buf = realloc(out->buf, out->write_len);
+	}
 	if (get_data(in, len, out->buf) != len) return buf_eof(in);
 	out->read_len = len;
 
-	if (checksum) {
-		if (get_bytes(in, 4, &code)) return buf_eof(in); // checksum
-		if (code != crc32(out->buf, len)) return -ERR_BAD_CHECKSUM;
-	}
+	if (get_bytes(in, 4, &code)) return buf_eof(in); // checksum
+	if (code != crc32(out->buf, len)) return -ERR_BAD_CHECKSUM;
+
 	return 0;
 }
 
@@ -212,7 +212,7 @@ static int get_main_header(nut_context_t *nut, int len) {
 	int i, j, err = 0;
 	int flag, fields, timestamp = 0, mul = 1, stream = 0, sflag, size, count, reserved;
 
-	CHECK(get_header(nut->i, tmp, len, 1));
+	CHECK(get_header(nut->i, tmp, len));
 
 	GET_V(tmp, i);
 	ERROR(i != NUT_VERSION, -ERR_BAD_VERSION);
@@ -262,7 +262,7 @@ static int get_stream_header(nut_context_t * nut, int id) {
 	uint64_t a;
 
 	GET_V(nut->i, len);
-	CHECK(get_header(nut->i, tmp, len, 1));
+	CHECK(get_header(nut->i, tmp, len));
 
 	GET_V(tmp, i);
 	ERROR(i != id, -ERR_BAD_STREAM_ORDER);
@@ -384,7 +384,7 @@ static int get_index(nut_context_t * nut) {
 	ERROR(x != INDEX_STARTCODE, -ERR_GENERAL_ERROR);
 
 	GET_V(nut->i, x);
-	CHECK(get_header(nut->i, tmp, x, 1));
+	CHECK(get_header(nut->i, tmp, x));
 
 	GET_V(tmp, x);
 	for (i = 0; i < nut->stream_count; i++) {
@@ -691,11 +691,11 @@ int nut_read_headers(nut_context_t * nut, nut_packet_t * pd, nut_stream_header_t
 		if (nut->seek_status <= 1) {
 			if (nut->seek_status == 0) {
 				nut->before_seek = bctello(nut->i);
-				seek_buf(nut->i, -8, SEEK_END);
+				seek_buf(nut->i, -12, SEEK_END);
 			}
 			nut->seek_status = 1;
 			CHECK(get_bytes(nut->i, 8, &idx_ptr));
-			if (idx_ptr) idx_ptr = nut->i->filesize - 8 - idx_ptr;
+			if (idx_ptr) idx_ptr = nut->i->filesize - idx_ptr;
 			if (!idx_ptr || idx_ptr >= nut->i->filesize) nut->dopts.read_index = 0; // invalid ptr
 		}
 		if (nut->dopts.read_index) {

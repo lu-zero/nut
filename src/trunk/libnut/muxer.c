@@ -160,6 +160,7 @@ static int frame_header(nut_context_t * nut, const nut_packet_t * fd, int * rftn
 	if (rftnum) *rftnum = ftnum;
 	return size;
 }
+
 static void put_frame_header(nut_context_t * nut, output_buffer_t * bc, const nut_packet_t * fd) {
 	stream_context_t * sc = &nut->sc[fd->stream];
 	int ftnum = -1, coded_pts, pts_delta = fd->pts - sc->last_pts;
@@ -207,18 +208,21 @@ static void put_frame(nut_context_t * nut, const nut_packet_t * fd, const uint8_
 	sc->sh.max_pts = MAX(sc->sh.max_pts, fd->pts);
 }
 
-static void put_header(output_buffer_t * bc, output_buffer_t * tmp, uint64_t startcode, int checksum) {
+static void put_header(output_buffer_t * bc, output_buffer_t * tmp, uint64_t startcode, int index_ptr) {
 	int forward_ptr;
 	assert(tmp->is_mem);
 
 	forward_ptr = tmp->buf_ptr - tmp->buf;
-	if (checksum) forward_ptr += 4;
+	forward_ptr += 4; // checksum
+	if (index_ptr) forward_ptr += 8;
 	fprintf(stderr, "header/index size: %d\n", forward_ptr + 8 + v_len(forward_ptr));
+
+	if (index_ptr) put_bytes(tmp, 8, 8 + v_len(forward_ptr) + forward_ptr);
 
 	put_bytes(bc, 8, startcode);
 	put_v(bc, forward_ptr);
 	put_data(bc, tmp->buf_ptr - tmp->buf, tmp->buf);
-	if (checksum) put_bytes(bc, 4, crc32(tmp->buf, tmp->buf_ptr - tmp->buf));
+	put_bytes(bc, 4, crc32(tmp->buf, tmp->buf_ptr - tmp->buf));
 }
 
 static void put_main_header(nut_context_t * nut) {
@@ -256,7 +260,7 @@ static void put_main_header(nut_context_t * nut) {
 	}
 
 	assert(nut->fti[n].tmp_flag == -1);
-	put_header(nut->o, tmp, MAIN_STARTCODE, 1);
+	put_header(nut->o, tmp, MAIN_STARTCODE, 0);
 	free_buffer(tmp);
 }
 
@@ -290,7 +294,7 @@ static void put_stream_header(nut_context_t * nut, int id) {
 			break;
 	}
 
-	put_header(nut->o, tmp, STREAM_STARTCODE, 1);
+	put_header(nut->o, tmp, STREAM_STARTCODE, 0);
 	free_buffer(tmp);
 }
 
@@ -356,7 +360,6 @@ static void put_headers(nut_context_t * nut) {
 }
 
 static void put_index(nut_context_t * nut) {
-	off_t start = bctello(nut->o);
 	output_buffer_t * tmp = new_mem_buffer();
 	syncpoint_list_t * s = &nut->syncpoints;
 	int i;
@@ -415,8 +418,6 @@ static void put_index(nut_context_t * nut) {
 
 	put_header(nut->o, tmp, INDEX_STARTCODE, 1);
 	free_buffer(tmp);
-
-	put_bytes(nut->o, 8, bctello(nut->o) - start);
 }
 
 void nut_write_info(nut_context_t * nut, const nut_info_packet_t info []) {
@@ -442,7 +443,7 @@ void nut_write_info(nut_context_t * nut, const nut_info_packet_t info []) {
 			put_vb(tmp, info[i].val, info[i].data);
 	}
 
-	put_header(nut->o, tmp, INFO_STARTCODE, 1);
+	put_header(nut->o, tmp, INFO_STARTCODE, 0);
 	free_buffer(tmp);
 }
 
