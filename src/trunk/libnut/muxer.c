@@ -130,6 +130,59 @@ static void put_vb(output_buffer_t * bc, int len, uint8_t * data) {
 	put_data(bc, len, data);
 }
 
+static void put_syncpoint(nut_context_t * nut, const nut_packet_t * fd) {
+	int i;
+	uint64_t pts = 0;
+	int stream = 0;
+	int back_ptr = 0;
+	int keys[nut->stream_count];
+	syncpoint_list_t * s = &nut->syncpoints;
+
+	nut->last_syncpoint = bctello(nut->o);
+
+	for (i = 0; i < nut->stream_count; i++) {
+		if (nut->sc[i].last_dts > 0 && compare_ts(nut, nut->sc[i].last_dts, i, pts, stream) > 0) {
+			pts = nut->sc[i].last_dts;
+			stream = i;
+		}
+	}
+
+	if (s->alloc_len <= s->len) {
+		s->alloc_len += PREALLOC_SIZE;
+		s->s = realloc(s->s, s->alloc_len * sizeof(syncpoint_t));
+		s->pts = realloc(s->pts, s->alloc_len * nut->stream_count * sizeof(uint64_t));
+	}
+
+	for (i = 0; i < nut->stream_count; i++) s->pts[s->len * nut->stream_count + i] = nut->sc[i].last_key;
+	s->s[s->len].pos = nut->last_syncpoint;
+	s->len++;
+
+	for (i = 0; i < nut->stream_count; i++) keys[i] = !!nut->sc[i].eor; // FIXME for eor in index
+	for (i = s->len; --i; ) {
+		int j;
+		int n = 1;
+		for (j = 0; j < nut->stream_count; j++) {
+			if (keys[j]) continue;
+			if (!s->pts[i * nut->stream_count + j]) continue;
+			if (compare_ts(nut, s->pts[i * nut->stream_count + j] - 1, j, pts, stream) <= 0) keys[j] = 1;
+		}
+		for (j = 0; j < nut->stream_count; j++) n &= keys[j];
+		if (n) { i--; break; }
+	}
+	back_ptr = (nut->last_syncpoint - s->s[i].pos) / 8;
+
+	put_bytes(nut->o, 8, SYNCPOINT_STARTCODE);
+	put_v(nut->o, pts * nut->stream_count + stream);
+	put_v(nut->o, back_ptr);
+
+	for (i = 0; i < nut->stream_count; i++) {
+		nut->sc[i].last_pts = convert_ts(nut, pts, stream, i);
+		nut->sc[i].last_key = 0;
+	}
+
+	nut->sync_overhead += bctello(nut->o) - nut->last_syncpoint;
+}
+
 static int frame_header(nut_context_t * nut, const nut_packet_t * fd, int * rftnum) {
 	int i, ftnum = -1, size = 0, coded_pts, pts_delta;
 	stream_context_t * sc = &nut->sc[fd->stream];
@@ -296,59 +349,6 @@ static void put_stream_header(nut_context_t * nut, int id) {
 
 	put_header(nut->o, tmp, STREAM_STARTCODE, 0);
 	free_buffer(tmp);
-}
-
-static void put_syncpoint(nut_context_t * nut, const nut_packet_t * fd) {
-	int i;
-	uint64_t pts = 0;
-	int stream = 0;
-	int back_ptr = 0;
-	int keys[nut->stream_count];
-	syncpoint_list_t * s = &nut->syncpoints;
-
-	nut->last_syncpoint = bctello(nut->o);
-
-	for (i = 0; i < nut->stream_count; i++) {
-		if (nut->sc[i].last_dts > 0 && compare_ts(nut, nut->sc[i].last_dts, i, pts, stream) > 0) {
-			pts = nut->sc[i].last_dts;
-			stream = i;
-		}
-	}
-
-	if (s->alloc_len <= s->len) {
-		s->alloc_len += PREALLOC_SIZE;
-		s->s = realloc(s->s, s->alloc_len * sizeof(syncpoint_t));
-		s->pts = realloc(s->pts, s->alloc_len * nut->stream_count * sizeof(uint64_t));
-	}
-
-	for (i = 0; i < nut->stream_count; i++) s->pts[s->len * nut->stream_count + i] = nut->sc[i].last_key;
-	s->s[s->len].pos = nut->last_syncpoint;
-	s->len++;
-
-	for (i = 0; i < nut->stream_count; i++) keys[i] = !!nut->sc[i].eor; // FIXME for eor in index
-	for (i = s->len; --i; ) {
-		int j;
-		int n = 1;
-		for (j = 0; j < nut->stream_count; j++) {
-			if (keys[j]) continue;
-			if (!s->pts[i * nut->stream_count + j]) continue;
-			if (compare_ts(nut, s->pts[i * nut->stream_count + j] - 1, j, pts, stream) <= 0) keys[j] = 1;
-		}
-		for (j = 0; j < nut->stream_count; j++) n &= keys[j];
-		if (n) { i--; break; }
-	}
-	back_ptr = (nut->last_syncpoint - s->s[i].pos) / 8;
-
-	put_bytes(nut->o, 8, SYNCPOINT_STARTCODE);
-	put_v(nut->o, pts * nut->stream_count + stream);
-	put_v(nut->o, back_ptr);
-
-	for (i = 0; i < nut->stream_count; i++) {
-		nut->sc[i].last_pts = convert_ts(nut, pts, stream, i);
-		nut->sc[i].last_key = 0;
-	}
-
-	nut->sync_overhead += bctello(nut->o) - nut->last_syncpoint;
 }
 
 static void put_headers(nut_context_t * nut) {
