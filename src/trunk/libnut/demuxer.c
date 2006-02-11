@@ -451,7 +451,7 @@ static void clear_dts_cache(nut_context_t * nut) {
 
 static int get_packet(nut_context_t * nut, nut_packet_t * pd, int * saw_syncpoint) {
 	int err = 0;
-	int after_sync = 0;
+	off_t after_sync = 0;
 	uint64_t tmp;
 	int coded_pts, size_lsb = 0, stream_flags = 0, i;
 
@@ -484,9 +484,9 @@ static int get_packet(nut_context_t * nut, nut_packet_t * pd, int * saw_syncpoin
 			nut->i->buf_ptr -= 8;
 			return get_packet(nut, pd, saw_syncpoint);
 		} else if (tmp == SYNCPOINT_STARTCODE) {
+			after_sync = bctello(nut->i);
 			CHECK(get_syncpoint(nut));
 			CHECK(get_bytes(nut->i, 1, &tmp));
-			after_sync = 1;
 		} else {
 			nut->i->buf_ptr -= 7;
 			tmp = 'N';
@@ -522,6 +522,13 @@ static int get_packet(nut_context_t * nut, nut_packet_t * pd, int * saw_syncpoin
 	pd->flags = nut->ft[tmp].stream_flags ^ stream_flags;
 
 	for (i = 0; i < nut->ft[tmp].reserved; i++) { int scrap; GET_V(nut->i, scrap); }
+
+	if (after_sync) {
+		uint64_t checksum;
+		off_t pos = bctello(nut->i);
+		CHECK(get_bytes(nut->i, 4, &checksum));
+		ERROR(checksum != crc32(nut->i->buf_ptr - (bctello(nut->i) - after_sync), pos - after_sync), -ERR_BAD_CHECKSUM);
+	}
 
 	// error checking - max distance
 	ERROR(!after_sync && bctello(nut->i) + pd->len - nut->last_syncpoint > nut->max_distance, -ERR_MAX_DISTANCE);
