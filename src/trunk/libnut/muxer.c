@@ -84,6 +84,11 @@ static void free_buffer(output_buffer_t * bc) {
 	free(bc);
 }
 
+static output_buffer_t * clear_buffer(output_buffer_t * bc) {
+	bc->buf_ptr = bc->buf;
+	return bc;
+}
+
 static void put_bytes(output_buffer_t * bc, int count, uint64_t val) {
 	ready_write_buf(bc, count);
 	for(count--; count >= 0; count--){
@@ -279,7 +284,7 @@ static void put_header(output_buffer_t * bc, output_buffer_t * tmp, uint64_t sta
 }
 
 static void put_main_header(nut_context_t * nut) {
-	output_buffer_t *tmp = new_mem_buffer();
+	output_buffer_t * tmp = clear_buffer(nut->tmp_buffer);
 	int i, j, n;
 	int flag, fields, sflag, timestamp = 0, mul = 1, stream = 0, size, count;
 
@@ -314,11 +319,10 @@ static void put_main_header(nut_context_t * nut) {
 
 	assert(nut->fti[n].tmp_flag == -1);
 	put_header(nut->o, tmp, MAIN_STARTCODE, 0);
-	free_buffer(tmp);
 }
 
 static void put_stream_header(nut_context_t * nut, int id) {
-	output_buffer_t * tmp = new_mem_buffer();
+	output_buffer_t * tmp = clear_buffer(nut->tmp_buffer);
 	stream_context_t * sc = &nut->sc[id];
 
 	put_v(tmp, id); // ### is stream_id staying in spec
@@ -348,7 +352,6 @@ static void put_stream_header(nut_context_t * nut, int id) {
 	}
 
 	put_header(nut->o, tmp, STREAM_STARTCODE, 0);
-	free_buffer(tmp);
 }
 
 static void put_headers(nut_context_t * nut) {
@@ -360,7 +363,7 @@ static void put_headers(nut_context_t * nut) {
 }
 
 static void put_index(nut_context_t * nut) {
-	output_buffer_t * tmp = new_mem_buffer();
+	output_buffer_t * tmp = clear_buffer(nut->tmp_buffer);
 	syncpoint_list_t * s = &nut->syncpoints;
 	int i;
 	uint64_t max_pts = 0;
@@ -417,11 +420,10 @@ static void put_index(nut_context_t * nut) {
 	}
 
 	put_header(nut->o, tmp, INDEX_STARTCODE, 1);
-	free_buffer(tmp);
 }
 
 void nut_write_info(nut_context_t * nut, const nut_info_packet_t info []) {
-	output_buffer_t *tmp = new_mem_buffer();
+	output_buffer_t * tmp = clear_buffer(nut->tmp_buffer);
 	int i;
 
 	for(i = 0; ; i++){
@@ -444,7 +446,6 @@ void nut_write_info(nut_context_t * nut, const nut_info_packet_t info []) {
 	}
 
 	put_header(nut->o, tmp, INFO_STARTCODE, 0);
-	free_buffer(tmp);
 }
 
 void nut_write_frame(nut_context_t * nut, const nut_packet_t * fd, const uint8_t * buf) {
@@ -479,6 +480,7 @@ nut_context_t * nut_muxer_init(const nut_muxer_opts_t * mopts, const nut_stream_
 	// TODO check that all input is valid
 
 	nut->o = new_output_buffer(mopts->output);
+	nut->tmp_buffer = new_mem_buffer(); // general purpose buffer
 	nut->max_distance = 32768; // TODO
 	nut->fti = ft_default; // TODO
 	nut->mopts = *mopts;
@@ -567,6 +569,7 @@ void nut_muxer_uninit(nut_context_t * nut) {
 	free(nut->syncpoints.s);
 	free(nut->syncpoints.pts);
 
+	free_buffer(nut->tmp_buffer);
 	free_buffer(nut->o); // flushes file
 	fprintf(stderr, "TOTAL: %d bytes data, %d bytes overhead, %.2lf%% overhead\n", total,
 		(int)ftell(nut->mopts.output.priv) - total, (double)(ftell(nut->mopts.output.priv) - total) / total*100);

@@ -128,6 +128,7 @@ struct nut_context_s {
 	nut_demuxer_opts_t dopts;
 	input_buffer_t * i;
 	output_buffer_t * o;
+	output_buffer_t * tmp_buffer;
 
 	int stream_count;
 	stream_context_t * sc;
