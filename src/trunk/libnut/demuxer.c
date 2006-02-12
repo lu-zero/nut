@@ -240,7 +240,11 @@ static int get_main_header(nut_context_t *nut, int len) {
 		}
 
 		for(j = 0; j < count && i < 256; j++, i++) {
-			assert(i != 'N' || flag == INVALID_FLAG);
+			if (i == 'N') {
+				nut->ft[i].flags = INVALID_FLAG;
+				j--;
+				continue;
+			}
 			nut->ft[i].flags = flag;
 			nut->ft[i].stream_flags = sflag;
 			nut->ft[i].stream_plus1 = stream;

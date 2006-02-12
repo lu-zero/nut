@@ -22,9 +22,7 @@ frame_table_input_t ft_default[] = {
 	  {    0,      5,     1,   1, 673,      2,  672,     0 }, // used 862 times
 	  {    0,      5,     1,   1, 769,      2,  768,     0 }, // used 433 times
 	  {    0,      5,     1,   1, 961,      2,  960,     0 }, // used 191 times
-	  {    1,      7,     0,   2, 104,      1,    0,    64 }, // "1.2.0" => 14187
-	  {    4,      3,     0,   0,   1,      0,    0,     0 }, // invalid 'N'
-	  {    1,      5,     0,   2, 104,      1,   64,     0 },
+	  {    1,      4,     0,   2, 104,      1,    0,     0 }, // "1.2.0" => 14187
 	  {    1,      4,     0,  -1,  42,      1,    0,     0 }, // "1.-1.0" => 5707
 	  {    1,      4,     0,   1,  83,      1,    0,     0 }, // "1.1.0" => 11159
 	  {    1,      4,     1,   1,  11,      1,    0,     0 }, // "1.1.1" => 1409
@@ -315,7 +313,11 @@ static void put_main_header(nut_context_t * nut) {
 		else count = mul - size;
 
 		for(j = 0; j < count && i < 256; j++, i++) {
-			assert(i != 'N' || flag == INVALID_FLAG);
+			if (i == 'N') {
+				nut->ft[i].flags = INVALID_FLAG;
+				j--;
+				continue;
+			}
 			nut->ft[i].flags = flag;
 			nut->ft[i].stream_flags = sflag;
 			nut->ft[i].stream_plus1 = stream;
