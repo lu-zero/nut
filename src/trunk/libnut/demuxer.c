@@ -1190,16 +1190,15 @@ int nut_seek(nut_context_t * nut, double time_pos, int flags, const int * active
 			int j;
 			if (!(sl->s[i].pos & 1)) continue;
 			for (j = 0; j < nut->stream_count; j++) {
-				uint64_t tmp = sl->pts[i * nut->stream_count + j];
-				if (pts[j]&1 && tmp--) { // -- because all pts array os off-by-one. zero indicate no keyframe.
-					if ((pts[j] >> 1) < tmp) { if (!last_sync) last_sync = i; }
+				uint64_t tmp;
+				if (!(pts[j]&1)) continue;
+				tmp = sl->pts[i * nut->stream_count + j];
+				if (tmp--) { // -- because all pts array os off-by-one. zero indicate no keyframe.
+					if (tmp > (pts[j]>>1)) { if (!last_sync) last_sync = i; }
 					else sync[j] = (i-1);
 				}
 				tmp = sl->eor[i * nut->stream_count + j];
-				if (pts[j]&1 && tmp--) {
-					if ((pts[j] >> 1) < tmp) { if (!last_sync) last_sync = i; }
-					else sync[j] = -(i+1); // flag stream eor
-				}
+				if (tmp--) if (tmp <= (pts[j]>>1)) sync[j] = -(i+1); // flag stream eor
 			}
 		}
 		for (i = 0; i < nut->stream_count; i++) {
