@@ -369,12 +369,50 @@ static void put_stream_header(nut_context_t * nut, int id) {
 	put_header(nut->o, tmp, STREAM_STARTCODE, 0);
 }
 
+static void put_info(nut_context_t * nut, nut_info_packet_t * info) {
+	output_buffer_t * tmp = clear_buffer(nut->tmp_buffer);
+	int i;
+
+	put_v(tmp, info->stream_id_plus1);
+	put_v(tmp, info->chapter_id);
+	if (info->chapter_id) {
+		put_v(tmp, info->chapter_start);
+		put_v(tmp, info->chapter_len);
+	}
+	put_v(tmp, info->count);
+
+	for(i = 0; i < info->count; i++){
+		nut_info_field_t * field = &info->fields[i];
+		put_vb(tmp, strlen(field->name), field->name);
+		if (!strcmp(field->type, "v")) {
+			put_s(tmp, field->val);
+		} else if (!strcmp(field->type, "s")) {
+			put_s(tmp, -3);
+			put_s(tmp, field->val);
+		} else if (!strcmp(field->type, "r")) {
+			put_s(tmp, -(field->den + 2));
+			put_s(tmp, field->val);
+		} else {
+			if (strcmp(field->type, "UTF-8")) {
+				put_s(tmp, -1);
+			} else {
+				put_s(tmp, -2);
+				put_vb(tmp, strlen(field->type), field->type);
+			}
+			put_vb(tmp, field->val, field->data);
+		}
+	}
+
+	put_header(nut->o, tmp, INFO_STARTCODE, 0);
+}
+
 static void put_headers(nut_context_t * nut) {
 	int i;
 	nut->last_headers = bctello(nut->o);
 
 	put_main_header(nut);
 	for (i = 0; i < nut->stream_count; i++) put_stream_header(nut, i);
+	for (i = 0; i < nut->info_count; i++) put_info(nut, &nut->info[i]);
 }
 
 static void put_index(nut_context_t * nut) {
@@ -444,32 +482,6 @@ static void put_index(nut_context_t * nut) {
 	put_header(nut->o, tmp, INDEX_STARTCODE, 1);
 }
 
-void nut_write_info(nut_context_t * nut, const nut_info_packet_t info []) {
-	output_buffer_t * tmp = clear_buffer(nut->tmp_buffer);
-	int i;
-
-	for(i = 0; ; i++){
-		const char * type;
-		put_v(tmp, info[i].id);
-		if (!info[i].id) break;
-		type = info_table[info[i].id].type;
-		if (!type) {
-			type = info[i].type;
-			put_vb(tmp, strlen(info[i].type) + 1, info[i].type);
-		}
-		if (!info_table[info[i].id].name)
-			put_vb(tmp, strlen(info[i].name) + 1, info[i].name);
-		if (!strcmp(type, "v"))
-			put_v(tmp, info[i].val);
-		else if (!strcmp(type, "s"))
-			put_s(tmp, info[i].val);
-		else
-			put_vb(tmp, info[i].val, info[i].data);
-	}
-
-	put_header(nut->o, tmp, INFO_STARTCODE, 0);
-}
-
 void nut_write_frame(nut_context_t * nut, const nut_packet_t * fd, const uint8_t * buf) {
 	stream_context_t * sc = &nut->sc[fd->stream];
 	int write_syncpoint = 0;
@@ -497,7 +509,7 @@ void nut_write_frame(nut_context_t * nut, const nut_packet_t * fd, const uint8_t
 	else sc->eor = 0;
 }
 
-nut_context_t * nut_muxer_init(const nut_muxer_opts_t * mopts, const nut_stream_header_t s[]) {
+nut_context_t * nut_muxer_init(const nut_muxer_opts_t * mopts, const nut_stream_header_t s[], const nut_info_packet_t info[]) {
 	nut_context_t * nut = malloc(sizeof(nut_context_t));
 	int i;
 	// TODO check that all input is valid
@@ -554,6 +566,28 @@ nut_context_t * nut_muxer_init(const nut_muxer_opts_t * mopts, const nut_stream_
 		nut->sc[i].tot_size = 0;
 	}
 
+	if (info) {
+		for (nut->info_count = 0; info[nut->info_count].count >= 0; nut->info_count++);
+
+		nut->info = malloc(sizeof(nut_info_packet_t) * nut->info_count);
+
+		for (i = 0; i < nut->info_count; i++) {
+			int j;
+			nut->info[i] = info[i];
+			nut->info[i].fields = malloc(sizeof(nut_info_field_t) * info[i].count);
+			for (j = 0; j < info[i].count; j++) {
+				nut->info[i].fields[j] = info[i].fields[j];
+				if (info[i].fields[j].data) {
+					nut->info[i].fields[j].data = malloc(info[i].fields[j].val);
+					memcpy(nut->info[i].fields[j].data, info[i].fields[j].data, info[i].fields[j].val);
+				}
+			}
+		}
+	} else {
+		nut->info_count = 0;
+		nut->info = NULL;
+	}
+
 	put_data(nut->o, strlen(ID_STRING) + 1, ID_STRING);
 
 	put_headers(nut);
@@ -587,6 +621,13 @@ void nut_muxer_uninit(nut_context_t * nut) {
 		free(nut->sc[i].reorder_pts_cache);
 	}
 	free(nut->sc);
+
+	for (i = 0; i < nut->info_count; i++) {
+		int j;
+		for (j = 0; j < nut->info[i].count; j++) free(nut->info[i].fields[j].data);
+		free(nut->info[i].fields);
+	}
+	free(nut->info);
 
 	fprintf(stderr, "Syncpoints: %d size: %d\n", nut->syncpoints.len, nut->sync_overhead);
 

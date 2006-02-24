@@ -55,9 +55,8 @@ int main(int argc, char * argv []) {
 
 	if ((err = demuxer->read_headers(demuxer_priv, &nut_stream))) goto err_out;
 	mopts.output = (nut_output_stream_t){ .priv = out, .write = NULL };
-	// mopts.write_index = 0; // LETS SEE IF THIS WORKS!!! ### ### ###
 	mopts.write_index = 1;
-	nut = nut_muxer_init(&mopts, nut_stream);
+	nut = nut_muxer_init(&mopts, nut_stream, NULL);
 
 	for (i = 0; nut_stream[i].type >= 0; i++);
 

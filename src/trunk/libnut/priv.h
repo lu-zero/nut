@@ -134,6 +134,9 @@ struct nut_context_s {
 	int stream_count;
 	stream_context_t * sc;
 
+	int info_count;
+	nut_info_packet_t * info;
+
 	int max_distance;
 	frame_table_input_t * fti;
 	frame_table_t ft[256];

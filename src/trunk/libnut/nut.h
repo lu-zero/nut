@@ -61,11 +61,20 @@ typedef struct {
 } nut_demuxer_opts_t;
 
 typedef struct {
-	int id; // 0 means end
-	char * type;
-	char * name;
-	int val; // val is length if type is not "v" or "s"
-	uint8_t * data;
+	char type[7];
+	char name[65];
+	int64_t val;
+	int den;
+	uint8_t * data; // must be NULL if carries no data
+} nut_info_field_t;
+
+typedef struct {
+	int count; // count=-1 terminates the nut_info_packet_t array
+	int stream_id_plus1;
+	int chapter_id;
+	uint64_t chapter_start;
+	uint64_t chapter_len;
+	nut_info_field_t * fields;
 } nut_info_packet_t;
 
 typedef struct {
@@ -86,7 +95,7 @@ typedef struct nut_context_s nut_context_t;
 // Muxer
 
 /** allocs nut context, writes headers to file */
-nut_context_t * nut_muxer_init(const nut_muxer_opts_t * mopts, const nut_stream_header_t s[]);
+nut_context_t * nut_muxer_init(const nut_muxer_opts_t * mopts, const nut_stream_header_t s[], const nut_info_packet_t info[]);
 /** writes index (optionally), frees alloced ram */
 void nut_muxer_uninit(nut_context_t * nut);
 
