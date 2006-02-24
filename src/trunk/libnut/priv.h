@@ -83,6 +83,7 @@ typedef struct {
 	int alloc_len;
 	syncpoint_t * s;
 	uint64_t * pts; // each elem is stream_count items, +1 to real pts, 0 means there is no key
+	uint64_t * eor; // same as pts, is the pts of last eor in syncpoint region _IF_ eor is set by syncpoint.
 } syncpoint_list_t;
 
 typedef struct {
@@ -100,7 +101,7 @@ typedef struct {
 	int decode_delay;
 	nut_stream_header_t sh;
 	int64_t * pts_cache;
-	int eor;
+	int64_t eor;
 	// reorder.c
 	int64_t next_pts;
 	reorder_packet_t * packets;

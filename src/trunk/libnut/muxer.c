@@ -154,13 +154,17 @@ static void put_syncpoint(nut_context_t * nut, output_buffer_t * bc) {
 		s->alloc_len += PREALLOC_SIZE;
 		s->s = realloc(s->s, s->alloc_len * sizeof(syncpoint_t));
 		s->pts = realloc(s->pts, s->alloc_len * nut->stream_count * sizeof(uint64_t));
+		s->eor = realloc(s->eor, s->alloc_len * nut->stream_count * sizeof(uint64_t));
 	}
 
-	for (i = 0; i < nut->stream_count; i++) s->pts[s->len * nut->stream_count + i] = nut->sc[i].last_key;
+	for (i = 0; i < nut->stream_count; i++) {
+		s->pts[s->len * nut->stream_count + i] = nut->sc[i].last_key;
+		s->eor[s->len * nut->stream_count + i] = nut->sc[i].eor > 0 ? nut->sc[i].eor : 0;
+	}
 	s->s[s->len].pos = nut->last_syncpoint;
 	s->len++;
 
-	for (i = 0; i < nut->stream_count; i++) keys[i] = !!nut->sc[i].eor; // FIXME for eor in index
+	for (i = 0; i < nut->stream_count; i++) keys[i] = !!nut->sc[i].eor;
 	for (i = s->len; --i; ) {
 		int j;
 		int n = 1;
@@ -177,6 +181,7 @@ static void put_syncpoint(nut_context_t * nut, output_buffer_t * bc) {
 	for (i = 0; i < nut->stream_count; i++) {
 		nut->sc[i].last_pts = convert_ts(nut, pts, stream, i);
 		nut->sc[i].last_key = 0;
+		if (nut->sc[i].eor) nut->sc[i].eor = -1; // so we know to ignore this stream in future syncpoints
 	}
 
 	put_bytes(bc, 8, SYNCPOINT_STARTCODE);
@@ -395,7 +400,7 @@ static void put_index(nut_context_t * nut) {
 	}
 
 	for (i = 0; i < nut->stream_count; i++) {
-		uint64_t a, last = 0;
+		uint64_t a, last = 0; // all of pts[] array is off by one. using 0 for last pts is equivalent to -1 in spec.
 		int j;
 		for (j = 0; j < s->len; ) {
 			int k;
@@ -423,8 +428,15 @@ static void put_index(nut_context_t * nut) {
 			j += k;
 			for (k = j - k; k < j; k++) {
 				if (!s->pts[k * nut->stream_count + i]) continue;
-				put_v(tmp, s->pts[k * nut->stream_count + i] - last - 1);
-				last = s->pts[k * nut->stream_count + i] - 1;
+				if (s->eor[k * nut->stream_count + i]) {
+					put_v(tmp, 0);
+					put_v(tmp, s->pts[k * nut->stream_count + i] - last);
+					put_v(tmp, s->eor[k * nut->stream_count + i] - s->pts[k * nut->stream_count + i]);
+					last = s->eor[k * nut->stream_count + i];
+				} else {
+					put_v(tmp, s->pts[k * nut->stream_count + i] - last);
+					last = s->pts[k * nut->stream_count + i];
+				}
 			}
 		}
 	}
@@ -502,6 +514,7 @@ nut_context_t * nut_muxer_init(const nut_muxer_opts_t * mopts, const nut_stream_
 	nut->syncpoints.alloc_len = 0;
 	nut->syncpoints.s = NULL;
 	nut->syncpoints.pts = NULL;
+	nut->syncpoints.eor = NULL;
 	nut->last_syncpoint = 0;
 
 	for (nut->stream_count = 0; s[nut->stream_count].type >= 0; nut->stream_count++);
@@ -579,6 +592,7 @@ void nut_muxer_uninit(nut_context_t * nut) {
 
 	free(nut->syncpoints.s);
 	free(nut->syncpoints.pts);
+	free(nut->syncpoints.eor);
 
 	free_buffer(nut->tmp_buffer);
 	free_buffer(nut->o); // flushes file

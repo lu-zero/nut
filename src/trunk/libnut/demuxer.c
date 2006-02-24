@@ -301,7 +301,7 @@ err_out:
 	return err;
 }
 
-static int add_syncpoint(nut_context_t * nut, syncpoint_t sp, uint64_t * pts) {
+static int add_syncpoint(nut_context_t * nut, syncpoint_t sp, uint64_t * pts, uint64_t * eor) {
 	syncpoint_list_t * sl = &nut->syncpoints;
 	int i, j;
 
@@ -309,12 +309,14 @@ static int add_syncpoint(nut_context_t * nut, syncpoint_t sp, uint64_t * pts) {
 		off_t pos = sl->s[i].pos >> 1;
 		if (pos > sp.pos) continue;
 		if (sp.pos < pos + 8) { // syncpoint already in list
-			sl->s[i].pos = (sp.pos << 1) | (sl->s[i].pos & 1);
+			sl->s[i].pos = (sp.pos << 1) | (sl->s[i].pos & 1); // refine accuracy of syncpoint position
 			if (pts) {
 				sl->s[i].pos |= 1;
 				for (j = 0; j < nut->stream_count; j++) {
 					assert(!sl->pts[i * nut->stream_count + j] || sl->pts[i * nut->stream_count + j] == pts[j]);
 					sl->pts[i * nut->stream_count + j] = pts[j];
+					assert(!sl->eor[i * nut->stream_count + j] || sl->eor[i * nut->stream_count + j] == eor[j]);
+					sl->eor[i * nut->stream_count + j] = eor[j];
 				}
 			}
 			return i;
@@ -326,14 +328,19 @@ static int add_syncpoint(nut_context_t * nut, syncpoint_t sp, uint64_t * pts) {
 		sl->alloc_len += PREALLOC_SIZE/4;
 		sl->s = realloc(sl->s, sl->alloc_len * sizeof(syncpoint_t));
 		sl->pts = realloc(sl->pts, sl->alloc_len * nut->stream_count * sizeof(uint64_t));
+		sl->eor = realloc(sl->eor, sl->alloc_len * nut->stream_count * sizeof(uint64_t));
 	}
 	memmove(sl->s + i + 1, sl->s + i, (sl->len - i) * sizeof(syncpoint_t));
 	memmove(sl->pts + (i + 1) * nut->stream_count, sl->pts + i * nut->stream_count, (sl->len - i) * nut->stream_count * sizeof(uint64_t));
+	memmove(sl->eor + (i + 1) * nut->stream_count, sl->eor + i * nut->stream_count, (sl->len - i) * nut->stream_count * sizeof(uint64_t));
 
 	sl->s[i] = sp;
 	sl->s[i].pos <<= 1; // flag
 	if (pts) sl->s[i].pos |= 1;
-	for (j = 0; j < nut->stream_count; j++) sl->pts[i * nut->stream_count + j] = pts ? pts[j] : 0;
+	for (j = 0; j < nut->stream_count; j++) {
+		sl->pts[i * nut->stream_count + j] = pts ? pts[j] : 0;
+		sl->eor[i * nut->stream_count + j] = eor ? eor[j] : 0;
+	}
 	sl->len++;
 	return i;
 }
@@ -363,12 +370,18 @@ static int get_syncpoint(nut_context_t * nut) {
 	if (/*nut->dopts.cache_syncpoints*/1) {
 		int i;
 		uint64_t pts[nut->stream_count];
+		uint64_t eor[nut->stream_count];
 		for (i = 0; i < nut->stream_count; i++) {
 			pts[i] = nut->sc[i].last_key;
 			nut->sc[i].last_key = 0;
+			eor[i] = nut->sc[i].eor;
+			nut->sc[i].eor = 0;
 		}
-		i = add_syncpoint(nut, s, after_seek ? NULL : pts);
-		if (!after_seek) nut->syncpoints.s[i - 1].back_ptr |= 1;
+		if (after_seek) add_syncpoint(nut, s, NULL, NULL);
+		else {
+			i = add_syncpoint(nut, s, pts, eor);
+			nut->syncpoints.s[i - 1].back_ptr |= 1;
+		}
 	} /*else {
 		if (!nut->syncpoints.len) add_syncpoint(nut, s);
 	}*/
@@ -380,7 +393,6 @@ static int get_index(nut_context_t * nut) {
 	input_buffer_t * tmp = new_mem_buffer();
 	int err = 0;
 	syncpoint_list_t * sl = &nut->syncpoints;
-	uint64_t * p;
 	uint64_t x;
 	int i;
 
@@ -399,7 +411,8 @@ static int get_index(nut_context_t * nut) {
 	GET_V(tmp, x);
 	sl->alloc_len = sl->len = x;
 	sl->s = realloc(sl->s, sl->alloc_len * sizeof(syncpoint_t));
-	p = sl->pts = realloc(sl->pts, sl->alloc_len * sizeof(uint64_t) * nut->stream_count);
+	sl->pts = realloc(sl->pts, sl->alloc_len * sizeof(uint64_t) * nut->stream_count);
+	sl->eor = realloc(sl->eor, sl->alloc_len * sizeof(uint64_t) * nut->stream_count);
 
 	for (i = 0; i < sl->len; i++) {
 		GET_V(tmp, x);
@@ -410,7 +423,7 @@ static int get_index(nut_context_t * nut) {
 	}
 	for (i = 0; i < nut->stream_count; i++) {
 		int j;
-		uint64_t last_pts = 0;
+		uint64_t last_pts = 0; // all of pts[] array is off by one. using 0 for last pts is equivalent to -1 in spec.
 		for (j = 0; j < sl->len; ) {
 			int type, n, flag;
 			GET_V(tmp, x);
@@ -420,19 +433,26 @@ static int get_index(nut_context_t * nut) {
 			if (type) {
 				flag = x & 1;
 				x >>= 1;
-				while (x--) p[n++ * nut->stream_count + i] = flag;
-				if (n < sl->len) p[n++ * nut->stream_count + i] = !flag;
+				while (x--) sl->pts[n++ * nut->stream_count + i] = flag;
+				if (n < sl->len) sl->pts[n++ * nut->stream_count + i] = !flag;
 			} else {
 				while (x != 1) {
-					p[n++ * nut->stream_count + i] = x & 1;
+					sl->pts[n++ * nut->stream_count + i] = x & 1;
 					x >>= 1;
+					if (n == sl->len) break;
 				}
 			}
 			for(; j < n; j++) {
-				if (!p[j * nut->stream_count + i]) continue;
-				GET_V(tmp, x);
-				last_pts += x;
-				p[j * nut->stream_count + i] = last_pts + 1;
+				int A, B = 0;
+				if (!sl->pts[j * nut->stream_count + i]) continue;
+				GET_V(tmp, A);
+				if (!A) {
+					GET_V(tmp, A);
+					GET_V(tmp, B);
+					sl->eor[j * nut->stream_count + i] = last_pts + A + B;
+				}
+				sl->pts[j * nut->stream_count + i] = last_pts + A;
+				last_pts += A + B;
 			}
 		}
 	}
@@ -558,6 +578,8 @@ static void push_frame(nut_context_t * nut, nut_packet_t * pd) {
 	sc->last_pts = pd->pts;
 	sc->last_dts = get_dts(sc->decode_delay, sc->pts_cache, pd->pts);
 	if (pd->flags & NUT_KEY_STREAM_FLAG && !sc->last_key) sc->last_key = pd->pts + 1;
+	if (pd->flags & NUT_EOR_STREAM_FLAG) sc->eor = pd->pts + 1;
+	else sc->eor = 0;
 }
 
 static int find_syncpoint(nut_context_t * nut, int backwards, syncpoint_t * res, off_t stop) {
@@ -690,6 +712,7 @@ int nut_read_headers(nut_context_t * nut, nut_packet_t * pd, nut_stream_header_t
 				nut->sc[i].last_pts = 0;
 				nut->sc[i].last_dts = 0;
 				nut->sc[i].last_key = 0;
+				nut->sc[i].eor = 0;
 				nut->sc[i].sh.max_pts = 0;
 				nut->sc[i].sh.fourcc = NULL;
 				nut->sc[i].sh.codec_specific = NULL;
@@ -822,7 +845,7 @@ static int find_basic_syncpoints(nut_context_t * nut) {
 		if (!nut->seek_status) seek_buf(nut->i, 0, SEEK_SET);
 		nut->seek_status = 1;
 		CHECK(find_syncpoint(nut, 0, &s, 0));
-		add_syncpoint(nut, s, NULL);
+		add_syncpoint(nut, s, NULL, NULL);
 		nut->seek_status = 0;
 	}
 
@@ -832,7 +855,7 @@ static int find_basic_syncpoints(nut_context_t * nut) {
 		if (!nut->seek_status) seek_buf(nut->i, 0, SEEK_END);
 		nut->seek_status = 1;
 		CHECK(find_syncpoint(nut, 1, &s, 0));
-		i = add_syncpoint(nut, s, NULL);
+		i = add_syncpoint(nut, s, NULL, NULL);
 		assert(i == sl->len-1);
 		sl->s[i].back_ptr |= 1;
 		nut->seek_status = 0;
@@ -925,7 +948,7 @@ static int binary_search_syncpoint(nut_context_t * nut, double time_pos, uint64_
 			lop = s.pts;
 		}
 		if (1/*nut->dopts.cache_syncpoints || sl->len == 2*/) {
-			int tmp = add_syncpoint(nut, s, NULL);
+			int tmp = add_syncpoint(nut, s, NULL, NULL);
 			if (!res) i = tmp;
 		}/* else if (sl->len == 3) {
 			if (s.pts > pts) {
@@ -1021,7 +1044,10 @@ static int linear_search_seek(nut_context_t * nut, int backwards, uint64_t * pts
 				if (n) break; // pts for all active streams higher than requested pts
 			}
 			if (pd.flags & NUT_KEY_STREAM_FLAG) {
-				if (pd.pts <= pts[pd.stream]>>1) good_key[pd.stream] = begin<<1;
+				if (pd.pts <= pts[pd.stream]>>1) {
+					good_key[pd.stream] = begin<<1;
+					if (pd.flags & NUT_EOR_STREAM_FLAG) good_key[pd.stream] = 0;
+				}
 				if (!end && pd.pts >= pts[pd.stream]>>1) { // forward seek end
 					if (saw_syncpoint) nut->last_syncpoint = 0;
 					nut->i->buf_ptr = buf_before;
@@ -1157,6 +1183,7 @@ int nut_seek(nut_context_t * nut, double time_pos, int flags, const int * active
 		int sync[nut->stream_count];
 		int good_sync = -2;
 		int last_sync = 0;
+		int backup = -1;
 		for (i = 0; i < nut->stream_count; i++) sync[i] = -1;
 
 		for (i = 1; i < sl->len; i++) {
@@ -1164,19 +1191,25 @@ int nut_seek(nut_context_t * nut, double time_pos, int flags, const int * active
 			if (!(sl->s[i].pos & 1)) continue;
 			for (j = 0; j < nut->stream_count; j++) {
 				uint64_t tmp = sl->pts[i * nut->stream_count + j];
+				if (pts[j]&1 && tmp--) { // -- because all pts array os off-by-one. zero indicate no keyframe.
+					if ((pts[j] >> 1) < tmp) { if (!last_sync) last_sync = i; }
+					else sync[j] = (i-1);
+				}
+				tmp = sl->eor[i * nut->stream_count + j];
 				if (pts[j]&1 && tmp--) {
-					if ((pts[j] >> 1) < tmp) {
-						if (!last_sync) last_sync = i;
-					} else sync[j] = (i-1);
+					if ((pts[j] >> 1) < tmp) { if (!last_sync) last_sync = i; }
+					else sync[j] = -(i+1); // flag stream eor
 				}
 			}
 		}
 		for (i = 0; i < nut->stream_count; i++) {
 			if (!(pts[i] & 1)) continue;
+			if (sync[i] < -1) { backup = MAX(backup, -sync[i] - 1); continue; } // eor stream
 			if (good_sync == -2 || good_sync > sync[i]) good_sync = sync[i];
 		}
+		if (good_sync == -2) good_sync = backup; // all active streams are eor, just pick a random point, sort of.
 
-		if ((sl->s[sl->len-1].back_ptr & 1) && last_sync && good_sync != -1) {
+		if ((sl->s[sl->len-1].back_ptr & 1) && last_sync && good_sync >= 0) {
 			for (i = good_sync; i <= last_sync; i++) if (!(sl->s[i].pos & 1)) break;
 			if (i != last_sync+1 && good_sync <= last_sync) good_sync = -1;
 		} else good_sync = -1;
@@ -1215,6 +1248,7 @@ nut_context_t * nut_demuxer_init(nut_demuxer_opts_t * dopts) {
 	nut->syncpoints.alloc_len = 0;
 	nut->syncpoints.s = NULL;
 	nut->syncpoints.pts = NULL;
+	nut->syncpoints.eor = NULL;
 
 	nut->fti = NULL;
 	nut->sc = NULL;
@@ -1239,6 +1273,7 @@ void nut_demuxer_uninit(nut_context_t * nut) {
 
 	free(nut->syncpoints.s);
 	free(nut->syncpoints.pts);
+	free(nut->syncpoints.eor);
 	free(nut->sc);
 	free(nut->seek_state);
 	free_buffer(nut->i);

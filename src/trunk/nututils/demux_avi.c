@@ -413,12 +413,13 @@ static int get_packet(void * priv, nut_packet_t * p, uint8_t ** buf) {
 
 	if (avi->cur >= avi->packets) return -1;
 
-	if ((avi->stream[0].last_pts % 100) < N && avi->buf) {
+	if ((avi->stream[0].last_pts % 1000) < N && avi->buf) {
 		p->next_pts = 0;
 		p->len = 5;
 		p->flags = NUT_KEY_STREAM_FLAG;
-		p->stream = 2 + (avi->stream[0].last_pts % 100);
+		p->stream = 2;//2 + (avi->stream[0].last_pts % 100);
 		p->pts = avi->stream[0].last_pts;
+		if (avi->stream[0].last_pts % 1000) p->flags |= NUT_EOR_STREAM_FLAG;
 		*buf = (void*)avi;
 		free(avi->buf);
 		avi->buf = NULL;
