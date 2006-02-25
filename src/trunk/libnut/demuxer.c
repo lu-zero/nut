@@ -1024,7 +1024,12 @@ static int linear_search_seek(nut_context_t * nut, int backwards, uint64_t * pts
 				if (!stopper_syncpoint && bctello(nut->i) > (stopper->pos >> 1) - (stopper->back_ptr>>1) + 7) {
 					int n = 1;
 					stopper_syncpoint = bctello(nut->i);
-					for (i = 0; i < nut->stream_count; i++) if (!(pts[i] & 1)) n = 0;
+					for (i = 0; i < nut->stream_count; i++) {
+						if (!(pts[i] & 1)) {
+							if ((good_key[i]>>1) > (stopper->back_ptr>>1)) n = 0;
+							else good_key[i] = (stopper_syncpoint+1)<<1; // flag that we don't care about this stream
+						}
+					}
 					if (n) break; // no inactive streams, stop now
 					dont_flush = 1; // give it a chance, we might be able to do this in a single seek
 				}
@@ -1054,7 +1059,7 @@ static int linear_search_seek(nut_context_t * nut, int backwards, uint64_t * pts
 					break;
 				}
 			}
-		} else if (stopper) {
+		} else if (stopper && pd.flags&NUT_KEY_STREAM_FLAG) {
 			TO_PTS(stopper, stopper->pts)
 			if (compare_ts(nut, stopper_p, stopper_s, pd.pts, pd.stream) > 0) {
 				good_key[pd.stream] = begin<<1;
