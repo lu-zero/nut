@@ -16,4 +16,4 @@ nutindex: nutindex.c
 	${CC} ${CFLAGS} $^ -o $@
 
 clean:
-	rm -f *\~ nutmerge avireader oggreader riffreader *.o
+	rm -f *\~ nutmerge nutindex avireader oggreader riffreader *.o
