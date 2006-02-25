@@ -981,7 +981,7 @@ static int linear_search_seek(nut_context_t * nut, int backwards, uint64_t * pts
 	off_t good_key[nut->stream_count]; // lsb is "has pts been found bigger than requested pts"
 	off_t min_pos = 0;
 	uint64_t old_last_pts[nut->stream_count];
-	uint8_t * buf_before = NULL;
+	off_t buf_before = 0;
 	off_t stopper_syncpoint = 0;
 
 	for (i = 0; i < nut->stream_count; i++) {
@@ -1012,22 +1012,21 @@ static int linear_search_seek(nut_context_t * nut, int backwards, uint64_t * pts
 	if (!(nut->seek_status & 1)) while (bctello(nut->i) < end || !end) {
 		int saw_syncpoint;
 		nut_packet_t pd;
-		off_t begin = bctello(nut->i);
-		buf_before = nut->i->buf_ptr;
+		buf_before = bctello(nut->i);
 		CHECK(get_packet(nut, &pd, &saw_syncpoint)); // FIXME we're counting on syncpoint cache!!
 
 		if (saw_syncpoint) {
 			int dont_flush = 0;
-			int header_size = nut->i->buf_ptr - buf_before;
+			int header_size = bctello(nut->i) - buf_before;
 			nut->i->buf_ptr -= header_size;
 			if (stopper) {
-				if (!stopper_syncpoint && bctello(nut->i) > (stopper->pos >> 1) - (stopper->back_ptr>>1) + 7) {
+				if ((!stopper_syncpoint && buf_before > (stopper->pos >> 1) - (stopper->back_ptr>>1) + 7) || stopper_syncpoint == buf_before) {
 					int n = 1;
-					stopper_syncpoint = bctello(nut->i);
+					stopper_syncpoint = buf_before;
 					for (i = 0; i < nut->stream_count; i++) {
 						if (!(pts[i] & 1)) {
 							if ((good_key[i]>>1) > (stopper->back_ptr>>1)) n = 0;
-							else good_key[i] = (stopper_syncpoint+1)<<1; // flag that we don't care about this stream
+							else good_key[i] |= 1; // flag that we don't care about this stream
 						}
 					}
 					if (n) break; // no inactive streams, stop now
@@ -1035,7 +1034,6 @@ static int linear_search_seek(nut_context_t * nut, int backwards, uint64_t * pts
 				}
 			}
 			if (!dont_flush) flush_buf(nut->i); // flush at every syncpoint
-			buf_before = nut->i->buf_ptr;
 			nut->i->buf_ptr += header_size;
 		}
 
@@ -1050,23 +1048,23 @@ static int linear_search_seek(nut_context_t * nut, int backwards, uint64_t * pts
 			}
 			if (pd.flags & NUT_KEY_STREAM_FLAG) {
 				if (pd.pts <= pts[pd.stream]>>1) {
-					good_key[pd.stream] = begin<<1;
+					good_key[pd.stream] = buf_before<<1;
 					if (pd.flags & NUT_EOR_STREAM_FLAG) good_key[pd.stream] = 0;
 				}
 				if (!end && pd.pts >= pts[pd.stream]>>1) { // forward seek end
 					if (saw_syncpoint) nut->last_syncpoint = 0;
-					nut->i->buf_ptr = buf_before;
+					nut->i->buf_ptr -= bctello(nut->i) - buf_before;
 					break;
 				}
 			}
-		} else if (stopper && pd.flags&NUT_KEY_STREAM_FLAG) {
+		} else if (stopper && pd.flags&NUT_KEY_STREAM_FLAG && !(good_key[i]&1)) {
 			TO_PTS(stopper, stopper->pts)
 			if (compare_ts(nut, stopper_p, stopper_s, pd.pts, pd.stream) > 0) {
-				good_key[pd.stream] = begin<<1;
+				good_key[pd.stream] = buf_before<<1;
 				if (stopper_syncpoint) {
 					int n = 1;
 					for (i = 0; i < nut->stream_count; i++) {
-						if (!(pts[i] & 1) && good_key[i]>>1 < stopper_syncpoint) n = 0;
+						if (!(pts[i] & 1) && !(good_key[i]&1) && good_key[i]>>1 < stopper_syncpoint) n = 0;
 					}
 					// smart linear search stop, keyframe for every inactive stream after stopper_syncpoint
 					if (n) break;
@@ -1102,7 +1100,7 @@ static int linear_search_seek(nut_context_t * nut, int backwards, uint64_t * pts
 	nut->seek_status |= 1;
 	nut->last_syncpoint = 0; // last_key is invalid
 	clear_dts_cache(nut);
-	buf_before = nut->i->buf_ptr;
+	buf_before = bctello(nut->i);
 
 	while (bctello(nut->i) < min_pos) {
 		nut_packet_t pd;
@@ -1136,7 +1134,7 @@ err_out:
 			nut->seek_state[i].good_key = good_key[i];
 			nut->seek_state[i].old_last_pts = old_last_pts[i];
 		}
-		if (buf_before) nut->i->buf_ptr = buf_before; // rewind
+		if (buf_before) nut->i->buf_ptr -= bctello(nut->i) - buf_before; // rewind
 	}
 	return err;
 }
