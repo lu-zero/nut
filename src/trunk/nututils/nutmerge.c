@@ -48,8 +48,8 @@ int main(int argc, char * argv []) {
 		goto err_out;
 	}
 
-	in = fopen(argv[1], "r");
-	out = fopen(argv[2], "w");
+	in = fopen(argv[1], "rb");
+	out = fopen(argv[2], "wb");
 
 	demuxer_priv = demuxer->init(in);
 
