@@ -451,7 +451,7 @@ static int get_index(nut_context_t * nut) {
 					GET_V(tmp, A);
 					GET_V(tmp, B);
 					sl->eor[j * nut->stream_count + i] = last_pts + A + B;
-				}
+				} else sl->eor[j * nut->stream_count + i] = 0;
 				sl->pts[j * nut->stream_count + i] = last_pts + A;
 				last_pts += A + B;
 			}
