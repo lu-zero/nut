@@ -114,13 +114,14 @@ static int get_bytes(input_buffer_t * bc, int count, uint64_t * val) {
 static int get_v(input_buffer_t * bc, uint64_t * val) {
 	int i, len;
 	*val = 0;
-	while ((len = ready_read_buf(bc, 16))) {
+	do {
+		len = ready_read_buf(bc, 16);
 		for(i = 0; i < len; i++){
 			uint8_t tmp= *(bc->buf_ptr++);
 			*val = (*val << 7) | (tmp & 0x7F);
 			if (!(tmp & 0x80)) return 0;
 		}
-	}
+	} while (len >= 16);
 	return buf_eof(bc);
 }
 
