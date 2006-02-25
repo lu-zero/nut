@@ -59,7 +59,7 @@ static void ready_write_buf(output_buffer_t * bc, int amount) {
 }
 
 static output_buffer_t * new_mem_buffer() {
-	output_buffer_t *bc = malloc(sizeof(output_buffer_t));
+	output_buffer_t * bc = malloc(sizeof(output_buffer_t));
 	bc->write_len = PREALLOC_SIZE;
 	bc->is_mem = 1;
 	bc->file_pos = 0;
@@ -68,7 +68,7 @@ static output_buffer_t * new_mem_buffer() {
 }
 
 static output_buffer_t * new_output_buffer(nut_output_stream_t osc) {
-	output_buffer_t *bc = new_mem_buffer();
+	output_buffer_t * bc = new_mem_buffer();
 	bc->is_mem = 0;
 	bc->osc = osc;
 	if (!bc->osc.write) bc->osc.write = stream_write;
@@ -118,7 +118,7 @@ static void put_s(output_buffer_t * bc, int64_t val) {
 static void put_data(output_buffer_t * bc, int len, const uint8_t * data) {
 	if (!len) return;
 	assert(data);
-	if (len < PREALLOC_SIZE || bc->is_mem) {
+	if (bc->write_len - (bc->buf_ptr - bc->buf) > len || bc->is_mem) {
 		ready_write_buf(bc, len);
 		memcpy(bc->buf_ptr, data, len);
 		bc->buf_ptr += len;
