@@ -93,7 +93,7 @@ static demuxer_t * demux_open_nut(demuxer_t * demuxer) {
 
 	priv->s = s;
 
-	for (i = 0; s[i].type != -1; i++) switch(s[i].type) {
+	for (i = 0; s[i].type != -1 && i < 2; i++) switch(s[i].type) {
 		case NUT_AUDIO_CLASS: {
 			WAVEFORMATEX *wf= calloc(sizeof(WAVEFORMATEX) + s[i].codec_specific_len, 1);
 			sh_audio_t* sh_audio=new_sh_audio(demuxer, i);
