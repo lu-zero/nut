@@ -996,17 +996,21 @@ static int linear_search_seek(nut_context_t * nut, int backwards, uint64_t * pts
 		// find closest syncpoint by linear search, SHOULD be one pointed by back_ptr...
 		CHECK(find_syncpoint(nut, 0, &s, 0));
 		clear_dts_cache(nut);
-		nut->last_syncpoint = 0;
+		nut->last_syncpoint = 0; // last_key is invalid
 		seek_buf(nut->i, s.pos, SEEK_SET); // go back to syncpoint. This will not need a seek.
 		nut->seek_status = s.pos << 1;
 		if (s.pos > start + 7) goto err_out; // error condition, we didn't get the syncpoint we wanted
 	}
 
-	if (stopper) for (i = 1; i < sl->len; i++) {
-		if ((sl->s[i].pos >> 1) > (stopper->pos >> 1) - (stopper->back_ptr>>1) + 7) {
-			if (sl->s[i-1].back_ptr & 1) stopper_syncpoint = sl->s[i].pos >> 1;
-			break;
+	if (stopper) {
+		off_t back_ptr = (stopper->pos >> 1) - (stopper->back_ptr>>1);
+		for (i = 1; i < sl->len; i++) {
+			if ((sl->s[i].pos >> 1) > back_ptr + 7) {
+				if (sl->s[i-1].back_ptr & 1) stopper_syncpoint = sl->s[i].pos >> 1;
+				break;
+			}
 		}
+		if (back_ptr > (nut->seek_status>>1)) stopper = NULL; // bad stopper, it points to a different back_ptr
 	}
 
 	if (!(nut->seek_status & 1)) while (bctello(nut->i) < end || !end) {
