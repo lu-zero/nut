@@ -25,7 +25,7 @@ static inline uint32_t crc32(uint8_t * buf, int len){
 	int i;
 	while (len--) {
 		crc ^= *buf++ << 24;
-		for(i = 0; i < 8; i++) crc = (crc<<1) ^ (0x1EDC6F41 & (crc>>31));
+		for(i = 0; i < 8; i++) crc = (crc<<1) ^ (0x04C11DB7 & (crc>>31));
 	}
 	return crc;
 }
