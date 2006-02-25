@@ -21,7 +21,7 @@
 #define bctello(bc) ((bc)->file_pos + ((bc)->buf_ptr - (bc)->buf))
 
 static inline uint32_t crc32(uint8_t * buf, int len){
-	uint32_t crc = 0;
+	int32_t crc = 0;
 	int i;
 	while (len--) {
 		crc ^= *buf++ << 24;

@@ -177,7 +177,7 @@ static const struct { char * name, * type; } info_table [] = {
 };
 
 static inline uint32_t crc32(uint8_t * buf, int len){
-	uint32_t crc = 0;
+	int32_t crc = 0;
 	int i;
 	while (len--) {
 		crc ^= *buf++ << 24;
