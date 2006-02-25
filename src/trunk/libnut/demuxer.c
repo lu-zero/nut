@@ -732,6 +732,18 @@ int nut_read_headers(nut_context_t * nut, nut_packet_t * pd, nut_stream_header_t
 					nut->sc[i].pts_cache[j] = -1;
 			}
 		}
+		if (nut->dopts.read_index) {
+			off_t pos = bctello(nut->i);
+			uint64_t tmp;
+			CHECK(get_bytes(nut->i, 8, &tmp));
+			if (tmp == INDEX_STARTCODE) {
+				GET_V(nut->i, tmp);
+				nut->before_seek = bctello(nut->i) + tmp;
+				nut->seek_status = 2;
+			}
+			nut->i->buf_ptr -= bctello(nut->i) - pos;
+			flush_buf(nut->i);
+		}
 		nut->last_headers = 1;
 	}
 
