@@ -390,7 +390,7 @@ static void put_info(nut_context_t * nut, nut_info_packet_t * info) {
 			put_s(tmp, -3);
 			put_s(tmp, field->val);
 		} else if (!strcmp(field->type, "r")) {
-			put_s(tmp, -(field->den + 2));
+			put_s(tmp, -(field->den + 3));
 			put_s(tmp, field->val);
 		} else {
 			if (strcmp(field->type, "UTF-8")) {
