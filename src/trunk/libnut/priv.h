@@ -157,25 +157,6 @@ struct nut_context_s {
 	int sync_overhead;
 };
 
-static const struct { char * name, * type; } info_table [] = {
-        {NULL                   ,  NULL }, // end
-        {NULL                   ,  NULL },
-        {NULL                   , "UTF8"},
-        {NULL                   , "v"},
-        {NULL                   , "s"},
-        {"StreamId"             , "v"},
-        {"Author"               , "UTF8"},
-        {"Title"                , "UTF8"},
-        {"Language"             , "UTF8"},
-        {"Description"          , "UTF8"},
-        {"Copyright"            , "UTF8"},
-        {"Encoder"              , "UTF8"},
-        {"Keyword"              , "UTF8"},
-        {"Cover"                , "JPEG"},
-        {"Cover"                , "PNG"},
-        {"Disposition"          , "UTF8"},
-};
-
 static inline uint32_t crc32(uint8_t * buf, int len){
 	int32_t crc = 0;
 	int i;
