@@ -1,5 +1,6 @@
 #include <inttypes.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include "nut.h"
 #include "priv.h"
 
