@@ -105,7 +105,7 @@ static int get_bytes(input_buffer_t * bc, int count, uint64_t * val) {
 	int i;
 	if (ready_read_buf(bc, count) < count) return buf_eof(bc);
 	*val = 0;
-	for(i = 0; i < count; i++){
+	for (i = 0; i < count; i++) {
 		*val = (*val << 8) | *(bc->buf_ptr++);
 	}
 	return 0;
@@ -116,7 +116,7 @@ static int get_v(input_buffer_t * bc, uint64_t * val) {
 	*val = 0;
 	do {
 		len = ready_read_buf(bc, 16);
-		for(i = 0; i < len; i++){
+		for (i = 0; i < len; i++) {
 			uint8_t tmp= *(bc->buf_ptr++);
 			*val = (*val << 7) | (tmp & 0x7F);
 			if (!(tmp & 0x80)) return 0;
@@ -157,7 +157,7 @@ static int get_s_trace(input_buffer_t * bc, int64_t * val, char * var, char * fi
 #define get_s_(bc, var, name) get_s(bc, var)
 #endif
 
-#define CHECK(expr) do { int _a; if ((_a = (expr))) { err = _a; goto err_out; } } while(0)
+#define CHECK(expr) do { if ((err = (expr))) goto err_out; } while(0)
 #define ERROR(expr, code) do { if (expr) { err = code; goto err_out; } } while(0)
 #define GET_V(bc, v) do { uint64_t _tmp; CHECK(get_v_((bc), &_tmp, #v)); (v) = _tmp; } while(0)
 #define GET_S(bc, v) do {  int64_t _tmp; CHECK(get_s_((bc), &_tmp, #v)); (v) = _tmp; } while(0)
@@ -569,7 +569,7 @@ static int get_packet(nut_context_t * nut, nut_packet_t * pd, int * saw_syncpoin
 		ERROR(compare_ts(nut, pd->pts, pd->stream, nut->sc[i].last_dts, i) < 0, -ERR_OUT_OF_ORDER);
 	}
 
-	if (saw_syncpoint) *saw_syncpoint = after_sync;
+	if (saw_syncpoint) *saw_syncpoint = !!after_sync;
 err_out:
 	return err;
 }
@@ -737,12 +737,8 @@ int nut_read_headers(nut_context_t * nut, nut_packet_t * pd, nut_stream_header_t
 			off_t pos = bctello(nut->i);
 			uint64_t tmp;
 			CHECK(get_bytes(nut->i, 8, &tmp));
-			if (tmp == INDEX_STARTCODE) {
-				GET_V(nut->i, tmp);
-				nut->before_seek = bctello(nut->i) + tmp;
-				nut->seek_status = 2;
-			}
-			nut->i->buf_ptr -= bctello(nut->i) - pos;
+			if (tmp == INDEX_STARTCODE) nut->seek_status = 2;
+			nut->i->buf_ptr -= 8;
 			flush_buf(nut->i);
 		}
 		nut->last_headers = 1;
@@ -768,7 +764,7 @@ int nut_read_headers(nut_context_t * nut, nut_packet_t * pd, nut_stream_header_t
 			err = 0;
 		}
 		nut->seek_status = 0;
-		seek_buf(nut->i, nut->before_seek, SEEK_SET);
+		if (nut->before_seek) seek_buf(nut->i, nut->before_seek, SEEK_SET);
 		nut->before_seek = 0;
 	}
 	*s = malloc(sizeof(nut_stream_header_t) * (nut->stream_count + 1));
