@@ -1,26 +1,26 @@
 Index: Makefile
 ===================================================================
 RCS file: /cvsroot/mplayer/main/Makefile,v
-retrieving revision 1.330
-diff -u -r1.330 Makefile
---- Makefile	19 Aug 2005 19:24:30 -0000	1.330
-+++ Makefile	13 Sep 2005 19:28:19 -0000
-@@ -109,6 +109,7 @@
-               $(W32_LIB) \
-               $(DS_LIB) \
-               libaf/libaf.a \
-+              ../nut/libnut/demuxer.o \
-               libmpdemux/libmpdemux.a \
-               input/libinput.a \
-               postproc/libswscale.a \
+retrieving revision 1.341
+diff -u -r1.341 Makefile
+--- Makefile	16 Feb 2006 20:45:24 -0000	1.341
++++ Makefile	4 Mar 2006 15:46:04 -0000
+@@ -42,6 +42,7 @@
+               sub_cc.c \
+               subreader.c \
+               vobsub.c \
++              ../nut/libnut/demuxer.c \
+ 
+ SRCS_MENCODER = mencoder.c \
+                 mp_msg-mencoder.c \
 Index: libmpdemux/Makefile
 ===================================================================
 RCS file: /cvsroot/mplayer/main/libmpdemux/Makefile,v
-retrieving revision 1.96
-diff -u -r1.96 Makefile
---- libmpdemux/Makefile	1 Aug 2005 20:16:56 -0000	1.96
-+++ libmpdemux/Makefile	13 Sep 2005 19:28:42 -0000
-@@ -72,6 +72,7 @@
+retrieving revision 1.101
+diff -u -r1.101 Makefile
+--- libmpdemux/Makefile	6 Feb 2006 16:04:17 -0000	1.101
++++ libmpdemux/Makefile	4 Mar 2006 15:46:06 -0000
+@@ -70,6 +70,7 @@
          demux_mpc.c \
          demux_mpg.c \
          demux_nsv.c \
@@ -28,7 +28,7 @@ diff -u -r1.96 Makefile
          demux_nuv.c \
          demux_ogg.c \
          demux_pva.c \
-@@ -148,7 +149,7 @@
+@@ -158,7 +159,7 @@
  
  OBJS	= $(SRCS:.c=.o)
  OBJS   += $(CPLUSPLUSSRCS:.cpp=.o)
@@ -40,19 +40,19 @@ diff -u -r1.96 Makefile
 Index: libmpdemux/demuxer.c
 ===================================================================
 RCS file: /cvsroot/mplayer/main/libmpdemux/demuxer.c,v
-retrieving revision 1.199
-diff -u -r1.199 demuxer.c
---- libmpdemux/demuxer.c	26 Aug 2005 17:40:01 -0000	1.199
-+++ libmpdemux/demuxer.c	13 Sep 2005 19:28:53 -0000
-@@ -61,6 +61,7 @@
- extern demuxer_desc_t demuxer_desc_rtp;
+retrieving revision 1.217
+diff -u -r1.217 demuxer.c
+--- libmpdemux/demuxer.c	17 Feb 2006 01:57:41 -0000	1.217
++++ libmpdemux/demuxer.c	4 Mar 2006 15:46:06 -0000
+@@ -66,6 +66,7 @@
  extern demuxer_desc_t demuxer_desc_lavf;
+ #endif
  extern demuxer_desc_t demuxer_desc_aac;
 +extern demuxer_desc_t demuxer_desc_nut;
  
  demuxer_desc_t* demuxer_list[] = {
    &demuxer_desc_rawaudio,
-@@ -119,6 +120,7 @@
+@@ -125,6 +126,7 @@
    &demuxer_desc_lavf,
  #endif
    &demuxer_desc_aac,
@@ -63,10 +63,10 @@ diff -u -r1.199 demuxer.c
 Index: libmpdemux/demuxer.h
 ===================================================================
 RCS file: /cvsroot/mplayer/main/libmpdemux/demuxer.h,v
-retrieving revision 1.80
-diff -u -r1.80 demuxer.h
---- libmpdemux/demuxer.h	26 Aug 2005 17:40:02 -0000	1.80
-+++ libmpdemux/demuxer.h	13 Sep 2005 19:28:54 -0000
+retrieving revision 1.91
+diff -u -r1.91 demuxer.h
+--- libmpdemux/demuxer.h	17 Feb 2006 01:57:41 -0000	1.91
++++ libmpdemux/demuxer.h	4 Mar 2006 15:46:07 -0000
 @@ -50,11 +50,12 @@
  #define DEMUXER_TYPE_MPC 40
  #define DEMUXER_TYPE_MPEG_PES 41
