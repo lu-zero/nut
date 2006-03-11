@@ -488,7 +488,7 @@ nut_context_t * nut_muxer_init(const nut_muxer_opts_t * mopts, const nut_stream_
 	nut->max_distance = mopts->max_distance;
 	nut->mopts = *mopts;
 
-	if (nut->max_distance > 65536) nut->max_distance = 65536;
+	if (nut->max_distance > 131072) nut->max_distance = 131072;
 
 	{
 	int j, n;

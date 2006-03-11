@@ -236,7 +236,7 @@ static int get_main_header(nut_context_t * nut) {
 	ERROR(i != NUT_VERSION, -ERR_BAD_VERSION);
 	GET_V(tmp, nut->stream_count);
 	GET_V(tmp, nut->max_distance);
-	if (nut->max_distance > 65536) nut->max_distance = 65536;
+	if (nut->max_distance > 131072) nut->max_distance = 131072;
 
 	for(i = 0; i < 256; ) {
 		int scrap;
