@@ -15,6 +15,32 @@ struct demuxer_t * demuxers[] = {
 	NULL
 };
 
+frame_table_input_t ft_default[] = {
+	// There must be atleast this safety net:
+	//{    3,      3,     0,   0,   1,      0,    0,     0 },
+	//{ flag, fields, sflag, pts, mul, stream, size, count }
+	  {    4,      0,     0,   0,   1,      0,    0,     0 }, // invalid 0x00
+	  {    1,      1,     1,   0,   1,      0,    0,     0 }, // safety net non key frame
+	  {    1,      0,     0,   0,   1,      0,    0,     0 }, // safety net key frame
+	  {    3,      0,     0,   0,   1,      0,    0,     0 }, // one more safety net
+	  {    0,      5,     1,   1, 337,      2,  336,     0 }, // used 82427 times
+	  {    0,      5,     1,   1, 385,      2,  384,     0 }, // used 56044 times
+	  {    0,      5,     0,   2,   7,      1,    6,     0 }, // used 20993 times
+	  {    0,      5,     0,   1,   7,      1,    6,     0 }, // used 10398 times
+	  {    0,      5,     1,   1, 481,      2,  480,     0 }, // used 3527 times
+	  {    0,      5,     1,   1, 289,      2,  288,     0 }, // used 2042 times
+	  {    0,      5,     1,   1, 577,      2,  576,     0 }, // used 1480 times
+	  {    0,      5,     1,   1, 673,      2,  672,     0 }, // used 862 times
+	  {    0,      5,     1,   1, 769,      2,  768,     0 }, // used 433 times
+	  {    0,      5,     1,   1, 961,      2,  960,     0 }, // used 191 times
+	  {    1,      4,     0,   2, 104,      1,    0,     0 }, // "1.2.0" => 14187
+	  {    1,      4,     0,  -1,  42,      1,    0,     0 }, // "1.-1.0" => 5707
+	  {    1,      4,     0,   1,  83,      1,    0,     0 }, // "1.1.0" => 11159
+	  {    1,      4,     1,   1,  11,      1,    0,     0 }, // "1.1.1" => 1409
+	  {    4,      3,     0,   0,   1,      0,    0,     0 }, // invalid 0xFF
+	  {   -1,      0,     0,   0,   0,      0,    0,     0 }, // end
+};
+
 int main(int argc, char * argv []) {
 	FILE * in = NULL, * out = NULL;
 	struct demuxer_t * demuxer = NULL;
@@ -56,6 +82,8 @@ int main(int argc, char * argv []) {
 	if ((err = demuxer->read_headers(demuxer_priv, &nut_stream))) goto err_out;
 	mopts.output = (nut_output_stream_t){ .priv = out, .write = NULL };
 	mopts.write_index = 1;
+	mopts.fti = ft_default;
+	mopts.max_distance = 32768;
 	nut = nut_muxer_init(&mopts, nut_stream, NULL);
 
 	for (i = 0; nut_stream[i].type >= 0; i++);

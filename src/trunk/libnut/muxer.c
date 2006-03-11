@@ -4,32 +4,6 @@
 #include "nut.h"
 #include "priv.h"
 
-frame_table_input_t ft_default[] = {
-	// There must be atleast this safety net:
-	//{    3,      3,     0,   0,   1,      0,    0,     0 },
-	//{ flag, fields, sflag, pts, mul, stream, size, count }
-	  {    4,      0,     0,   0,   1,      0,    0,     0 }, // invalid 0x00
-	  {    1,      1,     1,   0,   1,      0,    0,     0 }, // safety net non key frame
-	  {    1,      0,     0,   0,   1,      0,    0,     0 }, // safety net key frame
-	  {    3,      0,     0,   0,   1,      0,    0,     0 }, // one more safety net
-	  {    0,      5,     1,   1, 337,      2,  336,     0 }, // used 82427 times
-	  {    0,      5,     1,   1, 385,      2,  384,     0 }, // used 56044 times
-	  {    0,      5,     0,   2,   7,      1,    6,     0 }, // used 20993 times
-	  {    0,      5,     0,   1,   7,      1,    6,     0 }, // used 10398 times
-	  {    0,      5,     1,   1, 481,      2,  480,     0 }, // used 3527 times
-	  {    0,      5,     1,   1, 289,      2,  288,     0 }, // used 2042 times
-	  {    0,      5,     1,   1, 577,      2,  576,     0 }, // used 1480 times
-	  {    0,      5,     1,   1, 673,      2,  672,     0 }, // used 862 times
-	  {    0,      5,     1,   1, 769,      2,  768,     0 }, // used 433 times
-	  {    0,      5,     1,   1, 961,      2,  960,     0 }, // used 191 times
-	  {    1,      4,     0,   2, 104,      1,    0,     0 }, // "1.2.0" => 14187
-	  {    1,      4,     0,  -1,  42,      1,    0,     0 }, // "1.-1.0" => 5707
-	  {    1,      4,     0,   1,  83,      1,    0,     0 }, // "1.1.0" => 11159
-	  {    1,      4,     1,   1,  11,      1,    0,     0 }, // "1.1.1" => 1409
-	  {    4,      3,     0,   0,   1,      0,    0,     0 }, // invalid 0xFF
-	  {   -1,      0,     0,   0,   0,      0,    0,     0 }, // end
-};
-
 static int stream_write(void * priv, size_t len, const uint8_t * buf) {
 	return fwrite(buf, 1, len, priv);
 }
@@ -273,7 +247,7 @@ static void put_frame(nut_context_t * nut, const nut_packet_t * fd, const uint8_
 
 	put_data(nut->o, fd->len, data);
 	sc->last_pts = fd->pts;
-	sc->last_dts = get_dts(sc->decode_delay, sc->pts_cache, fd->pts);
+	sc->last_dts = get_dts(sc->sh.decode_delay, sc->pts_cache, fd->pts);
 	sc->sh.max_pts = MAX(sc->sh.max_pts, fd->pts);
 }
 
@@ -303,18 +277,18 @@ static void put_main_header(nut_context_t * nut) {
 	put_v(tmp, nut->stream_count);
 	put_v(tmp, nut->max_distance);
 	for(n=i=0; i < 256; n++) {
-		assert(nut->fti[n].tmp_flag != -1);
-		put_v(tmp, flag = nut->fti[n].tmp_flag);
-		put_v(tmp, fields = nut->fti[n].tmp_fields);
-		if (fields > 0) put_v(tmp, sflag = nut->fti[n].tmp_sflag);
+		assert(nut->mopts.fti[n].tmp_flag != -1);
+		put_v(tmp, flag = nut->mopts.fti[n].tmp_flag);
+		put_v(tmp, fields = nut->mopts.fti[n].tmp_fields);
+		if (fields > 0) put_v(tmp, sflag = nut->mopts.fti[n].tmp_sflag);
 		else sflag = 0;
-		if (fields > 1) put_s(tmp, timestamp = nut->fti[n].tmp_pts);
-		if (fields > 2) put_v(tmp, mul = nut->fti[n].tmp_mul);
-		if (fields > 3) put_v(tmp, stream = nut->fti[n].tmp_stream);
-		if (fields > 4) put_v(tmp, size = nut->fti[n].tmp_size);
+		if (fields > 1) put_s(tmp, timestamp = nut->mopts.fti[n].tmp_pts);
+		if (fields > 2) put_v(tmp, mul = nut->mopts.fti[n].tmp_mul);
+		if (fields > 3) put_v(tmp, stream = nut->mopts.fti[n].tmp_stream);
+		if (fields > 4) put_v(tmp, size = nut->mopts.fti[n].tmp_size);
 		else size = 0;
 		if (fields > 5) put_v(tmp, 0); // reserved
-		if (fields > 6) put_v(tmp, count = nut->fti[n].count);
+		if (fields > 6) put_v(tmp, count = nut->mopts.fti[n].count);
 		else count = mul - size;
 
 		for(j = 0; j < count && i < 256; j++, i++) {
@@ -332,7 +306,7 @@ static void put_main_header(nut_context_t * nut) {
 		}
 	}
 
-	assert(nut->fti[n].tmp_flag == -1);
+	assert(nut->mopts.fti[n].tmp_flag == -1);
 	put_header(nut->o, tmp, MAIN_STARTCODE, 0);
 }
 
@@ -347,7 +321,7 @@ static void put_stream_header(nut_context_t * nut, int id) {
 	put_v(tmp, sc->sh.timebase.den);
 	put_v(tmp, sc->msb_pts_shift);
 	put_v(tmp, sc->max_pts_distance);
-	put_v(tmp, sc->decode_delay);
+	put_v(tmp, sc->sh.decode_delay);
 	put_bytes(tmp, 1, sc->sh.fixed_fps ? 1 : 0);
 	put_vb(tmp, sc->sh.codec_specific_len, sc->sh.codec_specific);
 
@@ -516,9 +490,12 @@ nut_context_t * nut_muxer_init(const nut_muxer_opts_t * mopts, const nut_stream_
 
 	nut->o = new_output_buffer(mopts->output);
 	nut->tmp_buffer = new_mem_buffer(); // general purpose buffer
-	nut->max_distance = 32768; // TODO
-	nut->fti = ft_default; // TODO
+	nut->max_distance = mopts->max_distance;
 	nut->mopts = *mopts;
+
+	for (i = 0; mopts->fti[i].tmp_flag != -1; i++);
+	nut->mopts.fti = malloc(++i * sizeof(frame_table_input_t));
+	memcpy(nut->mopts.fti, mopts->fti, i * sizeof(frame_table_input_t));
 
 	nut->sync_overhead = 0;
 
@@ -540,7 +517,6 @@ nut_context_t * nut_muxer_init(const nut_muxer_opts_t * mopts, const nut_stream_
 		nut->sc[i].last_dts = -1;
 		nut->sc[i].msb_pts_shift = 7; // TODO
 		nut->sc[i].max_pts_distance = (s[i].timebase.den + s[i].timebase.nom - 1) / s[i].timebase.nom; // TODO
-		nut->sc[i].decode_delay = !i; // ### TODO
 		nut->sc[i].eor = 0;
 		nut->sc[i].sh = s[i];
 		nut->sc[i].sh.max_pts = 0;
@@ -551,11 +527,11 @@ nut_context_t * nut_muxer_init(const nut_muxer_opts_t * mopts, const nut_stream_
 		nut->sc[i].sh.codec_specific = malloc(s[i].codec_specific_len);
 		memcpy(nut->sc[i].sh.codec_specific, s[i].codec_specific, s[i].codec_specific_len);
 
-		nut->sc[i].pts_cache = malloc(nut->sc[i].decode_delay * sizeof(int64_t));
+		nut->sc[i].pts_cache = malloc(nut->sc[i].sh.decode_delay * sizeof(int64_t));
 
 		// reorder.c
-		nut->sc[i].reorder_pts_cache = malloc(nut->sc[i].decode_delay * sizeof(int64_t));
-		for (j = 0; j < nut->sc[i].decode_delay; j++) nut->sc[i].reorder_pts_cache[j] = nut->sc[i].pts_cache[j] = -1;
+		nut->sc[i].reorder_pts_cache = malloc(nut->sc[i].sh.decode_delay * sizeof(int64_t));
+		for (j = 0; j < nut->sc[i].sh.decode_delay; j++) nut->sc[i].reorder_pts_cache[j] = nut->sc[i].pts_cache[j] = -1;
 		nut->sc[i].next_pts = 0;
 		nut->sc[i].packets = NULL;
 		nut->sc[i].num_packets = 0;
@@ -634,6 +610,7 @@ void nut_muxer_uninit(nut_context_t * nut) {
 	free(nut->syncpoints.s);
 	free(nut->syncpoints.pts);
 	free(nut->syncpoints.eor);
+	free(nut->mopts.fti);
 
 	free_buffer(nut->tmp_buffer);
 	free_buffer(nut->o); // flushes file

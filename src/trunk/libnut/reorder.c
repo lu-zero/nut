@@ -80,7 +80,7 @@ void nut_write_frame_reorder(nut_context_t * nut, const nut_packet_t * p, const 
 	s->num_packets++;
 	s->packets = realloc(s->packets, s->num_packets * sizeof(reorder_packet_t));
 	s->packets[s->num_packets - 1].p = *p;
-	s->packets[s->num_packets - 1].dts = get_dts(s->decode_delay, s->reorder_pts_cache, p->pts);
+	s->packets[s->num_packets - 1].dts = get_dts(s->sh.decode_delay, s->reorder_pts_cache, p->pts);
 
 	s->packets[s->num_packets - 1].buf = malloc(p->len); // FIXME
 	memcpy(s->packets[s->num_packets - 1].buf, buf, p->len);

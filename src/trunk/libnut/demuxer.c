@@ -278,7 +278,7 @@ static int get_stream_header(nut_context_t * nut, int id) {
 	GET_V(tmp, sc->sh.timebase.den);
 	GET_V(tmp, sc->msb_pts_shift);
 	GET_V(tmp, sc->max_pts_distance);
-	GET_V(tmp, sc->decode_delay);
+	GET_V(tmp, sc->sh.decode_delay);
 	CHECK(get_bytes(tmp, 1, &a));
 	sc->sh.fixed_fps = a & 1;
 	CHECK(get_vb(tmp, &sc->sh.codec_specific_len, &sc->sh.codec_specific));
@@ -469,7 +469,7 @@ static void clear_dts_cache(nut_context_t * nut) {
 	int i;
 	for (i = 0; i < nut->stream_count; i++) {
 		int j;
-		for (j = 0; j < nut->sc[i].decode_delay; j++) nut->sc[i].pts_cache[j] = -1;
+		for (j = 0; j < nut->sc[i].sh.decode_delay; j++) nut->sc[i].pts_cache[j] = -1;
 		nut->sc[i].last_dts = -1;
 	}
 }
@@ -577,7 +577,7 @@ err_out:
 static void push_frame(nut_context_t * nut, nut_packet_t * pd) {
 	stream_context_t * sc = &nut->sc[pd->stream];
 	sc->last_pts = pd->pts;
-	sc->last_dts = get_dts(sc->decode_delay, sc->pts_cache, pd->pts);
+	sc->last_dts = get_dts(sc->sh.decode_delay, sc->pts_cache, pd->pts);
 	if (pd->flags & NUT_KEY_STREAM_FLAG && !sc->last_key) sc->last_key = pd->pts + 1;
 	if (pd->flags & NUT_EOR_STREAM_FLAG) sc->eor = pd->pts + 1;
 	else sc->eor = 0;
@@ -728,13 +728,12 @@ int nut_read_headers(nut_context_t * nut, nut_packet_t * pd, nut_stream_header_t
 			if (tmp != STREAM_STARTCODE) return -ERR_NOSTREAM_STARTCODE;
 			CHECK(get_stream_header(nut, i));
 			if (!nut->sc[i].pts_cache) {
-				nut->sc[i].pts_cache = malloc(nut->sc[i].decode_delay * sizeof(int64_t));
-				for (j = 0; j < nut->sc[i].decode_delay; j++)
+				nut->sc[i].pts_cache = malloc(nut->sc[i].sh.decode_delay * sizeof(int64_t));
+				for (j = 0; j < nut->sc[i].sh.decode_delay; j++)
 					nut->sc[i].pts_cache[j] = -1;
 			}
 		}
 		if (nut->dopts.read_index) {
-			off_t pos = bctello(nut->i);
 			uint64_t tmp;
 			CHECK(get_bytes(nut->i, 8, &tmp));
 			if (tmp == INDEX_STARTCODE) nut->seek_status = 2;
@@ -1038,7 +1037,7 @@ static int linear_search_seek(nut_context_t * nut, int backwards, uint64_t * pts
 					stopper_syncpoint = buf_before;
 					for (i = 0; i < nut->stream_count; i++) {
 						if (!(pts[i] & 1)) {
-							if ((good_key[i]>>1) > (stopper->back_ptr>>1)) n = 0;
+							if (good_key[i]>>1) n = 0;
 							else good_key[i] |= 1; // flag that we don't care about this stream
 						}
 					}
@@ -1265,7 +1264,6 @@ nut_context_t * nut_demuxer_init(nut_demuxer_opts_t * dopts) {
 	nut->syncpoints.pts = NULL;
 	nut->syncpoints.eor = NULL;
 
-	nut->fti = NULL;
 	nut->sc = NULL;
 	nut->last_headers = 0;
 	nut->stream_count = 0;

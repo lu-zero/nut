@@ -40,6 +40,7 @@ struct ogg_stream_s {
 	int time_base_denom;
 	int time_base_nom;
 	int fixed_fps;
+	int decode_delay;
 	int codec_specific_len;
 	uint8_t * codec_specific;
 	int width;
@@ -262,6 +263,7 @@ static int vorbis_read_headers(ogg_t * ogg, int stream) {
 	os->time_base_denom = sample_rate / gcd(sample_rate, i);
 	os->time_base_nom = i / gcd(sample_rate, i);
 	os->fixed_fps = 0;
+	os->decode_delay = 0;
 	os->codec_specific_len = 0;
 	os->codec_specific = NULL;
 	os->samplerate_nom = sample_rate;
@@ -530,6 +532,7 @@ static int read_headers(void * priv, nut_stream_header_t ** nut_streams) {
 		s[i].timebase.den = os->time_base_denom;
 		s[i].timebase.nom = os->time_base_nom;
 		s[i].fixed_fps = os->fixed_fps;
+		s[i].decode_delay = os->decode_delay;
 		s[i].codec_specific = os->codec_specific;
 		s[i].codec_specific_len = os->codec_specific_len;
 		switch (os->oc->type) {

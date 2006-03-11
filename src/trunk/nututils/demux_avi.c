@@ -362,6 +362,7 @@ static int read_headers(void * priv, nut_stream_header_t ** nut_streams) {
 		s[i].timebase.den = avi->stream[i].strh->dwRate;
 		s[i].timebase.nom = avi->stream[i].strh->dwScale;
 		s[i].fixed_fps = 1;
+		s[i].decode_delay = !i; // FIXME
 		s[i].codec_specific_len = avi->stream[i].extra_len;
 		s[i].codec_specific = avi->stream[i].extra;
 		if (avi->stream[i].type == 0) { // video

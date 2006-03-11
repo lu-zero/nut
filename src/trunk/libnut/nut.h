@@ -33,6 +33,7 @@ typedef struct {
 	uint8_t * fourcc;
 	nut_timebase_t timebase;
 	int fixed_fps;
+	int decode_delay;
 	int codec_specific_len;
 	uint8_t * codec_specific;
 	// video
@@ -50,8 +51,21 @@ typedef struct {
 } nut_stream_header_t;
 
 typedef struct {
+	int tmp_flag;      // 1 => use msb, 2 => coded sflags, 4 => invalid, -1 => end
+	int tmp_fields;
+	int tmp_sflag;     // tmp_fields = 1
+	int tmp_pts;       // tmp_fields = 2
+	int tmp_mul;       // tmp_fields = 3
+	int tmp_stream;    // tmp_fields = 4
+	int tmp_size;      // tmp_fields = 5
+	int count;         // tmp_fields = 7 (6 is reserved)
+} frame_table_input_t;
+
+typedef struct {
 	nut_output_stream_t output;
 	int write_index;
+	int max_distance;
+	frame_table_input_t * fti;
 } nut_muxer_opts_t;
 
 typedef struct {

@@ -98,7 +98,6 @@ typedef struct {
 	int64_t last_dts;
 	int msb_pts_shift;
 	int max_pts_distance;
-	int decode_delay;
 	nut_stream_header_t sh;
 	int64_t * pts_cache;
 	int64_t eor;
@@ -112,17 +111,6 @@ typedef struct {
 	int tot_size;
 	int total_frames;
 } stream_context_t;
-
-typedef struct {
-	int tmp_flag;      // 1 => use msb, 2 => coded sflags, 4 => invalid
-	int tmp_fields;
-	int tmp_sflag;     // tmp_fields = 1
-	int tmp_pts;       // tmp_fields = 2
-	int tmp_mul;       // tmp_fields = 3
-	int tmp_stream;    // tmp_fields = 4
-	int tmp_size;      // tmp_fields = 5
-	int count;         // tmp_fields = 7 (6 is reserved)
-} frame_table_input_t;
 
 struct nut_context_s {
 	nut_muxer_opts_t mopts;
@@ -138,7 +126,6 @@ struct nut_context_s {
 	nut_info_packet_t * info;
 
 	int max_distance;
-	frame_table_input_t * fti;
 	frame_table_t ft[256];
 
 	off_t last_syncpoint; // for checking corruption and putting syncpoints, also for back_ptr
