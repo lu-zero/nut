@@ -811,31 +811,6 @@ int nut_skip_packet(nut_context_t * nut, int * len) {
 }
 
 int nut_read_info(nut_context_t * nut, nut_info_packet_t * info []) {
-#if 0
-	BufferContext *tmp = new_mem_buffer();
-
-	for(;;){
-		char * type;
-		int id = info[0].id;
-		put_v(tmp, id);
-		if (!id) break;
-		type = info_table[id].type;
-		if (!type) {
-			type = info[0].type.data;
-			put_vb(tmp, info[0].type.len, info[0].type.data);
-		}
-		if (!info_table[id].name)
-			put_vb(tmp, info[0].name.len, info[0].name.data);
-		if (!strcmp(type, "v"))
-			put_v(tmp, info[0].val.i);
-		else
-			put_vb(tmp, info[0].val.s.len, info[0].val.s.data);
-		id++;
-	}
-
-	put_header(nut->i, tmp, INFO_STARTCODE, 1);
-	free_buffer(tmp);
-#endif
 	return 0;
 }
 

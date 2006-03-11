@@ -354,10 +354,8 @@ static void put_info(nut_context_t * nut, nut_info_packet_t * info) {
 
 	put_v(tmp, info->stream_id_plus1);
 	put_v(tmp, info->chapter_id);
-	if (info->chapter_id) {
-		put_v(tmp, info->chapter_start);
-		put_v(tmp, info->chapter_len);
-	}
+	put_v(tmp, info->chapter_start);
+	put_v(tmp, info->chapter_len);
 	put_v(tmp, info->count);
 
 	for(i = 0; i < info->count; i++){
@@ -368,8 +366,11 @@ static void put_info(nut_context_t * nut, nut_info_packet_t * info) {
 		} else if (!strcmp(field->type, "s")) {
 			put_s(tmp, -3);
 			put_s(tmp, field->val);
+		} else if (!strcmp(field->type, "t")) {
+			put_s(tmp, -4);
+			put_v(tmp, field->val);
 		} else if (!strcmp(field->type, "r")) {
-			put_s(tmp, -(field->den + 3));
+			put_s(tmp, -(field->den + 4));
 			put_s(tmp, field->val);
 		} else {
 			if (strcmp(field->type, "UTF-8")) {
