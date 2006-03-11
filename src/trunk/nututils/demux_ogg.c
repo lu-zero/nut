@@ -571,7 +571,7 @@ static int get_packet(void * priv, nut_packet_t * p, uint8_t ** buf) {
 
 	p->next_pts = 0;
 	p->stream = stream;
-	p->flags = os->oc->is_key ? os->oc->is_key(os) : NUT_KEY_STREAM_FLAG;
+	p->flags = !os->oc->is_key || os->oc->is_key(os) ? NUT_FLAG_KEY : 0;
 	p->pts = os->oc->get_pts(os);
 
 	*buf = os->buf + os->buf_pos;

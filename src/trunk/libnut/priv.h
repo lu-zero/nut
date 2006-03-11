@@ -17,7 +17,13 @@
 #define     INDEX_STARTCODE (0xDD672F23E64EULL + (((uint64_t)('N'<<8) + 'X')<<48))
 #define      INFO_STARTCODE (0xAB68B596BA78ULL + (((uint64_t)('N'<<8) + 'I')<<48))
 
-#define MSB_CODED_FLAG 1
+#define NUT_API_FLAGS    3
+
+#define FLAG_SIZE_MSB   32
+#define FLAG_CHECKSUM   64
+#define FLAG_CODED    4096
+#define FLAG_INVALID  8192
+
 #define STREAM_CODED_FLAG 2
 #define INVALID_FLAG 4
 
@@ -63,13 +69,12 @@ typedef struct {
 } output_buffer_t;
 
 typedef struct {
-	int flags;
-	int stream_flags;
-	int stream_plus1;
-	int pts_delta;
-	int lsb;
-	int mul;
-	int reserved;
+	uint16_t flags;
+	uint16_t mul;
+	uint16_t lsb;
+	int16_t pts_delta;
+	uint8_t reserved;
+	uint8_t stream_plus1;
 } frame_table_t;
 
 typedef struct {

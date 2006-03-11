@@ -417,10 +417,10 @@ static int get_packet(void * priv, nut_packet_t * p, uint8_t ** buf) {
 	if ((avi->stream[0].last_pts % 1000) < N && avi->buf) {
 		p->next_pts = 0;
 		p->len = 5;
-		p->flags = NUT_KEY_STREAM_FLAG;
+		p->flags = NUT_FLAG_KEY;
 		p->stream = 2;//2 + (avi->stream[0].last_pts % 100);
 		p->pts = avi->stream[0].last_pts;
-		if (avi->stream[0].last_pts % 1000) p->flags |= NUT_EOR_STREAM_FLAG;
+		if (avi->stream[0].last_pts % 1000) p->flags |= NUT_FLAG_EOR;
 		*buf = (void*)avi;
 		free(avi->buf);
 		avi->buf = NULL;
@@ -432,7 +432,7 @@ static int get_packet(void * priv, nut_packet_t * p, uint8_t ** buf) {
 	FIXENDIAN32(len);
 	p->next_pts = 0;
 	p->len = len;
-	p->flags = (avi->index[avi->cur++].dwFlags & 0x10) ? NUT_KEY_STREAM_FLAG : 0;
+	p->flags = (avi->index[avi->cur++].dwFlags & 0x10) ? NUT_FLAG_KEY : 0;
 	p->stream = s = (fourcc[0] - '0') * 10 + (fourcc[1] - '0');
 	if (s == 0) { // 1 frame of video
 		int type;
@@ -441,8 +441,8 @@ static int get_packet(void * priv, nut_packet_t * p, uint8_t ** buf) {
 		if (stats) fprintf(stats, "%c", type==0?'I':type==1?'P':type==2?'B':'S');
 		switch (type) {
 			case 0: // I
-				if (!(p->flags & NUT_KEY_STREAM_FLAG)) printf("Error detected stream %d frame %d\n", s, (int)p->pts);
-				p->flags |= NUT_KEY_STREAM_FLAG;
+				if (!(p->flags & NUT_FLAG_KEY)) printf("Error detected stream %d frame %d\n", s, (int)p->pts);
+				p->flags |= NUT_FLAG_KEY;
 				break;
 			case 3: // S
 				printf("S-Frame %d\n", (int)ftell(avi->in));
@@ -476,8 +476,8 @@ static int get_packet(void * priv, nut_packet_t * p, uint8_t ** buf) {
 		if (samplesize) avi->stream[s].last_pts += p->len / samplesize;
 		else avi->stream[s].last_pts++;
 
-		if (!(p->flags & NUT_KEY_STREAM_FLAG)) printf("Error detected stream %d frame %d\n", s, (int)p->pts);
-		p->flags |= NUT_KEY_STREAM_FLAG;
+		if (!(p->flags & NUT_FLAG_KEY)) printf("Error detected stream %d frame %d\n", s, (int)p->pts);
+		p->flags |= NUT_FLAG_KEY;
 	} else {
 		printf("%d %4.4s\n", avi->cur, fourcc);
 		err = 10;

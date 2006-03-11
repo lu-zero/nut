@@ -135,7 +135,7 @@ static void put_header(output_buffer_t * bc, output_buffer_t * in, output_buffer
 static void put_main_header(nut_context_t * nut) {
 	output_buffer_t * tmp = clear_buffer(nut->tmp_buffer);
 	int i;
-	int flag, fields, sflag, timestamp = 0, mul = 1, stream = 0, size, count;
+	int flag, fields, timestamp = 0, mul = 1, stream = 0, size, count;
 
 	put_v(tmp, NUT_VERSION);
 	put_v(tmp, nut->stream_count);
@@ -143,37 +143,33 @@ static void put_main_header(nut_context_t * nut) {
 	for(i = 0; i < 256; ) {
 		fields = 0;
 		flag = nut->ft[i].flags;
-		if (nut->ft[i].stream_flags != 0) fields = 1;
-		sflag = nut->ft[i].stream_flags;
-		if (nut->ft[i].pts_delta != timestamp) fields = 2;
+		if (nut->ft[i].pts_delta != timestamp) fields = 1;
 		timestamp = nut->ft[i].pts_delta;
-		if (nut->ft[i].mul != mul) fields = 3;
+		if (nut->ft[i].mul != mul) fields = 2;
 		mul = nut->ft[i].mul;
-		if (nut->ft[i].stream_plus1 != stream) fields = 4;
+		if (nut->ft[i].stream_plus1 != stream) fields = 3;
 		stream = nut->ft[i].stream_plus1;
-		if (nut->ft[i].lsb != 0) fields = 5;
+		if (nut->ft[i].lsb != 0) fields = 4;
 		size = nut->ft[i].lsb;
 
 		for (count = 0; i < 256; count++, i++) {
 			if (i == 'N') { count--; continue; }
 			if (nut->ft[i].flags != flag) break;
-			if (nut->ft[i].stream_flags != sflag) break;
 			if (nut->ft[i].stream_plus1 != stream) break;
 			if (nut->ft[i].mul != mul) break;
 			if (nut->ft[i].lsb != size + count) break;
 			if (nut->ft[i].pts_delta != timestamp) break;
 		}
-		if (count != mul - size) fields = 7;
+		if (count != mul - size) fields = 6;
 
 		put_v(tmp, flag);
 		put_v(tmp, fields);
-		if (fields > 0) put_v(tmp, sflag);
-		if (fields > 1) put_s(tmp, timestamp);
-		if (fields > 2) put_v(tmp, mul);
-		if (fields > 3) put_v(tmp, stream);
-		if (fields > 4) put_v(tmp, size);
-		if (fields > 5) put_v(tmp, 0); // reserved
-		if (fields > 6) put_v(tmp, count);
+		if (fields > 0) put_s(tmp, timestamp);
+		if (fields > 1) put_v(tmp, mul);
+		if (fields > 2) put_v(tmp, stream);
+		if (fields > 3) put_v(tmp, size);
+		if (fields > 4) put_v(tmp, 0); // reserved
+		if (fields > 5) put_v(tmp, count);
 	}
 
 	put_header(nut->o, tmp, nut->tmp_buffer2, MAIN_STARTCODE, 0);
@@ -386,65 +382,82 @@ static void put_index(nut_context_t * nut) {
 	put_header(nut->o, tmp, nut->tmp_buffer2, INDEX_STARTCODE, 1);
 }
 
-static int frame_header(nut_context_t * nut, const nut_packet_t * fd, int * rftnum) {
-	int i, ftnum = -1, size = 0, coded_pts, pts_delta;
+static int frame_header(nut_context_t * nut, output_buffer_t * tmp, const nut_packet_t * fd) {
 	stream_context_t * sc = &nut->sc[fd->stream];
-	pts_delta = fd->pts - sc->last_pts;
-	// ### check lsb pts
-	if (MAX(pts_delta, -pts_delta) < (1 << (sc->msb_pts_shift - 1)) - 1)
-		coded_pts = fd->pts & ((1 << sc->msb_pts_shift) - 1);
-	else
-		coded_pts = fd->pts + (1 << sc->msb_pts_shift);
+	int i, ftnum = -1, size = 0, coded_pts, coded_flags = 0, msb_pts = (1 << sc->msb_pts_shift);
+	int checksum = 0, pts_delta = (int64_t)fd->pts - (int64_t)sc->last_pts;
+
+	if (ABS(pts_delta) < (msb_pts/2) - 1) coded_pts = fd->pts & (msb_pts - 1);
+	else coded_pts = fd->pts + msb_pts;
+
+	if (fd->len > nut->max_distance) checksum = 1;
+	if (ABS(pts_delta) > sc->max_pts_distance) {
+		fprintf(stderr, "%d > %d || %d - %d > %d   \n", fd->len, nut->max_distance, (int)fd->pts, (int)sc->last_pts, sc->max_pts_distance);
+		checksum = 1;
+	}
+
 	for (i = 0; i < 256; i++) {
-		int len = 1;
-		if (nut->ft[i].flags & INVALID_FLAG) continue;
+		int len = 1; // frame code
+		int flags = nut->ft[i].flags;
+		if (flags & FLAG_INVALID) continue;
 		if (nut->ft[i].stream_plus1 && nut->ft[i].stream_plus1 - 1 != fd->stream) continue;
 		if (nut->ft[i].pts_delta && nut->ft[i].pts_delta != pts_delta) continue;
-		if (nut->ft[i].flags & MSB_CODED_FLAG) {
-			if ((fd->len - nut->ft[i].lsb) % nut->ft[i].mul) continue;
-		} else {
-			if (nut->ft[i].lsb != fd->len) continue;
+		if (flags & FLAG_CODED) {
+			flags = fd->flags & NUT_API_FLAGS;
+			if (nut->ft[i].lsb != fd->len) flags |= FLAG_SIZE_MSB;
+			if (checksum) flags |= FLAG_CHECKSUM;
+			flags |= FLAG_CODED;
 		}
-		if (!(nut->ft[i].flags & STREAM_CODED_FLAG) && (fd->flags & 3) != nut->ft[i].stream_flags) continue;
-		len += nut->ft[i].stream_plus1 ? 0 : v_len(fd->stream);
-		len += nut->ft[i].pts_delta ? 0 : v_len(coded_pts);
-		len += nut->ft[i].flags & MSB_CODED_FLAG ? v_len((fd->len - nut->ft[i].lsb) / nut->ft[i].mul) : 0;
-		len += nut->ft[i].flags & STREAM_CODED_FLAG ? v_len((fd->flags & 3) ^ nut->ft[i].stream_flags) : 0;
-		if (!size || len < size) { ftnum = i; size = len; }
+		if (flags & FLAG_SIZE_MSB) { if ((fd->len - nut->ft[i].lsb) % nut->ft[i].mul) continue; }
+		else { if (nut->ft[i].lsb != fd->len) continue; }
+		if ((flags ^ fd->flags) & NUT_API_FLAGS) continue;
+		if (checksum && !(flags & FLAG_CHECKSUM)) continue;
+
+		len += nut->ft[i].stream_plus1  ? 0 : v_len(fd->stream);
+		len += nut->ft[i].pts_delta     ? 0 : v_len(coded_pts);
+		len += !(flags & FLAG_CODED)    ? 0 : v_len(flags ^ nut->ft[i].flags);
+		len += !(flags & FLAG_SIZE_MSB) ? 0 : v_len((fd->len - nut->ft[i].lsb) / nut->ft[i].mul);
+		len += !(flags & FLAG_CHECKSUM) ? 0 : 4;
+		if (!size || len < size) { ftnum = i; coded_flags = flags; size = len; }
 	}
 	assert(ftnum != -1);
-	if (rftnum) *rftnum = ftnum;
+	if (tmp) {
+		put_bytes(tmp, 1, ftnum); // frame_code
+		if (!nut->ft[ftnum].stream_plus1) put_v(tmp, fd->stream);
+		if (!nut->ft[ftnum].pts_delta)    put_v(tmp, coded_pts);
+		if (coded_flags & FLAG_CODED)     put_v(tmp, coded_flags ^ nut->ft[ftnum].flags);
+		if (coded_flags & FLAG_SIZE_MSB)  put_v(tmp, (fd->len - nut->ft[ftnum].lsb) / nut->ft[ftnum].mul);
+		if (coded_flags & FLAG_CHECKSUM)  put_bytes(tmp, 4, crc32(tmp->buf, bctello(tmp)));
+	}
 	return size;
 }
 
-static void put_frame(nut_context_t * nut, const nut_packet_t * fd, const uint8_t * data) {
-	output_buffer_t * tmp = clear_buffer(nut->tmp_buffer);
+void nut_write_frame(nut_context_t * nut, const nut_packet_t * fd, const uint8_t * buf) {
 	stream_context_t * sc = &nut->sc[fd->stream];
-	int ftnum = -1, coded_pts, pts_delta = fd->pts - sc->last_pts;
+	output_buffer_t * tmp;
 	int i;
 
-	if (ABS(pts_delta) < (1 << (sc->msb_pts_shift - 1)) - 1)
-		coded_pts = fd->pts & ((1 << sc->msb_pts_shift) - 1);
-	else
-		coded_pts = fd->pts + (1 << sc->msb_pts_shift);
+	if (bctello(nut->o) > (1 << 23)) { // main header repetition
+		i = 23; // ### magic value for header repetition
+		if (bctello(nut->o) > (1 << 25)) {
+			for (i = 26; bctello(nut->o) > (1 << i); i++);
+			i--;
+		}
+		if (nut->last_headers < (1 << i)) {
+			put_headers(nut);
+		}
+	}
+	// distance syncpoints
+	if (nut->last_syncpoint < nut->last_headers  ||
+		bctello(nut->o) - nut->last_syncpoint + fd->len + frame_header(nut, NULL, fd) > nut->max_distance) put_syncpoint(nut);
 
-	sc->overhead += frame_header(nut, fd, &ftnum);
-
-	put_bytes(tmp, 1, ftnum); // frame_code
-
-	if (!nut->ft[ftnum].stream_plus1) put_v(tmp, fd->stream);
-	if (!nut->ft[ftnum].pts_delta)    put_v(tmp, coded_pts);
-	if (nut->ft[ftnum].flags & MSB_CODED_FLAG)
-		put_v(tmp, (fd->len - nut->ft[ftnum].lsb) / nut->ft[ftnum].mul);
-	if (nut->ft[ftnum].flags & STREAM_CODED_FLAG)
-		put_v(tmp, (fd->flags & 3) ^ nut->ft[ftnum].stream_flags);
-
-	if (0) put_bytes(tmp, 4, crc32(tmp->buf + 8, tmp->buf_ptr - tmp->buf - 8)); // not including startcode
-
-	put_data(nut->o, bctello(tmp), tmp->buf);
-
+	tmp = clear_buffer(nut->tmp_buffer);
+	sc->overhead += frame_header(nut, tmp, fd);
 	sc->total_frames++;
 	sc->tot_size += fd->len;
+
+	put_data(nut->o, bctello(tmp), tmp->buf);
+	put_data(nut->o, fd->len, buf);
 
         for (i = 0; i < nut->stream_count; i++) {
 		if (nut->sc[i].last_dts == -1) continue;
@@ -455,35 +468,12 @@ static void put_frame(nut_context_t * nut, const nut_packet_t * fd, const uint8_
 		assert(compare_ts(nut, fd->pts, fd->stream, nut->sc[i].last_dts, i) >= 0);
 	}
 
-	put_data(nut->o, fd->len, data);
 	sc->last_pts = fd->pts;
 	sc->last_dts = get_dts(sc->sh.decode_delay, sc->pts_cache, fd->pts);
 	sc->sh.max_pts = MAX(sc->sh.max_pts, fd->pts);
-}
 
-void nut_write_frame(nut_context_t * nut, const nut_packet_t * fd, const uint8_t * buf) {
-	stream_context_t * sc = &nut->sc[fd->stream];
-
-	if (bctello(nut->o) > (1 << 23)) { // main header repetition
-		int i = 23; // ### magic value for header repetition
-		if (bctello(nut->o) > (1 << 25)) {
-			for (i = 26; bctello(nut->o) > (1 << i); i++);
-			i--;
-		}
-		if (nut->last_headers < (1 << i)) {
-			put_headers(nut);
-		}
-	}
-	// distance syncpoints
-	if (ABS((int64_t)fd->pts - (int64_t)sc->last_pts) > sc->max_pts_distance)
-		fprintf(stderr, "%d - %d > %d   \n", (int)fd->pts, (int)sc->last_pts, sc->max_pts_distance);
-	if (nut->last_syncpoint < nut->last_headers || ABS((int64_t)fd->pts - (int64_t)sc->last_pts) > sc->max_pts_distance ||
-		bctello(nut->o) - nut->last_syncpoint + fd->len + frame_header(nut, fd, NULL) > nut->max_distance) put_syncpoint(nut);
-
-	put_frame(nut, fd, buf);
-
-	if ((fd->flags & NUT_KEY_STREAM_FLAG) && !sc->last_key) sc->last_key = fd->pts + 1;
-	if (fd->flags & NUT_EOR_STREAM_FLAG) sc->eor = fd->pts + 1;
+	if ((fd->flags & NUT_FLAG_KEY) && !sc->last_key) sc->last_key = fd->pts + 1;
+	if (fd->flags & NUT_FLAG_EOR) sc->eor = fd->pts + 1;
 	else sc->eor = 0;
 }
 
@@ -502,20 +492,18 @@ nut_context_t * nut_muxer_init(const nut_muxer_opts_t * mopts, const nut_stream_
 
 	{
 	int j, n;
-	int flag, fields, sflag, timestamp = 0, mul = 1, stream = 0, size, count;
+	int flag, fields, timestamp = 0, mul = 1, stream = 0, size, count;
 
 	for(n=i=0; i < 256; n++) {
 		assert(mopts->fti[n].tmp_flag != -1);
 		flag   = mopts->fti[n].tmp_flag;
 		fields = mopts->fti[n].tmp_fields;
-		if (fields > 0) sflag     = mopts->fti[n].tmp_sflag;
-		else sflag = 0;
-		if (fields > 1) timestamp = mopts->fti[n].tmp_pts;
-		if (fields > 2) mul       = mopts->fti[n].tmp_mul;
-		if (fields > 3) stream    = mopts->fti[n].tmp_stream;
-		if (fields > 4) size      = mopts->fti[n].tmp_size;
+		if (fields > 0) timestamp = mopts->fti[n].tmp_pts;
+		if (fields > 1) mul       = mopts->fti[n].tmp_mul;
+		if (fields > 2) stream    = mopts->fti[n].tmp_stream;
+		if (fields > 3) size      = mopts->fti[n].tmp_size;
 		else size = 0;
-		if (fields > 6) count     = mopts->fti[n].count;
+		if (fields > 5) count     = mopts->fti[n].count;
 		else count = mul - size;
 
 		for(j = 0; j < count && i < 256; j++, i++) {
@@ -525,7 +513,6 @@ nut_context_t * nut_muxer_init(const nut_muxer_opts_t * mopts, const nut_stream_
 				continue;
 			}
 			nut->ft[i].flags = flag;
-			nut->ft[i].stream_flags = sflag;
 			nut->ft[i].stream_plus1 = stream;
 			nut->ft[i].mul = mul;
 			nut->ft[i].lsb = size + j;

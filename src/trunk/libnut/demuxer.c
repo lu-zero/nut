@@ -200,7 +200,7 @@ static int get_header(input_buffer_t * in, input_buffer_t * out) {
 
 	GET_V(in, forward_ptr);
 	if (forward_ptr > 4096) {
-		skip_buffer(in, 4); // header_checksum
+		CHECK(skip_buffer(in, 4)); // header_checksum
 		ERROR(crc32(get_buf(in, start), bctello(in) - start), -ERR_BAD_CHECKSUM);
 	}
 
@@ -220,7 +220,7 @@ err_out:
 static int get_main_header(nut_context_t * nut) {
 	input_buffer_t itmp, * tmp = new_mem_buffer(&itmp);
 	int i, j, err = 0;
-	int flag, fields, timestamp = 0, mul = 1, stream = 0, sflag, size, count, reserved;
+	int flag, fields, timestamp = 0, mul = 1, stream = 0, size, count, reserved;
 
 	CHECK(get_header(nut->i, tmp));
 
@@ -234,21 +234,17 @@ static int get_main_header(nut_context_t * nut) {
 		int scrap;
 		GET_V(tmp, flag);
 		GET_V(tmp, fields);
-		if (fields > 0) GET_V(tmp, sflag);
-		else sflag = 0;
-		if (fields > 1) GET_S(tmp, timestamp);
-		if (fields > 2) GET_V(tmp, mul);
-		if (fields > 3) GET_V(tmp, stream);
-		if (fields > 4) GET_V(tmp, size);
+		if (fields > 0) GET_S(tmp, timestamp);
+		if (fields > 1) GET_V(tmp, mul);
+		if (fields > 2) GET_V(tmp, stream);
+		if (fields > 3) GET_V(tmp, size);
 		else size = 0;
-		if (fields > 5) GET_V(tmp, reserved);
+		if (fields > 4) GET_V(tmp, reserved);
 		else reserved = 0;
-		if (fields > 6) GET_V(tmp, count);
+		if (fields > 5) GET_V(tmp, count);
 		else count = mul - size;
 
-		for (j = 7; j < fields; j++) {
-			GET_V(tmp, scrap);
-		}
+		for (j = 6; j < fields; j++) GET_V(tmp, scrap);
 
 		for(j = 0; j < count && i < 256; j++, i++) {
 			if (i == 'N') {
@@ -257,7 +253,6 @@ static int get_main_header(nut_context_t * nut) {
 				continue;
 			}
 			nut->ft[i].flags = flag;
-			nut->ft[i].stream_flags = sflag;
 			nut->ft[i].stream_plus1 = stream;
 			nut->ft[i].mul = mul;
 			nut->ft[i].lsb = size + j;
@@ -483,17 +478,16 @@ static void clear_dts_cache(nut_context_t * nut) {
 }
 
 static int get_packet(nut_context_t * nut, nut_packet_t * pd, int * saw_syncpoint) {
-	int err = 0;
-	off_t after_sync = 0;
 	uint64_t tmp;
-	int coded_pts, size_lsb = 0, stream_flags = 0, i;
+	int err = 0, after_sync = 0, checksum = 0, flags, i;
+	off_t start;
 
 	CHECK(get_bytes(nut->i, 1, &tmp)); // frame_code or 'N'
 	if (tmp == 'N') {
 		CHECK(get_bytes(nut->i, 7, &tmp));
 		tmp |= (uint64_t)'N' << 56;
 		if (tmp == SYNCPOINT_STARTCODE) {
-			after_sync = bctello(nut->i);
+			after_sync = 1;
 			CHECK(get_syncpoint(nut));
 			CHECK(get_bytes(nut->i, 1, &tmp));
 		} else {
@@ -502,15 +496,19 @@ static int get_packet(nut_context_t * nut, nut_packet_t * pd, int * saw_syncpoin
 		}
 	}
 
-	ERROR(nut->ft[tmp].flags & INVALID_FLAG, -ERR_NOT_FRAME_NOT_N);
-
+	start = bctello(nut->i) - 1;
 	pd->type = e_frame;
+
+	flags = nut->ft[tmp].flags;
+	ERROR(flags & FLAG_INVALID, -ERR_NOT_FRAME_NOT_N);
+
 	if (!nut->ft[tmp].stream_plus1) GET_V(nut->i, pd->stream);
 	else pd->stream = nut->ft[tmp].stream_plus1 - 1;
 
 	ERROR(pd->stream >= nut->stream_count, -ERR_NOT_FRAME_NOT_N);
 
 	if (!nut->ft[tmp].pts_delta) {
+		uint64_t coded_pts;
 		GET_V(nut->i, coded_pts);
 		if (coded_pts >= (1 << nut->sc[pd->stream].msb_pts_shift))
 			pd->pts = coded_pts - (1 << nut->sc[pd->stream].msb_pts_shift);
@@ -524,25 +522,32 @@ static int get_packet(nut_context_t * nut, nut_packet_t * pd, int * saw_syncpoin
 		pd->pts = nut->sc[pd->stream].last_pts + nut->ft[tmp].pts_delta;
 	}
 
-	if (nut->ft[tmp].flags & MSB_CODED_FLAG) GET_V(nut->i, size_lsb);
-	pd->len = size_lsb * nut->ft[tmp].mul + nut->ft[tmp].lsb;
+	if (flags & FLAG_CODED) {
+		int coded_flags;
+		GET_V(nut->i, coded_flags);
+		flags ^= coded_flags;
+	}
+	pd->flags = flags & NUT_API_FLAGS;
 
-	if (nut->ft[tmp].flags & STREAM_CODED_FLAG) GET_V(nut->i, stream_flags);
-	pd->flags = nut->ft[tmp].stream_flags ^ stream_flags;
+	if (flags & FLAG_SIZE_MSB) {
+		int size_msb;
+		GET_V(nut->i, size_msb);
+		pd->len = size_msb * nut->ft[tmp].mul + nut->ft[tmp].lsb;
+	} else pd->len = nut->ft[tmp].lsb;
 
 	for (i = 0; i < nut->ft[tmp].reserved; i++) { int scrap; GET_V(nut->i, scrap); }
 
-	if (0) {
-		uint64_t checksum;
-		off_t pos = bctello(nut->i);
-		CHECK(get_bytes(nut->i, 4, &checksum));
-		ERROR(checksum != crc32(nut->i->buf_ptr - (bctello(nut->i) - after_sync), pos - after_sync), -ERR_BAD_CHECKSUM);
+	if (flags & FLAG_CHECKSUM) {
+		CHECK(skip_buffer(nut->i, 4)); // header_checksum
+		ERROR(crc32(nut->i->buf_ptr - (bctello(nut->i) - start), bctello(nut->i) - start), -ERR_BAD_CHECKSUM);
+		checksum = 1;
 	}
 
 	// error checking - max distance
 	ERROR(!after_sync && bctello(nut->i) + pd->len - nut->last_syncpoint > nut->max_distance, -ERR_MAX_DISTANCE);
+	ERROR(!checksum && pd->len > nut->max_distance, -ERR_MAX_DISTANCE);
 	// error checking - max pts distance
-	ERROR(!after_sync && ABS((int64_t)pd->pts - (int64_t)nut->sc[pd->stream].last_pts) > nut->sc[pd->stream].max_pts_distance, -ERR_MAX_PTS_DISTANCE);
+	ERROR(!checksum && ABS((int64_t)pd->pts - (int64_t)nut->sc[pd->stream].last_pts) > nut->sc[pd->stream].max_pts_distance, -ERR_MAX_PTS_DISTANCE);
 	// error checking - out of order dts
 	for (i = 0; i < nut->stream_count; i++) {
 		if (nut->sc[i].last_dts == -1) continue;
@@ -562,8 +567,8 @@ static void push_frame(nut_context_t * nut, nut_packet_t * pd) {
 	stream_context_t * sc = &nut->sc[pd->stream];
 	sc->last_pts = pd->pts;
 	sc->last_dts = get_dts(sc->sh.decode_delay, sc->pts_cache, pd->pts);
-	if (pd->flags & NUT_KEY_STREAM_FLAG && !sc->last_key) sc->last_key = pd->pts + 1;
-	if (pd->flags & NUT_EOR_STREAM_FLAG) sc->eor = pd->pts + 1;
+	if (pd->flags & NUT_FLAG_KEY && !sc->last_key) sc->last_key = pd->pts + 1;
+	if (pd->flags & NUT_FLAG_EOR) sc->eor = pd->pts + 1;
 	else sc->eor = 0;
 }
 
@@ -1010,10 +1015,10 @@ static int linear_search_seek(nut_context_t * nut, int backwards, uint64_t * pts
 				}
 				if (n) break; // pts for all active streams higher than requested pts
 			}
-			if (pd.flags & NUT_KEY_STREAM_FLAG) {
+			if (pd.flags & NUT_FLAG_KEY) {
 				if (pd.pts <= pts[pd.stream]>>1) {
 					good_key[pd.stream] = buf_before<<1;
-					if (pd.flags & NUT_EOR_STREAM_FLAG) good_key[pd.stream] = 0;
+					if (pd.flags & NUT_FLAG_EOR) good_key[pd.stream] = 0;
 				}
 				if (!end && pd.pts >= pts[pd.stream]>>1) { // forward seek end
 					if (saw_syncpoint) nut->last_syncpoint = 0;
@@ -1021,7 +1026,7 @@ static int linear_search_seek(nut_context_t * nut, int backwards, uint64_t * pts
 					break;
 				}
 			}
-		} else if (stopper && pd.flags&NUT_KEY_STREAM_FLAG && !(good_key[i]&1)) {
+		} else if (stopper && pd.flags&NUT_FLAG_KEY && !(good_key[i]&1)) {
 			TO_PTS(stopper, stopper->pts)
 			if (compare_ts(nut, stopper_p, stopper_s, pd.pts, pd.stream) > 0) {
 				good_key[pd.stream] = buf_before<<1;

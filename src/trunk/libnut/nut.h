@@ -3,11 +3,13 @@
 
 #define NUT_VERSION 2
 
-#define NUT_VIDEO_CLASS 0
-#define NUT_AUDIO_CLASS 1
+#define NUT_VIDEO_CLASS    0
+#define NUT_AUDIO_CLASS    1
+#define NUT_SUBTITLE_CLASS 2
+#define NUT_USERDATA_CLASS 3
 
-#define NUT_KEY_STREAM_FLAG 1
-#define NUT_EOR_STREAM_FLAG 2
+#define NUT_FLAG_KEY 1
+#define NUT_FLAG_EOR 2
 
 typedef struct {
 	void * priv;
@@ -51,14 +53,13 @@ typedef struct {
 } nut_stream_header_t;
 
 typedef struct {
-	int tmp_flag;      // 1 => use msb, 2 => coded sflags, 4 => invalid, -1 => end
+	int tmp_flag;      // -1 => end
 	int tmp_fields;
-	int tmp_sflag;     // tmp_fields = 1
-	int tmp_pts;       // tmp_fields = 2
-	int tmp_mul;       // tmp_fields = 3
-	int tmp_stream;    // tmp_fields = 4
-	int tmp_size;      // tmp_fields = 5
-	int count;         // tmp_fields = 7 (6 is reserved)
+	int tmp_pts;       // tmp_fields = 1
+	int tmp_mul;       // tmp_fields = 2
+	int tmp_stream;    // tmp_fields = 3
+	int tmp_size;      // tmp_fields = 4
+	int count;         // tmp_fields = 6 (5 is reserved)
 } frame_table_input_t;
 
 typedef struct {
