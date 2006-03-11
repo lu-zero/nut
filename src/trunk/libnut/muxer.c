@@ -299,7 +299,7 @@ static void put_syncpoint(nut_context_t * nut) {
 		for (j = 0; j < nut->stream_count; j++) n &= keys[j];
 		if (n) { i--; break; }
 	}
-	back_ptr = (nut->last_syncpoint - s->s[i].pos) / 8;
+	back_ptr = (nut->last_syncpoint - s->s[i].pos) / 16;
 
 	for (i = 0; i < nut->stream_count; i++) {
 		nut->sc[i].last_pts = convert_ts(nut, pts, stream, i);
@@ -332,8 +332,8 @@ static void put_index(nut_context_t * nut) {
 
 	put_v(tmp, s->len);
 	for (i = 0; i < s->len; i++) {
-		off_t pos = s->s[i].pos / 8;
-		off_t last_pos = i ? s->s[i-1].pos / 8 : 0;
+		off_t pos = s->s[i].pos / 16;
+		off_t last_pos = i ? s->s[i-1].pos / 16 : 0;
 		put_v(tmp, pos - last_pos);
 	}
 

@@ -311,7 +311,7 @@ static int add_syncpoint(nut_context_t * nut, syncpoint_t sp, uint64_t * pts, ui
 	for (i = sl->len; i--; ) { // more often than not, we're adding at end of list
 		off_t pos = sl->s[i].pos >> 1;
 		if (pos > sp.pos) continue;
-		if (sp.pos < pos + 8) { // syncpoint already in list
+		if (sp.pos < pos + 16) { // syncpoint already in list
 			sl->s[i].pos = (sp.pos << 1) | (sl->s[i].pos & 1); // refine accuracy of syncpoint position
 			if (pts) {
 				sl->s[i].pos |= 1;
@@ -369,7 +369,7 @@ static int get_syncpoint(nut_context_t * nut) {
 
 	GET_V(tmp, s.pts);
 	GET_V(tmp, s.back_ptr);
-	s.back_ptr = (s.back_ptr * 8 + 7)<<1;
+	s.back_ptr = (s.back_ptr * 16 + 15)<<1;
 
 	set_global_pts(nut, s.pts);
 
@@ -421,7 +421,7 @@ static int get_index(nut_context_t * nut) {
 
 	for (i = 0; i < sl->len; i++) {
 		GET_V(tmp, x);
-		x *= 8;
+		x *= 16;
 		sl->s[i].pos = (x << 1) + (i ? sl->s[i-1].pos : 1);
 		sl->s[i].back_ptr = 1;
 		sl->s[i].pts = 0;
@@ -599,7 +599,7 @@ retry:
 
 			GET_V(tmp, res->pts);
 			GET_V(tmp, res->back_ptr);
-			res->back_ptr = (res->back_ptr * 8 + 7) << 1;
+			res->back_ptr = (res->back_ptr * 16 + 15) << 1;
 		}
 		if (!backwards) return 0;
 		else ptr = bctello(nut->i);
@@ -882,7 +882,7 @@ static int binary_search_syncpoint(nut_context_t * nut, double time_pos, uint64_
 		double hi_pd = TO_DOUBLE_PTS(hip);
 		double lo_pd = TO_DOUBLE_PTS(lop);
 		a++;
-		if (hi - lo < nut->max_distance*2) guess = lo + 8;
+		if (hi - lo < nut->max_distance*2) guess = lo + 16;
 		else { // linear interpolation
 #define INTERPOLATE_WEIGHT (19./20)
 			double a = (double)(hi - lo) / (hi_pd - lo_pd);
@@ -890,7 +890,7 @@ static int binary_search_syncpoint(nut_context_t * nut, double time_pos, uint64_
 			guess = guess * INTERPOLATE_WEIGHT + (lo+hi)/2 * (1 - INTERPOLATE_WEIGHT);
 			if (hi - guess < nut->max_distance*2) guess = hi - nut->max_distance*2; //(lo + hi)/2;
 		}
-		if (guess < lo + 8) guess = lo + 8;
+		if (guess < lo + 8) guess = lo + 16;
 		fprintf(stderr, "\n%d [ (%d,%.3f) .. (%d,%.3f) .. (%d,%.3f) ] ", i, (int)lo, lo_pd, (int)guess, time_pos, (int)hi, hi_pd);
 		if (!nut->seek_status) seek_buf(nut->i, guess, SEEK_SET);
 		nut->seek_status = hi; // so we know where to continue off...
@@ -899,7 +899,7 @@ static int binary_search_syncpoint(nut_context_t * nut, double time_pos, uint64_
 
 		if (s.back_ptr == 1 || s.pos >= hi) { // we got back to 'hi'
 			// either we scanned everything from lo to hi, or we keep trying
-			if (guess <= lo + 11) sl->s[i].back_ptr |= 1; // we are done!
+			if (guess <= lo + 16) sl->s[i].back_ptr |= 1; // we are done!
 			else hi = guess;
 			continue;
 		}
@@ -964,13 +964,13 @@ static int linear_search_seek(nut_context_t * nut, int backwards, uint64_t * pts
 		nut->last_syncpoint = 0; // last_key is invalid
 		seek_buf(nut->i, s.pos, SEEK_SET); // go back to syncpoint. This will not need a seek.
 		nut->seek_status = s.pos << 1;
-		if (s.pos > start + 7) goto err_out; // error condition, we didn't get the syncpoint we wanted
+		if (s.pos > start + 15) goto err_out; // error condition, we didn't get the syncpoint we wanted
 	}
 
 	if (stopper) {
 		off_t back_ptr = (stopper->pos >> 1) - (stopper->back_ptr>>1);
 		for (i = 1; i < sl->len; i++) {
-			if ((sl->s[i].pos >> 1) > back_ptr + 7) {
+			if ((sl->s[i].pos >> 1) > back_ptr + 15) {
 				if (sl->s[i-1].back_ptr & 1) stopper_syncpoint = sl->s[i].pos >> 1;
 				break;
 			}
@@ -989,7 +989,7 @@ static int linear_search_seek(nut_context_t * nut, int backwards, uint64_t * pts
 			int header_size = bctello(nut->i) - buf_before;
 			nut->i->buf_ptr -= header_size;
 			if (stopper) {
-				if ((!stopper_syncpoint && buf_before > (stopper->pos >> 1) - (stopper->back_ptr>>1) + 7) || stopper_syncpoint == buf_before) {
+				if ((!stopper_syncpoint && buf_before > (stopper->pos >> 1) - (stopper->back_ptr>>1) + 15) || stopper_syncpoint == buf_before) {
 					int n = 1;
 					stopper_syncpoint = buf_before;
 					for (i = 0; i < nut->stream_count; i++) {
