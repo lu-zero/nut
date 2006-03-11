@@ -212,36 +212,49 @@ static int get_v(input_buffer_t * bc, uint64_t * val) {
 }
 
 static int get_data(input_buffer_t * bc, int len, uint8_t * buf) {
-	int tmp;
-	tmp = ready_read_buf(bc, len);
-	len = MIN(len, tmp);
-	memcpy(buf, bc->buf_ptr, len);
-	bc->buf_ptr += len;
+	int tmp = MIN(len, bc->read_len - (bc->buf_ptr - bc->buf));
+	if (tmp) {
+		memcpy(buf, bc->buf_ptr, tmp);
+		bc->buf_ptr += tmp;
+		len -= tmp;
+	}
+	if (len) {
+		int read = fread(buf + tmp, 1, len, bc->in);
+		bc->file_pos += read;
+		len -= read;
+	}
+	flush_buf(bc);
 	return len;
 }
 
 #define CHECK(expr) do { int _a; if ((_a = (expr))) return _a; } while(0)
 #define GET_V(bc, v) do { uint64_t _tmp; CHECK(get_v((bc), &_tmp)); (v) = _tmp; } while(0)
 
+static int get_header(input_buffer_t * in) {
+	off_t start = bctello(in) - 8; // startcode
+	int forward_ptr;
+
+	GET_V(in, forward_ptr);
+	if (forward_ptr > 4096) {
+		CHECK(skip_buffer(in, 4)); // header_checksum
+		if (crc32(in->buf_ptr - (bctello(in) - start), bctello(in) - start)) return 3;
+	}
+
+	CHECK(skip_buffer(in, forward_ptr));
+	if (crc32(in->buf_ptr - forward_ptr, forward_ptr)) return 3;
+	return 0;
+}
+
 static int read_headers(input_buffer_t * in) {
 	int len = strlen(ID_STRING) + 1;
-	char str[len];
 	uint64_t tmp;
-	if (get_data(in, len, str) != len) return 1;
-	if (memcmp(str, ID_STRING, len)) return 1;
+	assert(in->buf == in->buf_ptr);
+	if (ready_read_buf(in, len) < len) return 1;
+	if (memcmp(in->buf_ptr, ID_STRING, len)) return 1;
+	in->buf_ptr += len;
 	CHECK(get_bytes(in, 8, &tmp));
-	if (tmp != MAIN_STARTCODE) return 1;
-	GET_V(in, len);
-	CHECK(skip_buffer(in, len));
-	CHECK(get_bytes(in, 8, &tmp));
-	while (tmp == STREAM_STARTCODE) {
-		GET_V(in, len);
-		CHECK(skip_buffer(in, len));
-		CHECK(get_bytes(in, 8, &tmp));
-	}
-	while (tmp == INFO_STARTCODE) {
-		GET_V(in, len);
-		CHECK(skip_buffer(in, len));
+	while (tmp != INDEX_STARTCODE && tmp != SYNCPOINT_STARTCODE) {
+		CHECK(get_header(in));
 		CHECK(get_bytes(in, 8, &tmp));
 	}
 	if (tmp == INDEX_STARTCODE) return 2;
@@ -252,6 +265,7 @@ static int read_headers(input_buffer_t * in) {
 static int find_copy_index(input_buffer_t * in, output_buffer_t * out, off_t * end) {
 	uint64_t tmp;
 	uint64_t idx_len;
+	uint64_t max_pts, syncpoints;
 	int new_idx_len, forward_ptr;
 	int i, padding;
 	assert(out->is_mem);
@@ -265,47 +279,45 @@ static int find_copy_index(input_buffer_t * in, output_buffer_t * out, off_t * e
 	if (tmp != INDEX_STARTCODE) return 2;
 
 	GET_V(in, forward_ptr);
+	if (forward_ptr > 4) { // checksum
+		skip_buffer(in, 4);
+		if (crc32(in->buf, in->buf_ptr - in->buf)) return 4;
+	}
 
-	GET_V(in, tmp); put_v(out, tmp); // max_pts
-	GET_V(in, tmp); put_v(out, tmp); // syncpoints
+	GET_V(in, max_pts);
+	GET_V(in, syncpoints);
 
 	GET_V(in, tmp); // first syncpoint position
 
-	new_idx_len = ((idx_len + 7)/8)*8;
+	new_idx_len = ((idx_len + 15)/16)*16;
 
 	// paranoia, this should either iterate once or not at all
-	while ( (v_len(tmp         + new_idx_len/8      ) - v_len(tmp        )) +
+	while ( (v_len(tmp         + new_idx_len/16     ) - v_len(tmp        )) +
 		(v_len(forward_ptr + new_idx_len-idx_len) - v_len(forward_ptr))
-		> new_idx_len - idx_len) new_idx_len += 8;
+		> new_idx_len - idx_len) new_idx_len += 16;
+
+	put_bytes(out, 8, INDEX_STARTCODE);
+	put_v(out, forward_ptr + new_idx_len-idx_len);
+	if (forward_ptr + new_idx_len-idx_len > 4096) put_bytes(out, 4, crc32(out->buf, bctello(out)));
+	put_v(out, max_pts);
+	put_v(out, syncpoints);
 
 	padding = new_idx_len - idx_len;
-	padding -= (v_len(tmp + new_idx_len/8) - v_len(tmp));
+	padding -= (v_len(tmp + new_idx_len/16) - v_len(tmp));
 	padding -= (v_len(forward_ptr + new_idx_len-idx_len) - v_len(forward_ptr)); // extreme paranoia, this will be zero
 	for (i = 0; i < padding; i++) put_bytes(out, 1, 0x80);
-	put_v(out, tmp + new_idx_len/8); // the new first syncpoint position
-	printf("%d => %d (%d)\n", (int)tmp, (int)(tmp + new_idx_len/8), new_idx_len);
+	put_v(out, tmp + new_idx_len/16); // the new first syncpoint position
+	printf("%d => %d (%d)\n", (int)tmp, (int)(tmp + new_idx_len/16), new_idx_len);
 
 	idx_len = (in->filesize - 12) - bctello(in); // from where we are, until the index_ptr and checksum, copy everything
-	if (ready_read_buf(in, idx_len) < idx_len) return 1;
 	ready_write_buf(out, idx_len);
-	memcpy(out->buf_ptr, in->buf_ptr, idx_len);
+	if (get_data(in, idx_len, out->buf_ptr)) return 1;
 	out->buf_ptr += idx_len;
-	in->buf_ptr += idx_len;
 
-	forward_ptr = out->buf_ptr - out->buf;
-	forward_ptr += 4 + 8; // checksum and index_ptr
-	put_bytes(out, 8, 8 + v_len(forward_ptr) + forward_ptr); // index_ptr
-	put_bytes(out, 4, crc32(out->buf, out->buf_ptr - out->buf)); // checksum
+	put_bytes(out, 8, new_idx_len); // index_ptr
+	put_bytes(out, 4, crc32(out->buf, bctello(out))); // checksum
 
 	return 0;
-}
-
-static void put_index(output_buffer_t * bc, output_buffer_t * tmp) {
-	assert(tmp->is_mem);
-
-	put_bytes(bc, 8, INDEX_STARTCODE);
-	put_v(bc, tmp->buf_ptr - tmp->buf); // forward_ptr
-	put_data(bc, tmp->buf_ptr - tmp->buf, tmp->buf);
 }
 
 int main(int argc, char * argv[]) {
@@ -325,8 +337,8 @@ int main(int argc, char * argv[]) {
 	seek_buf(in, 0, SEEK_SET);
 	CHECK(read_headers(in));
 
-	put_data(out, bctello(in), in->buf);
-	put_index(out, mem);
+	put_data(out, bctello(in), in->buf); // write headers
+	put_data(out, bctello(mem), mem->buf); // write index
 
 	// copy all data
 	while (bctello(in) < end) {
@@ -337,7 +349,7 @@ int main(int argc, char * argv[]) {
 		flush_buf(in);
 		printf("%d\r", (int)bctello(in));
 	}
-	put_index(out, mem);
+	put_data(out, bctello(mem), mem->buf); // write index
 
 	free_buffer(in);
 	free_out_buffer(out);
