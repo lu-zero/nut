@@ -270,43 +270,48 @@ static void put_header(output_buffer_t * bc, output_buffer_t * tmp, uint64_t sta
 
 static void put_main_header(nut_context_t * nut) {
 	output_buffer_t * tmp = clear_buffer(nut->tmp_buffer);
-	int i, j, n;
+	int i;
 	int flag, fields, sflag, timestamp = 0, mul = 1, stream = 0, size, count;
 
 	put_v(tmp, NUT_VERSION);
 	put_v(tmp, nut->stream_count);
 	put_v(tmp, nut->max_distance);
-	for(n=i=0; i < 256; n++) {
-		assert(nut->mopts.fti[n].tmp_flag != -1);
-		put_v(tmp, flag = nut->mopts.fti[n].tmp_flag);
-		put_v(tmp, fields = nut->mopts.fti[n].tmp_fields);
-		if (fields > 0) put_v(tmp, sflag = nut->mopts.fti[n].tmp_sflag);
-		else sflag = 0;
-		if (fields > 1) put_s(tmp, timestamp = nut->mopts.fti[n].tmp_pts);
-		if (fields > 2) put_v(tmp, mul = nut->mopts.fti[n].tmp_mul);
-		if (fields > 3) put_v(tmp, stream = nut->mopts.fti[n].tmp_stream);
-		if (fields > 4) put_v(tmp, size = nut->mopts.fti[n].tmp_size);
-		else size = 0;
-		if (fields > 5) put_v(tmp, 0); // reserved
-		if (fields > 6) put_v(tmp, count = nut->mopts.fti[n].count);
-		else count = mul - size;
+	for(i = 0; i < 256; ) {
+		fields = 0;
+		flag = nut->ft[i].flags;
+		if (nut->ft[i].stream_flags != 0) fields = 1;
+		sflag = nut->ft[i].stream_flags;
+		if (nut->ft[i].pts_delta != timestamp) fields = 2;
+		timestamp = nut->ft[i].pts_delta;
+		if (nut->ft[i].mul != mul) fields = 3;
+		mul = nut->ft[i].mul;
+		if (nut->ft[i].stream_plus1 != stream) fields = 4;
+		stream = nut->ft[i].stream_plus1;
+		if (nut->ft[i].lsb != 0) fields = 5;
+		size = nut->ft[i].lsb;
 
-		for(j = 0; j < count && i < 256; j++, i++) {
-			if (i == 'N') {
-				nut->ft[i].flags = INVALID_FLAG;
-				j--;
-				continue;
-			}
-			nut->ft[i].flags = flag;
-			nut->ft[i].stream_flags = sflag;
-			nut->ft[i].stream_plus1 = stream;
-			nut->ft[i].mul = mul;
-			nut->ft[i].lsb = size + j;
-			nut->ft[i].pts_delta = timestamp;
+		for (count = 0; i < 256; count++, i++) {
+			if (i == 'N') { count--; continue; }
+			if (nut->ft[i].flags != flag) break;
+			if (nut->ft[i].stream_flags != sflag) break;
+			if (nut->ft[i].stream_plus1 != stream) break;
+			if (nut->ft[i].mul != mul) break;
+			if (nut->ft[i].lsb != size + count) break;
+			if (nut->ft[i].pts_delta != timestamp) break;
 		}
+		if (count != mul - size) fields = 7;
+
+		put_v(tmp, flag);
+		put_v(tmp, fields);
+		if (fields > 0) put_v(tmp, sflag);
+		if (fields > 1) put_s(tmp, timestamp);
+		if (fields > 2) put_v(tmp, mul);
+		if (fields > 3) put_v(tmp, stream);
+		if (fields > 4) put_v(tmp, size);
+		if (fields > 5) put_v(tmp, 0); // reserved
+		if (fields > 6) put_v(tmp, count);
 	}
 
-	assert(nut->mopts.fti[n].tmp_flag == -1);
 	put_header(nut->o, tmp, MAIN_STARTCODE, 0);
 }
 
@@ -493,9 +498,40 @@ nut_context_t * nut_muxer_init(const nut_muxer_opts_t * mopts, const nut_stream_
 	nut->max_distance = mopts->max_distance;
 	nut->mopts = *mopts;
 
-	for (i = 0; mopts->fti[i].tmp_flag != -1; i++);
-	nut->mopts.fti = malloc(++i * sizeof(frame_table_input_t));
-	memcpy(nut->mopts.fti, mopts->fti, i * sizeof(frame_table_input_t));
+	{
+	int j, n;
+	int flag, fields, sflag, timestamp = 0, mul = 1, stream = 0, size, count;
+
+	for(n=i=0; i < 256; n++) {
+		assert(mopts->fti[n].tmp_flag != -1);
+		flag   = mopts->fti[n].tmp_flag;
+		fields = mopts->fti[n].tmp_fields;
+		if (fields > 0) sflag     = mopts->fti[n].tmp_sflag;
+		else sflag = 0;
+		if (fields > 1) timestamp = mopts->fti[n].tmp_pts;
+		if (fields > 2) mul       = mopts->fti[n].tmp_mul;
+		if (fields > 3) stream    = mopts->fti[n].tmp_stream;
+		if (fields > 4) size      = mopts->fti[n].tmp_size;
+		else size = 0;
+		if (fields > 6) count     = mopts->fti[n].count;
+		else count = mul - size;
+
+		for(j = 0; j < count && i < 256; j++, i++) {
+			if (i == 'N') {
+				nut->ft[i].flags = INVALID_FLAG;
+				j--;
+				continue;
+			}
+			nut->ft[i].flags = flag;
+			nut->ft[i].stream_flags = sflag;
+			nut->ft[i].stream_plus1 = stream;
+			nut->ft[i].mul = mul;
+			nut->ft[i].lsb = size + j;
+			nut->ft[i].pts_delta = timestamp;
+		}
+	}
+	assert(mopts->fti[n].tmp_flag == -1);
+	}
 
 	nut->sync_overhead = 0;
 
@@ -610,7 +646,6 @@ void nut_muxer_uninit(nut_context_t * nut) {
 	free(nut->syncpoints.s);
 	free(nut->syncpoints.pts);
 	free(nut->syncpoints.eor);
-	free(nut->mopts.fti);
 
 	free_buffer(nut->tmp_buffer);
 	free_buffer(nut->o); // flushes file
