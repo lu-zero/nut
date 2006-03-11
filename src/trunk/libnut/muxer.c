@@ -107,150 +107,6 @@ static void put_vb(output_buffer_t * bc, int len, uint8_t * data) {
 	put_data(bc, len, data);
 }
 
-static void put_syncpoint(nut_context_t * nut, output_buffer_t * bc) {
-	int i;
-	uint64_t pts = 0;
-	int stream = 0;
-	int back_ptr = 0;
-	int keys[nut->stream_count];
-	syncpoint_list_t * s = &nut->syncpoints;
-
-	nut->last_syncpoint = bctello(nut->o);
-
-	for (i = 0; i < nut->stream_count; i++) {
-		if (nut->sc[i].last_dts > 0 && compare_ts(nut, nut->sc[i].last_dts, i, pts, stream) > 0) {
-			pts = nut->sc[i].last_dts;
-			stream = i;
-		}
-	}
-
-	if (s->alloc_len <= s->len) {
-		s->alloc_len += PREALLOC_SIZE;
-		s->s = realloc(s->s, s->alloc_len * sizeof(syncpoint_t));
-		s->pts = realloc(s->pts, s->alloc_len * nut->stream_count * sizeof(uint64_t));
-		s->eor = realloc(s->eor, s->alloc_len * nut->stream_count * sizeof(uint64_t));
-	}
-
-	for (i = 0; i < nut->stream_count; i++) {
-		s->pts[s->len * nut->stream_count + i] = nut->sc[i].last_key;
-		s->eor[s->len * nut->stream_count + i] = nut->sc[i].eor > 0 ? nut->sc[i].eor : 0;
-	}
-	s->s[s->len].pos = nut->last_syncpoint;
-	s->len++;
-
-	for (i = 0; i < nut->stream_count; i++) keys[i] = !!nut->sc[i].eor;
-	for (i = s->len; --i; ) {
-		int j;
-		int n = 1;
-		for (j = 0; j < nut->stream_count; j++) {
-			if (keys[j]) continue;
-			if (!s->pts[i * nut->stream_count + j]) continue;
-			if (compare_ts(nut, s->pts[i * nut->stream_count + j] - 1, j, pts, stream) <= 0) keys[j] = 1;
-		}
-		for (j = 0; j < nut->stream_count; j++) n &= keys[j];
-		if (n) { i--; break; }
-	}
-	back_ptr = (nut->last_syncpoint - s->s[i].pos) / 8;
-
-	for (i = 0; i < nut->stream_count; i++) {
-		nut->sc[i].last_pts = convert_ts(nut, pts, stream, i);
-		nut->sc[i].last_key = 0;
-		if (nut->sc[i].eor) nut->sc[i].eor = -1; // so we know to ignore this stream in future syncpoints
-	}
-
-	put_bytes(bc, 8, SYNCPOINT_STARTCODE);
-	put_v(bc, pts * nut->stream_count + stream);
-	put_v(bc, back_ptr);
-
-	nut->sync_overhead += bctello(bc) + 4/*checksum*/;
-}
-
-static int frame_header(nut_context_t * nut, const nut_packet_t * fd, int * rftnum) {
-	int i, ftnum = -1, size = 0, coded_pts, pts_delta;
-	stream_context_t * sc = &nut->sc[fd->stream];
-	pts_delta = fd->pts - sc->last_pts;
-	// ### check lsb pts
-	if (MAX(pts_delta, -pts_delta) < (1 << (sc->msb_pts_shift - 1)) - 1)
-		coded_pts = fd->pts & ((1 << sc->msb_pts_shift) - 1);
-	else
-		coded_pts = fd->pts + (1 << sc->msb_pts_shift);
-	for (i = 0; i < 256; i++) {
-		int len = 1;
-		if (nut->ft[i].flags & INVALID_FLAG) continue;
-		if (nut->ft[i].stream_plus1 && nut->ft[i].stream_plus1 - 1 != fd->stream) continue;
-		if (nut->ft[i].pts_delta && nut->ft[i].pts_delta != pts_delta) continue;
-		if (nut->ft[i].flags & MSB_CODED_FLAG) {
-			if ((fd->len - nut->ft[i].lsb) % nut->ft[i].mul) continue;
-		} else {
-			if (nut->ft[i].lsb != fd->len) continue;
-		}
-		if (!(nut->ft[i].flags & STREAM_CODED_FLAG) && (fd->flags & 3) != nut->ft[i].stream_flags) continue;
-		len += nut->ft[i].stream_plus1 ? 0 : v_len(fd->stream);
-		len += nut->ft[i].pts_delta ? 0 : v_len(coded_pts);
-		len += nut->ft[i].flags & MSB_CODED_FLAG ? v_len((fd->len - nut->ft[i].lsb) / nut->ft[i].mul) : 0;
-		len += nut->ft[i].flags & STREAM_CODED_FLAG ? v_len((fd->flags & 3) ^ nut->ft[i].stream_flags) : 0;
-		if (!size || len < size) { ftnum = i; size = len; }
-	}
-	assert(ftnum != -1);
-	if (rftnum) *rftnum = ftnum;
-	return size;
-}
-
-static int put_frame_header(nut_context_t * nut, output_buffer_t * bc, const nut_packet_t * fd) {
-	stream_context_t * sc = &nut->sc[fd->stream];
-	int ftnum = -1, coded_pts, pts_delta = fd->pts - sc->last_pts;
-	int size;
-
-	if (ABS(pts_delta) < (1 << (sc->msb_pts_shift - 1)) - 1)
-		coded_pts = fd->pts & ((1 << sc->msb_pts_shift) - 1);
-	else
-		coded_pts = fd->pts + (1 << sc->msb_pts_shift);
-
-	size = frame_header(nut, fd, &ftnum);
-
-	put_bytes(bc, 1, ftnum); // frame_code
-
-	if (!nut->ft[ftnum].stream_plus1) put_v(bc, fd->stream);
-	if (!nut->ft[ftnum].pts_delta)    put_v(bc, coded_pts);
-	if (nut->ft[ftnum].flags & MSB_CODED_FLAG)
-		put_v(bc, (fd->len - nut->ft[ftnum].lsb) / nut->ft[ftnum].mul);
-	if (nut->ft[ftnum].flags & STREAM_CODED_FLAG)
-		put_v(bc, (fd->flags & 3) ^ nut->ft[ftnum].stream_flags);
-
-	return size;
-}
-
-static void put_frame(nut_context_t * nut, const nut_packet_t * fd, const uint8_t * data, int write_syncpoint) {
-	output_buffer_t * tmp = clear_buffer(nut->tmp_buffer);
-	stream_context_t * sc = &nut->sc[fd->stream];
-	int i;
-
-	if (write_syncpoint) put_syncpoint(nut, tmp);
-
-	sc->overhead += put_frame_header(nut, tmp, fd);
-
-	put_data(nut->o, tmp->buf_ptr - tmp->buf, tmp->buf);
-
-	if (write_syncpoint) put_bytes(nut->o, 4, crc32(tmp->buf + 8, tmp->buf_ptr - tmp->buf - 8)); // not including startcode
-
-	sc->total_frames++;
-	sc->tot_size += fd->len;
-
-        for (i = 0; i < nut->stream_count; i++) {
-		if (nut->sc[i].last_dts == -1) continue;
-		if (compare_ts(nut, fd->pts, fd->stream, nut->sc[i].last_dts, i) < 0)
-			fprintf(stderr, "%lld %d (%f) %lld %d (%f) \n",
-				fd->pts, fd->stream, TO_DOUBLE(fd->stream, fd->pts),
-				nut->sc[i].last_dts, i, TO_DOUBLE(i, nut->sc[i].last_dts));
-		assert(compare_ts(nut, fd->pts, fd->stream, nut->sc[i].last_dts, i) >= 0);
-	}
-
-	put_data(nut->o, fd->len, data);
-	sc->last_pts = fd->pts;
-	sc->last_dts = get_dts(sc->sh.decode_delay, sc->pts_cache, fd->pts);
-	sc->sh.max_pts = MAX(sc->sh.max_pts, fd->pts);
-}
-
 static void put_header(output_buffer_t * bc, output_buffer_t * tmp, uint64_t startcode, int index_ptr) {
 	int forward_ptr;
 	assert(tmp->is_mem);
@@ -395,6 +251,64 @@ static void put_headers(nut_context_t * nut) {
 	for (i = 0; i < nut->info_count; i++) put_info(nut, &nut->info[i]);
 }
 
+static void put_syncpoint(nut_context_t * nut, output_buffer_t * bc) {
+	int i;
+	uint64_t pts = 0;
+	int stream = 0;
+	int back_ptr = 0;
+	int keys[nut->stream_count];
+	syncpoint_list_t * s = &nut->syncpoints;
+
+	nut->last_syncpoint = bctello(nut->o);
+
+	for (i = 0; i < nut->stream_count; i++) {
+		if (nut->sc[i].last_dts > 0 && compare_ts(nut, nut->sc[i].last_dts, i, pts, stream) > 0) {
+			pts = nut->sc[i].last_dts;
+			stream = i;
+		}
+	}
+
+	if (s->alloc_len <= s->len) {
+		s->alloc_len += PREALLOC_SIZE;
+		s->s = realloc(s->s, s->alloc_len * sizeof(syncpoint_t));
+		s->pts = realloc(s->pts, s->alloc_len * nut->stream_count * sizeof(uint64_t));
+		s->eor = realloc(s->eor, s->alloc_len * nut->stream_count * sizeof(uint64_t));
+	}
+
+	for (i = 0; i < nut->stream_count; i++) {
+		s->pts[s->len * nut->stream_count + i] = nut->sc[i].last_key;
+		s->eor[s->len * nut->stream_count + i] = nut->sc[i].eor > 0 ? nut->sc[i].eor : 0;
+	}
+	s->s[s->len].pos = nut->last_syncpoint;
+	s->len++;
+
+	for (i = 0; i < nut->stream_count; i++) keys[i] = !!nut->sc[i].eor;
+	for (i = s->len; --i; ) {
+		int j;
+		int n = 1;
+		for (j = 0; j < nut->stream_count; j++) {
+			if (keys[j]) continue;
+			if (!s->pts[i * nut->stream_count + j]) continue;
+			if (compare_ts(nut, s->pts[i * nut->stream_count + j] - 1, j, pts, stream) <= 0) keys[j] = 1;
+		}
+		for (j = 0; j < nut->stream_count; j++) n &= keys[j];
+		if (n) { i--; break; }
+	}
+	back_ptr = (nut->last_syncpoint - s->s[i].pos) / 8;
+
+	for (i = 0; i < nut->stream_count; i++) {
+		nut->sc[i].last_pts = convert_ts(nut, pts, stream, i);
+		nut->sc[i].last_key = 0;
+		if (nut->sc[i].eor) nut->sc[i].eor = -1; // so we know to ignore this stream in future syncpoints
+	}
+
+	put_bytes(bc, 8, SYNCPOINT_STARTCODE);
+	put_v(bc, pts * nut->stream_count + stream);
+	put_v(bc, back_ptr);
+
+	nut->sync_overhead += bctello(bc) + 4/*checksum*/;
+}
+
 static void put_index(nut_context_t * nut) {
 	output_buffer_t * tmp = clear_buffer(nut->tmp_buffer);
 	syncpoint_list_t * s = &nut->syncpoints;
@@ -462,6 +376,92 @@ static void put_index(nut_context_t * nut) {
 	put_header(nut->o, tmp, INDEX_STARTCODE, 1);
 }
 
+static int frame_header(nut_context_t * nut, const nut_packet_t * fd, int * rftnum) {
+	int i, ftnum = -1, size = 0, coded_pts, pts_delta;
+	stream_context_t * sc = &nut->sc[fd->stream];
+	pts_delta = fd->pts - sc->last_pts;
+	// ### check lsb pts
+	if (MAX(pts_delta, -pts_delta) < (1 << (sc->msb_pts_shift - 1)) - 1)
+		coded_pts = fd->pts & ((1 << sc->msb_pts_shift) - 1);
+	else
+		coded_pts = fd->pts + (1 << sc->msb_pts_shift);
+	for (i = 0; i < 256; i++) {
+		int len = 1;
+		if (nut->ft[i].flags & INVALID_FLAG) continue;
+		if (nut->ft[i].stream_plus1 && nut->ft[i].stream_plus1 - 1 != fd->stream) continue;
+		if (nut->ft[i].pts_delta && nut->ft[i].pts_delta != pts_delta) continue;
+		if (nut->ft[i].flags & MSB_CODED_FLAG) {
+			if ((fd->len - nut->ft[i].lsb) % nut->ft[i].mul) continue;
+		} else {
+			if (nut->ft[i].lsb != fd->len) continue;
+		}
+		if (!(nut->ft[i].flags & STREAM_CODED_FLAG) && (fd->flags & 3) != nut->ft[i].stream_flags) continue;
+		len += nut->ft[i].stream_plus1 ? 0 : v_len(fd->stream);
+		len += nut->ft[i].pts_delta ? 0 : v_len(coded_pts);
+		len += nut->ft[i].flags & MSB_CODED_FLAG ? v_len((fd->len - nut->ft[i].lsb) / nut->ft[i].mul) : 0;
+		len += nut->ft[i].flags & STREAM_CODED_FLAG ? v_len((fd->flags & 3) ^ nut->ft[i].stream_flags) : 0;
+		if (!size || len < size) { ftnum = i; size = len; }
+	}
+	assert(ftnum != -1);
+	if (rftnum) *rftnum = ftnum;
+	return size;
+}
+
+static int put_frame_header(nut_context_t * nut, output_buffer_t * bc, const nut_packet_t * fd) {
+	stream_context_t * sc = &nut->sc[fd->stream];
+	int ftnum = -1, coded_pts, pts_delta = fd->pts - sc->last_pts;
+	int size;
+
+	if (ABS(pts_delta) < (1 << (sc->msb_pts_shift - 1)) - 1)
+		coded_pts = fd->pts & ((1 << sc->msb_pts_shift) - 1);
+	else
+		coded_pts = fd->pts + (1 << sc->msb_pts_shift);
+
+	size = frame_header(nut, fd, &ftnum);
+
+	put_bytes(bc, 1, ftnum); // frame_code
+
+	if (!nut->ft[ftnum].stream_plus1) put_v(bc, fd->stream);
+	if (!nut->ft[ftnum].pts_delta)    put_v(bc, coded_pts);
+	if (nut->ft[ftnum].flags & MSB_CODED_FLAG)
+		put_v(bc, (fd->len - nut->ft[ftnum].lsb) / nut->ft[ftnum].mul);
+	if (nut->ft[ftnum].flags & STREAM_CODED_FLAG)
+		put_v(bc, (fd->flags & 3) ^ nut->ft[ftnum].stream_flags);
+
+	return size;
+}
+
+static void put_frame(nut_context_t * nut, const nut_packet_t * fd, const uint8_t * data, int write_syncpoint) {
+	output_buffer_t * tmp = clear_buffer(nut->tmp_buffer);
+	stream_context_t * sc = &nut->sc[fd->stream];
+	int i;
+
+	if (write_syncpoint) put_syncpoint(nut, tmp);
+
+	sc->overhead += put_frame_header(nut, tmp, fd);
+
+	put_data(nut->o, tmp->buf_ptr - tmp->buf, tmp->buf);
+
+	if (write_syncpoint) put_bytes(nut->o, 4, crc32(tmp->buf + 8, tmp->buf_ptr - tmp->buf - 8)); // not including startcode
+
+	sc->total_frames++;
+	sc->tot_size += fd->len;
+
+        for (i = 0; i < nut->stream_count; i++) {
+		if (nut->sc[i].last_dts == -1) continue;
+		if (compare_ts(nut, fd->pts, fd->stream, nut->sc[i].last_dts, i) < 0)
+			fprintf(stderr, "%lld %d (%f) %lld %d (%f) \n",
+				fd->pts, fd->stream, TO_DOUBLE(fd->stream, fd->pts),
+				nut->sc[i].last_dts, i, TO_DOUBLE(i, nut->sc[i].last_dts));
+		assert(compare_ts(nut, fd->pts, fd->stream, nut->sc[i].last_dts, i) >= 0);
+	}
+
+	put_data(nut->o, fd->len, data);
+	sc->last_pts = fd->pts;
+	sc->last_dts = get_dts(sc->sh.decode_delay, sc->pts_cache, fd->pts);
+	sc->sh.max_pts = MAX(sc->sh.max_pts, fd->pts);
+}
+
 void nut_write_frame(nut_context_t * nut, const nut_packet_t * fd, const uint8_t * buf) {
 	stream_context_t * sc = &nut->sc[fd->stream];
 	int write_syncpoint = 0;
@@ -498,6 +498,8 @@ nut_context_t * nut_muxer_init(const nut_muxer_opts_t * mopts, const nut_stream_
 	nut->tmp_buffer = new_mem_buffer(); // general purpose buffer
 	nut->max_distance = mopts->max_distance;
 	nut->mopts = *mopts;
+
+	if (nut->max_distance > 65536) nut->max_distance = 65536;
 
 	{
 	int j, n;
