@@ -77,8 +77,7 @@ static uint8_t * get_buf(input_buffer_t * bc, off_t start) {
 	return bc->buf + start;
 }
 
-static input_buffer_t * new_mem_buffer() {
-	input_buffer_t * bc = malloc(sizeof(input_buffer_t));
+static input_buffer_t * new_mem_buffer(input_buffer_t * bc) {
 	bc->read_len = 0;
 	bc->write_len = 0;
 	bc->is_mem = 1;
@@ -89,7 +88,7 @@ static input_buffer_t * new_mem_buffer() {
 }
 
 static input_buffer_t * new_input_buffer(nut_input_stream_t isc) {
-	input_buffer_t * bc = new_mem_buffer();
+	input_buffer_t * bc = new_mem_buffer(malloc(sizeof(input_buffer_t)));
 	bc->is_mem = 0;
 	bc->isc = isc;
 	bc->file_pos = isc.file_pos;
@@ -102,6 +101,7 @@ static input_buffer_t * new_input_buffer(nut_input_stream_t isc) {
 }
 
 static void free_buffer(input_buffer_t * bc) {
+	assert(!bc->is_mem);
 	if (!bc) return;
 	free(bc->buf);
 	free(bc);
@@ -210,19 +210,15 @@ static int get_header(input_buffer_t * in, input_buffer_t * out) {
 	if (out) {
 		assert(out->is_mem);
 		assert(out->buf == out->buf_ptr);
-		if (out->write_len < forward_ptr - 4) {
-			out->write_len = forward_ptr - 4;
-			out->buf_ptr = out->buf = realloc(out->buf, out->write_len);
-		}
-		memcpy(out->buf, in->buf_ptr - forward_ptr, forward_ptr - 4);
-		out->read_len = forward_ptr - 4; // not including checksum
+		out->buf_ptr = out->buf = in->buf_ptr - forward_ptr;
+		out->write_len = out->read_len = forward_ptr - 4; // not including checksum
 	}
 err_out:
 	return err;
 }
 
 static int get_main_header(nut_context_t * nut) {
-	input_buffer_t * tmp = new_mem_buffer();
+	input_buffer_t itmp, * tmp = new_mem_buffer(&itmp);
 	int i, j, err = 0;
 	int flag, fields, timestamp = 0, mul = 1, stream = 0, sflag, size, count, reserved;
 
@@ -270,12 +266,11 @@ static int get_main_header(nut_context_t * nut) {
 		}
 	}
 err_out:
-	free_buffer(tmp);
 	return err;
 }
 
 static int get_stream_header(nut_context_t * nut, int id) {
-	input_buffer_t * tmp = new_mem_buffer();
+	input_buffer_t itmp, * tmp = new_mem_buffer(&itmp);
 	stream_context_t * sc = &nut->sc[id];
 	int i, err = 0;
 	uint64_t a;
@@ -311,7 +306,6 @@ static int get_stream_header(nut_context_t * nut, int id) {
 			break;
 	}
 err_out:
-	free_buffer(tmp);
 	return err;
 }
 
@@ -372,11 +366,14 @@ static int get_syncpoint(nut_context_t * nut) {
 	int err = 0;
 	syncpoint_t s;
 	int after_seek = nut->last_syncpoint ? 0 : 1;
+	input_buffer_t itmp, * tmp = new_mem_buffer(&itmp);
 
 	nut->last_syncpoint = s.pos = bctello(nut->i) - 8;
 
-	GET_V(nut->i, s.pts);
-	GET_V(nut->i, s.back_ptr);
+	CHECK(get_header(nut->i, tmp));
+
+	GET_V(tmp, s.pts);
+	GET_V(tmp, s.back_ptr);
 	s.back_ptr = (s.back_ptr * 8 + 7)<<1;
 
 	set_global_pts(nut, s.pts);
@@ -404,7 +401,7 @@ err_out:
 }
 
 static int get_index(nut_context_t * nut) {
-	input_buffer_t * tmp = new_mem_buffer();
+	input_buffer_t itmp, * tmp = new_mem_buffer(&itmp);
 	int err = 0;
 	syncpoint_list_t * sl = &nut->syncpoints;
 	uint64_t x;
@@ -473,7 +470,6 @@ static int get_index(nut_context_t * nut) {
 	fprintf(stderr, "NUT index read successfully, %d syncpoints\n", sl->len);
 
 err_out:
-	free_buffer(tmp);
 	return err;
 }
 
@@ -496,37 +492,13 @@ static int get_packet(nut_context_t * nut, nut_packet_t * pd, int * saw_syncpoin
 	if (tmp == 'N') {
 		CHECK(get_bytes(nut->i, 7, &tmp));
 		tmp |= (uint64_t)'N' << 56;
-		if (tmp == MAIN_STARTCODE) {
-			int i;
-			GET_V(nut->i, pd->len);
-			CHECK(skip_buffer(nut->i, pd->len));
-			for (i = 0; i < nut->stream_count; i++) {
-				CHECK(get_bytes(nut->i, 8, &tmp));
-				ERROR(tmp != STREAM_STARTCODE, -ERR_NOSTREAM_STARTCODE);
-				GET_V(nut->i, pd->len);
-				CHECK(skip_buffer(nut->i, pd->len));
-			}
-			CHECK(get_bytes(nut->i, 8, &tmp));
-			while (tmp == INFO_STARTCODE) {
-				GET_V(nut->i, pd->len);
-				CHECK(skip_buffer(nut->i, pd->len));
-				CHECK(get_bytes(nut->i, 8, &tmp));
-			}
-			if (tmp == INDEX_STARTCODE) {
-				GET_V(nut->i, pd->len);
-				CHECK(skip_buffer(nut->i, pd->len));
-				CHECK(get_bytes(nut->i, 8, &tmp));
-			}
-			ERROR(tmp != SYNCPOINT_STARTCODE && tmp != MAIN_STARTCODE, -ERR_NO_HEADERS);
-			nut->i->buf_ptr -= 8;
-			return get_packet(nut, pd, saw_syncpoint);
-		} else if (tmp == SYNCPOINT_STARTCODE) {
+		if (tmp == SYNCPOINT_STARTCODE) {
 			after_sync = bctello(nut->i);
 			CHECK(get_syncpoint(nut));
 			CHECK(get_bytes(nut->i, 1, &tmp));
 		} else {
-			nut->i->buf_ptr -= 7;
-			tmp = 'N';
+			CHECK(get_header(nut->i, NULL));
+			return get_packet(nut, pd, saw_syncpoint);
 		}
 	}
 
@@ -560,7 +532,7 @@ static int get_packet(nut_context_t * nut, nut_packet_t * pd, int * saw_syncpoin
 
 	for (i = 0; i < nut->ft[tmp].reserved; i++) { int scrap; GET_V(nut->i, scrap); }
 
-	if (after_sync) {
+	if (0) {
 		uint64_t checksum;
 		off_t pos = bctello(nut->i);
 		CHECK(get_bytes(nut->i, 4, &checksum));
@@ -599,7 +571,7 @@ static int find_syncpoint(nut_context_t * nut, int backwards, syncpoint_t * res,
 	int read;
 	int err = 0;
 	uint64_t tmp;
-	uint8_t * ptr = NULL;
+	off_t ptr = 0;
 	assert(!backwards || !stop); // can't have both
 
 	if (backwards) seek_buf(nut->i, -nut->max_distance, SEEK_CUR);
@@ -614,32 +586,22 @@ retry:
 		tmp = (tmp << 8) | *(nut->i->buf_ptr++);
 		if (tmp != SYNCPOINT_STARTCODE) continue;
 		if (res) {
-			int i, scrap;
+			input_buffer_t itmp, * tmp = new_mem_buffer(&itmp);
 			res->pos = bctello(nut->i) - 8;
-			GET_V(nut->i, res->pts);
-			GET_V(nut->i, tmp);
-			res->back_ptr = (tmp * 8 + 7) << 1;
 
-			CHECK(get_bytes(nut->i, 1, &tmp));
-			if (!nut->ft[tmp].stream_plus1) GET_V(nut->i, scrap);
-			if (!nut->ft[tmp].pts_delta) GET_V(nut->i, scrap);
-			if (nut->ft[tmp].flags & MSB_CODED_FLAG) GET_V(nut->i, scrap);
-			if (nut->ft[tmp].flags & STREAM_CODED_FLAG) GET_V(nut->i, scrap);
-			for (i = 0; i < nut->ft[tmp].reserved; i++) GET_V(nut->i, scrap);
-			CHECK(get_bytes(nut->i, 4, &tmp));
+			if ((err = get_header(nut->i, tmp)) == 2) goto err_out;
+			if (err) { err = 0; continue; }
 
-			if (tmp != crc32(nut->i->buf_ptr - (bctello(nut->i) - res->pos - 8), bctello(nut->i) - 4 - res->pos - 8)) {
-				tmp = 0;
-				nut->i->buf_ptr -= bctello(nut->i) - res->pos - 8; // rewind to right after the startcode
-				continue;
-			}
+			GET_V(tmp, res->pts);
+			GET_V(tmp, res->back_ptr);
+			res->back_ptr = (res->back_ptr * 8 + 7) << 1;
 		}
 		if (!backwards) return 0;
-		else ptr = nut->i->buf_ptr;
+		else ptr = bctello(nut->i);
 	}
 
 	if (ptr) {
-		nut->i->buf_ptr = ptr;
+		nut->i->buf_ptr -= bctello(nut->i) - ptr;
 		return 0;
 	}
 

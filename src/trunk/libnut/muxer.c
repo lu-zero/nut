@@ -57,6 +57,7 @@ static void free_buffer(output_buffer_t * bc) {
 }
 
 static output_buffer_t * clear_buffer(output_buffer_t * bc) {
+	assert(bc->is_mem);
 	bc->buf_ptr = bc->buf;
 	return bc;
 }
@@ -258,7 +259,8 @@ static void put_headers(nut_context_t * nut) {
 	for (i = 0; i < nut->info_count; i++) put_info(nut, &nut->info[i]);
 }
 
-static void put_syncpoint(nut_context_t * nut, output_buffer_t * bc) {
+static void put_syncpoint(nut_context_t * nut) {
+	output_buffer_t * tmp = clear_buffer(nut->tmp_buffer);
 	int i;
 	uint64_t pts = 0;
 	int stream = 0;
@@ -309,11 +311,12 @@ static void put_syncpoint(nut_context_t * nut, output_buffer_t * bc) {
 		if (nut->sc[i].eor) nut->sc[i].eor = -1; // so we know to ignore this stream in future syncpoints
 	}
 
-	put_bytes(bc, 8, SYNCPOINT_STARTCODE);
-	put_v(bc, pts * nut->stream_count + stream);
-	put_v(bc, back_ptr);
+	put_v(tmp, pts * nut->stream_count + stream);
+	put_v(tmp, back_ptr);
 
-	nut->sync_overhead += bctello(bc) + 4/*checksum*/;
+	put_header(nut->o, tmp, nut->tmp_buffer2, SYNCPOINT_STARTCODE, 0);
+
+	nut->sync_overhead += bctello(tmp) + bctello(nut->tmp_buffer2);
 }
 
 static void put_index(nut_context_t * nut) {
@@ -414,42 +417,31 @@ static int frame_header(nut_context_t * nut, const nut_packet_t * fd, int * rftn
 	return size;
 }
 
-static int put_frame_header(nut_context_t * nut, output_buffer_t * bc, const nut_packet_t * fd) {
+static void put_frame(nut_context_t * nut, const nut_packet_t * fd, const uint8_t * data) {
+	output_buffer_t * tmp = clear_buffer(nut->tmp_buffer);
 	stream_context_t * sc = &nut->sc[fd->stream];
 	int ftnum = -1, coded_pts, pts_delta = fd->pts - sc->last_pts;
-	int size;
+	int i;
 
 	if (ABS(pts_delta) < (1 << (sc->msb_pts_shift - 1)) - 1)
 		coded_pts = fd->pts & ((1 << sc->msb_pts_shift) - 1);
 	else
 		coded_pts = fd->pts + (1 << sc->msb_pts_shift);
 
-	size = frame_header(nut, fd, &ftnum);
+	sc->overhead += frame_header(nut, fd, &ftnum);
 
-	put_bytes(bc, 1, ftnum); // frame_code
+	put_bytes(tmp, 1, ftnum); // frame_code
 
-	if (!nut->ft[ftnum].stream_plus1) put_v(bc, fd->stream);
-	if (!nut->ft[ftnum].pts_delta)    put_v(bc, coded_pts);
+	if (!nut->ft[ftnum].stream_plus1) put_v(tmp, fd->stream);
+	if (!nut->ft[ftnum].pts_delta)    put_v(tmp, coded_pts);
 	if (nut->ft[ftnum].flags & MSB_CODED_FLAG)
-		put_v(bc, (fd->len - nut->ft[ftnum].lsb) / nut->ft[ftnum].mul);
+		put_v(tmp, (fd->len - nut->ft[ftnum].lsb) / nut->ft[ftnum].mul);
 	if (nut->ft[ftnum].flags & STREAM_CODED_FLAG)
-		put_v(bc, (fd->flags & 3) ^ nut->ft[ftnum].stream_flags);
+		put_v(tmp, (fd->flags & 3) ^ nut->ft[ftnum].stream_flags);
 
-	return size;
-}
+	if (0) put_bytes(tmp, 4, crc32(tmp->buf + 8, tmp->buf_ptr - tmp->buf - 8)); // not including startcode
 
-static void put_frame(nut_context_t * nut, const nut_packet_t * fd, const uint8_t * data, int write_syncpoint) {
-	output_buffer_t * tmp = clear_buffer(nut->tmp_buffer);
-	stream_context_t * sc = &nut->sc[fd->stream];
-	int i;
-
-	if (write_syncpoint) put_syncpoint(nut, tmp);
-
-	sc->overhead += put_frame_header(nut, tmp, fd);
-
-	put_data(nut->o, tmp->buf_ptr - tmp->buf, tmp->buf);
-
-	if (write_syncpoint) put_bytes(nut->o, 4, crc32(tmp->buf + 8, tmp->buf_ptr - tmp->buf - 8)); // not including startcode
+	put_data(nut->o, bctello(tmp), tmp->buf);
 
 	sc->total_frames++;
 	sc->tot_size += fd->len;
@@ -471,7 +463,6 @@ static void put_frame(nut_context_t * nut, const nut_packet_t * fd, const uint8_
 
 void nut_write_frame(nut_context_t * nut, const nut_packet_t * fd, const uint8_t * buf) {
 	stream_context_t * sc = &nut->sc[fd->stream];
-	int write_syncpoint = 0;
 
 	if (bctello(nut->o) > (1 << 23)) { // main header repetition
 		int i = 23; // ### magic value for header repetition
@@ -487,9 +478,9 @@ void nut_write_frame(nut_context_t * nut, const nut_packet_t * fd, const uint8_t
 	if (ABS((int64_t)fd->pts - (int64_t)sc->last_pts) > sc->max_pts_distance)
 		fprintf(stderr, "%d - %d > %d   \n", (int)fd->pts, (int)sc->last_pts, sc->max_pts_distance);
 	if (nut->last_syncpoint < nut->last_headers || ABS((int64_t)fd->pts - (int64_t)sc->last_pts) > sc->max_pts_distance ||
-		bctello(nut->o) - nut->last_syncpoint + fd->len + frame_header(nut, fd, NULL) > nut->max_distance) write_syncpoint = 1;
+		bctello(nut->o) - nut->last_syncpoint + fd->len + frame_header(nut, fd, NULL) > nut->max_distance) put_syncpoint(nut);
 
-	put_frame(nut, fd, buf, write_syncpoint);
+	put_frame(nut, fd, buf);
 
 	if ((fd->flags & NUT_KEY_STREAM_FLAG) && !sc->last_key) sc->last_key = fd->pts + 1;
 	if (fd->flags & NUT_EOR_STREAM_FLAG) sc->eor = fd->pts + 1;
