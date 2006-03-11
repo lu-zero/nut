@@ -34,6 +34,10 @@ mplayer bla.nut
 auto detction should work fine.
 
 
+to copy index to begginning of file:
+./nutindex old.nut new.nut
+
+
 If you have weird endianess, You'll need to compile with 
 '-DWORDS_BIGENDIAN', just uncomment the appropriate file in config.mak .
 
