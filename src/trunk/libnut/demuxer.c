@@ -552,7 +552,7 @@ static int get_packet(nut_context_t * nut, nut_packet_t * pd, int * saw_syncpoin
 	}
 
 	// error checking - max distance
-	ERROR(!after_sync && bctello(nut->i) + pd->len - nut->last_syncpoint > nut->max_distance, -ERR_MAX_DISTANCE);
+	ERROR(!after_sync && bctello(nut->i) + pd->len - nut->last_syncpoint > nut->max_distance, -ERR_MAX_SYNCPOINT_DISTANCE);
 	ERROR(!checksum && pd->len > nut->max_distance, -ERR_MAX_DISTANCE);
 	// error checking - max pts distance
 	ERROR(!checksum && ABS((int64_t)pd->pts - (int64_t)nut->sc[pd->stream].last_pts) > nut->sc[pd->stream].max_pts_distance, -ERR_MAX_PTS_DISTANCE);
@@ -1273,6 +1273,7 @@ const char * nut_error(int error) {
 		case ERR_BAD_VERSION: return "Bad NUT Version.";
 		case ERR_NOT_FRAME_NOT_N: return "Invalid Framecode.";
 		case ERR_BAD_CHECKSUM: return "Bad Checksum.";
+		case ERR_MAX_SYNCPOINT_DISTANCE: return "max_distance syncpoint";
 		case ERR_MAX_DISTANCE: return "max_distance";
 		case ERR_NO_HEADERS: return "No headers found!";
 		case ERR_NOT_SEEKABLE: return "Cannot seek to that position.";
@@ -1281,6 +1282,7 @@ const char * nut_error(int error) {
 		case ERR_BAD_STREAM_ORDER: return "Stream headers are stored in wrong order.";
 		case ERR_NOSTREAM_STARTCODE: return "Expected stream startcode not found.";
 		case ERR_BAD_EOF: return "Invalid forward_ptr!";
+		case ERR_VLC_TOO_LONG: return "VLC too long";
 	}
 	return NULL;
 }
