@@ -708,7 +708,11 @@ int nut_read_headers(nut_context_t * nut, nut_stream_header_t * s []) {
 			uint64_t tmp;
 			int j;
 			CHECK(get_bytes(nut->i, 8, &tmp));
-			if (tmp != STREAM_STARTCODE) return -ERR_NOSTREAM_STARTCODE;
+			while (tmp != STREAM_STARTCODE) {
+				ERROR(tmp >> 56 != 'N', -ERR_NOSTREAM_STARTCODE);
+				CHECK(get_header(nut->i, NULL));
+				CHECK(get_bytes(nut->i, 8, &tmp));
+			}
 			CHECK(get_stream_header(nut, i));
 			if (!nut->sc[i].pts_cache) {
 				nut->sc[i].pts_cache = malloc(nut->sc[i].sh.decode_delay * sizeof(int64_t));
@@ -719,6 +723,11 @@ int nut_read_headers(nut_context_t * nut, nut_stream_header_t * s []) {
 		if (nut->dopts.read_index) {
 			uint64_t tmp;
 			CHECK(get_bytes(nut->i, 8, &tmp));
+			while (tmp >> 56 == 'N') {
+				if (tmp == INDEX_STARTCODE) break;
+				CHECK(get_header(nut->i, NULL));
+				CHECK(get_bytes(nut->i, 8, &tmp));
+			}
 			if (tmp == INDEX_STARTCODE) nut->seek_status = 2;
 			nut->i->buf_ptr -= 8;
 			flush_buf(nut->i);
