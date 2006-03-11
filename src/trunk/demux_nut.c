@@ -52,6 +52,7 @@ static int nut_check_file(demuxer_t * demuxer) {
 
 	if (memcmp(buf, ID_STRING, ID_LENGTH)) return 0;
 
+	stream_seek(demuxer->stream, 0);
 	return DEMUXER_TYPE_NUT;
 }
 
@@ -63,28 +64,17 @@ static demuxer_t * demux_open_nut(demuxer_t * demuxer) {
 			.seek = mp_seek,
 			.read = mp_read,
 			.eof = NULL,
-			.file_pos = ID_LENGTH,
+			.file_pos = stream_tell(demuxer->stream),
 		},
 		.read_index = index_mode
 	};
 	nut_priv_t * priv = demuxer->priv;
 	nut_context_t * nut = priv->nut = nut_demuxer_init(&dopts);
-	nut_packet_t pd;
 	nut_stream_header_t * s;
 	int ret;
 	int i;
 
-	while ((ret = nut_read_next_packet(nut, &pd))) {
-		if (ret < 0) mp_msg(MSGT_HEADER, MSGL_ERR, "NUT error: %s\n", nut_error(-ret));
-		if (ret == 1) break;
-	}
-	if (ret || pd.type != e_headers)  {
-		nut_demuxer_uninit(nut);
-		free(priv);
-		return NULL;
-	}
-
-	if ((ret = nut_read_headers(nut, &pd,  &s))) {
+	if ((ret = nut_read_headers(nut, &s))) {
 		if (ret < 0) mp_msg(MSGT_HEADER, MSGL_ERR, "NUT error: %s\n", nut_error(-ret));
 		nut_demuxer_uninit(nut);
 		free(priv);

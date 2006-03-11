@@ -161,11 +161,10 @@ len will be non-zero in the case of EAGAIN or EOF
 len is the amount of bytes that are LEFT, not the ones read. */
 int nut_skip_packet(nut_context_t * nut, int * len);
 
-/** Read headers, must be called ONLY after read_next_packet
-gave e_headers.
+/** Read headers, must be called at begginning
 @brief "s" is malloced and needs to be free'd.
 */
-int nut_read_headers(nut_context_t * nut, nut_packet_t * pd, nut_stream_header_t * s []);
+int nut_read_headers(nut_context_t * nut, nut_stream_header_t * s []);
 
 /** Just reads the frame DATA. all it's header has already been
 read by nut_read_next_packet. buf must be allocated and big enough.

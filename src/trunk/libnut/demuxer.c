@@ -71,6 +71,12 @@ static int skip_buffer(input_buffer_t * bc, int len) {
 	return 0;
 }
 
+static uint8_t * get_buf(input_buffer_t * bc, off_t start) {
+	start -= bc->file_pos;
+	assert((unsigned)start < bc->read_len);
+	return bc->buf + start;
+}
+
 static input_buffer_t * new_mem_buffer() {
 	input_buffer_t * bc = malloc(sizeof(input_buffer_t));
 	bc->read_len = 0;
@@ -187,33 +193,40 @@ static int get_vb(input_buffer_t * in, int * len, uint8_t ** buf) {
 	return 0;
 }
 
-static int get_header(input_buffer_t * in, input_buffer_t * out, int len) {
-	uint64_t code;
+static int get_header(input_buffer_t * in, input_buffer_t * out) {
+	off_t start = bctello(in) - 8; // startcode
+	int forward_ptr;
+	int err = 0;
 
-	assert(out->is_mem);
-	assert(out->buf == out->buf_ptr);
-
-	len -= 4; // checksum
-
-	if (out->write_len < len) {
-		out->write_len = len;
-		out->buf_ptr = out->buf = realloc(out->buf, out->write_len);
+	GET_V(in, forward_ptr);
+	if (forward_ptr > 4096) {
+		skip_buffer(in, 4); // header_checksum
+		ERROR(crc32(get_buf(in, start), bctello(in) - start), -ERR_BAD_CHECKSUM);
 	}
-	if (get_data(in, len, out->buf) != len) return buf_eof(in);
-	out->read_len = len;
 
-	if (get_bytes(in, 4, &code)) return buf_eof(in); // checksum
-	if (code != crc32(out->buf, len)) return -ERR_BAD_CHECKSUM;
+	CHECK(skip_buffer(in, forward_ptr));
+	ERROR(crc32(in->buf_ptr - forward_ptr, forward_ptr), -ERR_BAD_CHECKSUM);
 
-	return 0;
+	if (out) {
+		assert(out->is_mem);
+		assert(out->buf == out->buf_ptr);
+		if (out->write_len < forward_ptr - 4) {
+			out->write_len = forward_ptr - 4;
+			out->buf_ptr = out->buf = realloc(out->buf, out->write_len);
+		}
+		memcpy(out->buf, in->buf_ptr - forward_ptr, forward_ptr - 4);
+		out->read_len = forward_ptr - 4; // not including checksum
+	}
+err_out:
+	return err;
 }
 
-static int get_main_header(nut_context_t *nut, int len) {
+static int get_main_header(nut_context_t * nut) {
 	input_buffer_t * tmp = new_mem_buffer();
 	int i, j, err = 0;
 	int flag, fields, timestamp = 0, mul = 1, stream = 0, sflag, size, count, reserved;
 
-	CHECK(get_header(nut->i, tmp, len));
+	CHECK(get_header(nut->i, tmp));
 
 	GET_V(tmp, i);
 	ERROR(i != NUT_VERSION, -ERR_BAD_VERSION);
@@ -264,11 +277,10 @@ err_out:
 static int get_stream_header(nut_context_t * nut, int id) {
 	input_buffer_t * tmp = new_mem_buffer();
 	stream_context_t * sc = &nut->sc[id];
-	int i, err = 0, len;
+	int i, err = 0;
 	uint64_t a;
 
-	GET_V(nut->i, len);
-	CHECK(get_header(nut->i, tmp, len));
+	CHECK(get_header(nut->i, tmp));
 
 	GET_V(tmp, i);
 	ERROR(i != id, -ERR_BAD_STREAM_ORDER);
@@ -401,8 +413,7 @@ static int get_index(nut_context_t * nut) {
 	CHECK(get_bytes(nut->i, 8, &x));
 	ERROR(x != INDEX_STARTCODE, -ERR_GENERAL_ERROR);
 
-	GET_V(nut->i, x);
-	CHECK(get_header(nut->i, tmp, x));
+	CHECK(get_header(nut->i, tmp));
 
 	GET_V(tmp, x);
 	for (i = 0; i < nut->stream_count; i++) {
@@ -655,24 +666,7 @@ err_out:
 
 int nut_read_next_packet(nut_context_t * nut, nut_packet_t * pd) {
 	int err = 0;
-	uint64_t tmp;
-	if (!nut->last_headers) {
-		const int len = strlen(ID_STRING) + 1;
-		char str[len];
-		ERROR(get_data(nut->i, len, str) != len, buf_eof(nut->i));
-		if (memcmp(str, ID_STRING, len)) nut->i->buf_ptr = nut->i->buf; // rewind
-		CHECK(get_bytes(nut->i, 8, &tmp));
-		do {
-			if (tmp == MAIN_STARTCODE) {
-				GET_V(nut->i, pd->len);
-				pd->type = e_headers;
-				return 0;
-			}
-			ERROR(ready_read_buf(nut->i, 1) < 1, buf_eof(nut->i));
-			tmp = (tmp << 8) | *(nut->i->buf_ptr++);
-		} while (bctello(nut->i) < 4096);
-	}
-	ERROR(!nut->last_headers, -ERR_NO_HEADERS);
+	ERROR(!nut->last_headers, -ERR_NO_HEADERS); // paranoia, old API
 
 	if (nut->seek_status) { // in error mode!
 		syncpoint_t s;
@@ -702,11 +696,32 @@ err_out:
 	return err;
 }
 
-int nut_read_headers(nut_context_t * nut, nut_packet_t * pd, nut_stream_header_t * s []) {
+int nut_read_headers(nut_context_t * nut, nut_stream_header_t * s []) {
 	int i, err = 0;
 	*s = NULL;
-	if (!nut->last_headers) { // we already have headers, we were called just for index
-		CHECK(get_main_header(nut, pd->len));
+	if (!nut->seek_status) { // we already have headers, we were called just for index
+		if (!nut->last_headers) {
+			off_t start = bctello(nut->i);
+			uint64_t tmp;
+			if (start < strlen(ID_STRING) + 1) {
+				int n = strlen(ID_STRING) + 1 - start;
+				ERROR(ready_read_buf(nut->i, n) < n, buf_eof(nut->i));
+				if (memcmp(get_buf(nut->i, start), ID_STRING + start, n)) nut->i->buf_ptr = nut->i->buf; // rewind
+				fprintf(stderr, "NUT file_id checks out\n");
+			}
+
+			CHECK(get_bytes(nut->i, 7, &tmp));
+			ERROR(ready_read_buf(nut->i, 4096) < 4096, buf_eof(nut->i));
+			while (bctello(nut->i) < 4096) {
+				tmp = (tmp << 8) | *(nut->i->buf_ptr++);
+				if (tmp == MAIN_STARTCODE) break;
+			}
+			ERROR(tmp != MAIN_STARTCODE, -ERR_NO_HEADERS);
+			nut->last_headers = bctello(nut->i);
+			flush_buf(nut->i);
+		}
+
+		CHECK(get_main_header(nut));
 
 		if (!nut->sc) {
 			nut->sc = malloc(sizeof(stream_context_t) * nut->stream_count);
@@ -741,7 +756,6 @@ int nut_read_headers(nut_context_t * nut, nut_packet_t * pd, nut_stream_header_t
 			nut->i->buf_ptr -= 8;
 			flush_buf(nut->i);
 		}
-		nut->last_headers = 1;
 	}
 
 	if (nut->dopts.read_index && nut->i->isc.seek) {

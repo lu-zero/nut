@@ -107,21 +107,28 @@ static void put_vb(output_buffer_t * bc, int len, uint8_t * data) {
 	put_data(bc, len, data);
 }
 
-static void put_header(output_buffer_t * bc, output_buffer_t * tmp, uint64_t startcode, int index_ptr) {
+static void put_header(output_buffer_t * bc, output_buffer_t * in, output_buffer_t * tmp, uint64_t startcode, int index_ptr) {
 	int forward_ptr;
+	assert(in->is_mem);
 	assert(tmp->is_mem);
+	clear_buffer(tmp);
 
-	forward_ptr = tmp->buf_ptr - tmp->buf;
+	forward_ptr = bctello(in);
 	forward_ptr += 4; // checksum
 	if (index_ptr) forward_ptr += 8;
-	fprintf(stderr, "header/index size: %d\n", forward_ptr + 8 + v_len(forward_ptr));
 
-	if (index_ptr) put_bytes(tmp, 8, 8 + v_len(forward_ptr) + forward_ptr);
+	// packet_header
+	put_bytes(tmp, 8, startcode);
+	put_v(tmp, forward_ptr);
+	if (forward_ptr > 4096) put_bytes(tmp, 4, crc32(tmp->buf, bctello(tmp)));
+	put_data(bc, bctello(tmp), tmp->buf);
 
-	put_bytes(bc, 8, startcode);
-	put_v(bc, forward_ptr);
-	put_data(bc, tmp->buf_ptr - tmp->buf, tmp->buf);
-	put_bytes(bc, 4, crc32(tmp->buf, tmp->buf_ptr - tmp->buf));
+	// packet_footer
+	if (index_ptr) put_bytes(in, 8, bctello(tmp) + bctello(in) + 8 + 4);
+	put_bytes(in, 4, crc32(in->buf, bctello(in)));
+
+	put_data(bc, bctello(in), in->buf);
+	if (startcode != SYNCPOINT_STARTCODE) fprintf(stderr, "header/index size: %d\n", (int)(bctello(tmp) + bctello(in)));
 }
 
 static void put_main_header(nut_context_t * nut) {
@@ -168,7 +175,7 @@ static void put_main_header(nut_context_t * nut) {
 		if (fields > 6) put_v(tmp, count);
 	}
 
-	put_header(nut->o, tmp, MAIN_STARTCODE, 0);
+	put_header(nut->o, tmp, nut->tmp_buffer2, MAIN_STARTCODE, 0);
 }
 
 static void put_stream_header(nut_context_t * nut, int id) {
@@ -201,7 +208,7 @@ static void put_stream_header(nut_context_t * nut, int id) {
 			break;
 	}
 
-	put_header(nut->o, tmp, STREAM_STARTCODE, 0);
+	put_header(nut->o, tmp, nut->tmp_buffer2, STREAM_STARTCODE, 0);
 }
 
 static void put_info(nut_context_t * nut, nut_info_packet_t * info) {
@@ -239,7 +246,7 @@ static void put_info(nut_context_t * nut, nut_info_packet_t * info) {
 		}
 	}
 
-	put_header(nut->o, tmp, INFO_STARTCODE, 0);
+	put_header(nut->o, tmp, nut->tmp_buffer2, INFO_STARTCODE, 0);
 }
 
 static void put_headers(nut_context_t * nut) {
@@ -373,7 +380,7 @@ static void put_index(nut_context_t * nut) {
 		}
 	}
 
-	put_header(nut->o, tmp, INDEX_STARTCODE, 1);
+	put_header(nut->o, tmp, nut->tmp_buffer2, INDEX_STARTCODE, 1);
 }
 
 static int frame_header(nut_context_t * nut, const nut_packet_t * fd, int * rftnum) {
@@ -496,6 +503,7 @@ nut_context_t * nut_muxer_init(const nut_muxer_opts_t * mopts, const nut_stream_
 
 	nut->o = new_output_buffer(mopts->output);
 	nut->tmp_buffer = new_mem_buffer(); // general purpose buffer
+	nut->tmp_buffer2 = new_mem_buffer(); //  for packet_headers
 	nut->max_distance = mopts->max_distance;
 	nut->mopts = *mopts;
 
@@ -651,6 +659,7 @@ void nut_muxer_uninit(nut_context_t * nut) {
 	free(nut->syncpoints.eor);
 
 	free_buffer(nut->tmp_buffer);
+	free_buffer(nut->tmp_buffer2);
 	free_buffer(nut->o); // flushes file
 	fprintf(stderr, "TOTAL: %d bytes data, %d bytes overhead, %.2lf%% overhead\n", total,
 		(int)ftell(nut->mopts.output.priv) - total, (double)(ftell(nut->mopts.output.priv) - total) / total*100);

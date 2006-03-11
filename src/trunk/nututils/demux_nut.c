@@ -23,12 +23,7 @@ static void uninit(void * priv) {
 
 static int read_headers(void * priv, nut_stream_header_t ** nut_streams) {
 	nutmerge_nut_t * nut = priv;
-	nut_packet_t tmp;
-	int err;
-	if ((err = nut_read_next_packet(nut->nut, &tmp))) goto err_out;
-	if (tmp.type != e_headers) return 2;
-	err = nut_read_headers(nut->nut, &tmp, nut_streams);
-err_out:
+	int err = nut_read_headers(nut->nut, nut_streams);
 	return err == 1 ? -1 : ABS(err);
 }
 

@@ -118,6 +118,7 @@ struct nut_context_s {
 	input_buffer_t * i;
 	output_buffer_t * o;
 	output_buffer_t * tmp_buffer;
+	output_buffer_t * tmp_buffer2;
 
 	int stream_count;
 	stream_context_t * sc;
