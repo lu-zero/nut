@@ -205,7 +205,7 @@ static int demux_nut_fill_buffer(demuxer_t * demuxer, demux_stream_t * dsds) {
 	dp->pts = pts;
 
 	dp->pos = demuxer->filepos;
-	dp->flags= (pd.flags & NUT_KEY_STREAM_FLAG) ? 0x10 : 0;
+	dp->flags= (pd.flags & NUT_FLAG_KEY) ? 0x10 : 0;
 
 	while ((ret = nut_read_frame(nut, &pd.len, dp->buffer))) {
 		if (ret < 0) {
@@ -218,7 +218,7 @@ static int demux_nut_fill_buffer(demuxer_t * demuxer, demux_stream_t * dsds) {
 	return 1;
 }
 
-static void demux_seek_nut(demuxer_t * demuxer, float time_pos, int flags) {
+static void demux_seek_nut(demuxer_t * demuxer, float time_pos, float audio_delay, int flags) {
 	nut_context_t * nut = ((nut_priv_t*)demuxer->priv)->nut;
 	nut_priv_t * priv = demuxer->priv;
 	sh_audio_t * sh_audio = demuxer->audio->sh;
