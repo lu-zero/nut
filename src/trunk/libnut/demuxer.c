@@ -236,7 +236,7 @@ static int get_main_header(nut_context_t * nut) {
 	ERROR(i != NUT_VERSION, -ERR_BAD_VERSION);
 	GET_V(tmp, nut->stream_count);
 	GET_V(tmp, nut->max_distance);
-	if (nut->max_distance > 131072) nut->max_distance = 131072;
+	if (nut->max_distance > 65536) nut->max_distance = 65536;
 
 	for(i = 0; i < 256; ) {
 		int scrap;
@@ -553,7 +553,7 @@ static int get_packet(nut_context_t * nut, nut_packet_t * pd, int * saw_syncpoin
 
 	// error checking - max distance
 	ERROR(!after_sync && bctello(nut->i) + pd->len - nut->last_syncpoint > nut->max_distance, -ERR_MAX_SYNCPOINT_DISTANCE);
-	ERROR(!checksum && pd->len > nut->max_distance, -ERR_MAX_DISTANCE);
+	ERROR(!checksum && pd->len > 2*nut->max_distance, -ERR_MAX_DISTANCE);
 	// error checking - max pts distance
 	ERROR(!checksum && ABS((int64_t)pd->pts - (int64_t)nut->sc[pd->stream].last_pts) > nut->sc[pd->stream].max_pts_distance, -ERR_MAX_PTS_DISTANCE);
 	// error checking - out of order dts

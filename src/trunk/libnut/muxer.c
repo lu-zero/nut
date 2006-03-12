@@ -390,7 +390,7 @@ static int frame_header(nut_context_t * nut, output_buffer_t * tmp, const nut_pa
 	if (ABS(pts_delta) < (msb_pts/2) - 1) coded_pts = fd->pts & (msb_pts - 1);
 	else coded_pts = fd->pts + msb_pts;
 
-	if (fd->len > nut->max_distance) checksum = 1;
+	if (fd->len > 2*nut->max_distance) checksum = 1;
 	if (ABS(pts_delta) > sc->max_pts_distance) {
 		fprintf(stderr, "%d > %d || %d - %d > %d   \n", fd->len, nut->max_distance, (int)fd->pts, (int)sc->last_pts, sc->max_pts_distance);
 		checksum = 1;
@@ -488,7 +488,7 @@ nut_context_t * nut_muxer_init(const nut_muxer_opts_t * mopts, const nut_stream_
 	nut->max_distance = mopts->max_distance;
 	nut->mopts = *mopts;
 
-	if (nut->max_distance > 131072) nut->max_distance = 131072;
+	if (nut->max_distance > 65536) nut->max_distance = 65536;
 
 	{
 	int j, n;
