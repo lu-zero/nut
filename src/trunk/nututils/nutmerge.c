@@ -20,9 +20,10 @@ frame_table_input_t ft_default[] = {
 	//{ 4128,      3,   0,   1,      0,    0,     0 },
 	//{ flag, fields, pts, mul, stream, size, count }
 	  { 8192,      0,   0,   1,      0,    0,     0 }, // invalid 0x00
-	  {   32,      1,   0,   1,      0,    0,     0 }, // safety net non key frame
+	  {   32,      0,   0,   1,      0,    0,     0 }, // safety net non key frame
 	  {   33,      0,   0,   1,      0,    0,     0 }, // safety net key frame
 	  { 4128,      0,   0,   1,      0,    0,     0 }, // one more safety net
+	  {    3,      0,   0,   1,      0,    0,     0 }, // EOR frame
 	  {    1,      4,   1, 337,      2,  336,     0 }, // used 82427 times
 	  {    1,      4,   1, 385,      2,  384,     0 }, // used 56044 times
 	  {    0,      4,   2,   7,      1,    6,     0 }, // used 20993 times
@@ -34,7 +35,7 @@ frame_table_input_t ft_default[] = {
 	  {    1,      4,   1, 769,      2,  768,     0 }, // used 433 times
 	  {    1,      4,   1, 961,      2,  960,     0 }, // used 191 times
 	  {   32,      3,   2, 101,      1,    0,     0 }, // "1.2.0" => 14187
-	  {   32,      3,  -1,  41,      1,    0,     0 }, // "1.-1.0" => 5707
+	  {   32,      3,  -1,  40,      1,    0,     0 }, // "1.-1.0" => 5707
 	  {   32,      3,   1,  81,      1,    0,     0 }, // "1.1.0" => 11159
 	  {   33,      3,   1,  11,      1,    0,     0 }, // "1.1.1" => 1409
 	  {   97,      3,   0,   6,      1,    0,     0 }, // checksum for video
