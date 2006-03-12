@@ -72,17 +72,16 @@ static void put_bytes(output_buffer_t * bc, int count, uint64_t val) {
 	}
 }
 
-static output_buffer_t * new_mem_buffer() {
-	output_buffer_t * bc = malloc(sizeof(output_buffer_t));
-	bc->write_len = PREALLOC_SIZE;
+static output_buffer_t * new_mem_buffer(output_buffer_t * bc) {
+	bc->write_len = 0;
 	bc->is_mem = 1;
 	bc->file_pos = 0;
-	bc->buf_ptr = bc->buf = malloc(bc->write_len);
+	bc->buf_ptr = bc->buf = NULL;
 	return bc;
 }
 
-static output_buffer_t * new_output_buffer(FILE * out) {
-	output_buffer_t * bc = new_mem_buffer();
+static output_buffer_t * new_output_buffer(output_buffer_t * bc, FILE * out) {
+	new_mem_buffer(bc);
 	bc->is_mem = 0;
 	bc->out = out;
 	return bc;
@@ -105,7 +104,7 @@ static void put_v(output_buffer_t * bc, uint64_t val) {
 }
 
 static void put_data(output_buffer_t * bc, int len, const uint8_t * data) {
-	if (len < PREALLOC_SIZE || bc->is_mem) {
+	if (len + (bc->buf_ptr - bc->buf) < bc->write_len || bc->is_mem) {
 		ready_write_buf(bc, len);
 		memcpy(bc->buf_ptr, data, len);
 		bc->buf_ptr += len;
@@ -119,7 +118,6 @@ static void free_out_buffer(output_buffer_t * bc) {
 	if (!bc) return;
 	if (!bc->is_mem) flush_out_buf(bc);
 	free(bc->buf);
-	free(bc);
 }
 
 // ============ INPUT BUFFER ==============
@@ -164,8 +162,7 @@ static void seek_buf(input_buffer_t * bc, long long pos, int whence) {
 	if (whence == SEEK_END) bc->filesize = bc->file_pos - pos;
 }
 
-static input_buffer_t * new_input_buffer(FILE * in) {
-	input_buffer_t * bc = malloc(sizeof(input_buffer_t));
+static input_buffer_t * new_input_buffer(input_buffer_t * bc, FILE * in) {
 	bc->read_len = 0;
 	bc->write_len = 0;
 	bc->file_pos = 0;
@@ -184,7 +181,6 @@ static int skip_buffer(input_buffer_t * bc, int len) {
 static void free_buffer(input_buffer_t * bc) {
 	if (!bc) return;
 	free(bc->buf);
-	free(bc);
 }
 
 static int get_bytes(input_buffer_t * bc, int count, uint64_t * val) {
@@ -296,6 +292,8 @@ static int find_copy_index(input_buffer_t * in, output_buffer_t * out, off_t * e
 		(v_len(forward_ptr + new_idx_len-idx_len) - v_len(forward_ptr))
 		> new_idx_len - idx_len) new_idx_len += 16;
 
+	ready_write_buf(out, new_idx_len); // prealloc
+
 	put_bytes(out, 8, INDEX_STARTCODE);
 	put_v(out, forward_ptr + new_idx_len-idx_len);
 	if (forward_ptr + new_idx_len-idx_len > 4096) put_bytes(out, 4, crc32(out->buf, bctello(out)));
@@ -310,7 +308,6 @@ static int find_copy_index(input_buffer_t * in, output_buffer_t * out, off_t * e
 	printf("%d => %d (%d)\n", (int)tmp, (int)(tmp + new_idx_len/16), new_idx_len);
 
 	idx_len = (in->filesize - 12) - bctello(in); // from where we are, until the index_ptr and checksum, copy everything
-	ready_write_buf(out, idx_len);
 	if (get_data(in, idx_len, out->buf_ptr)) return 1;
 	out->buf_ptr += idx_len;
 
@@ -323,22 +320,26 @@ static int find_copy_index(input_buffer_t * in, output_buffer_t * out, off_t * e
 int main(int argc, char * argv[]) {
 	FILE * fin = argc>2 ? fopen(argv[1], "rb") : NULL;
 	FILE * fout = argc>2 ? fopen(argv[2], "wb") : NULL;
-	input_buffer_t * in;
-	output_buffer_t * out, * mem = new_mem_buffer();
+	input_buffer_t iin, * in;
+	output_buffer_t oout, * out, omem, * mem = new_mem_buffer(&omem);
 	off_t end;
 	if (!fin || !fout) {
 		fprintf(stderr, "bleh\n");
 		return 1;
 	}
-	in = new_input_buffer(fin);
-	out = new_output_buffer(fout);
+	in = new_input_buffer(&iin, fin);
+	out = new_output_buffer(&oout, fout);
 	CHECK(find_copy_index(in, mem, &end));
 
 	seek_buf(in, 0, SEEK_SET);
 	CHECK(read_headers(in));
 
+	printf("headers: %d\n", (int)bctello(in));
+
 	put_data(out, bctello(in), in->buf); // write headers
 	put_data(out, bctello(mem), mem->buf); // write index
+
+	flush_buf(in);
 
 	// copy all data
 	while (bctello(in) < end) {
