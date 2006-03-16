@@ -359,8 +359,8 @@ static int read_headers(void * priv, nut_stream_header_t ** nut_streams) {
 	*nut_streams = s = malloc(sizeof(nut_stream_header_t) * (avi->avih->dwStreams + 1 + N));
 	for (i = 0; i < avi->avih->dwStreams; i++) {
 		s[i].type = avi->stream[i].type;
-		s[i].timebase.den = avi->stream[i].strh->dwRate;
-		s[i].timebase.nom = avi->stream[i].strh->dwScale;
+		s[i].time_base.den = avi->stream[i].strh->dwRate;
+		s[i].time_base.nom = avi->stream[i].strh->dwScale;
 		s[i].fixed_fps = 1;
 		s[i].decode_delay = !i; // FIXME
 		s[i].codec_specific_len = avi->stream[i].extra_len;
@@ -383,7 +383,7 @@ static int read_headers(void * priv, nut_stream_header_t ** nut_streams) {
 			s[i].channel_count = avi->stream[i].audio->nChannels;
 		}
 	}
-	while (i < N + 2) s[i++] = s[0];
+	while (i < N + 2) { s[i] = s[0]; s[i++].decode_delay = 0; }
 	s[i].type = -1;
 	return 0;
 }

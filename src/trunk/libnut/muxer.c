@@ -140,7 +140,12 @@ static void put_main_header(nut_context_t * nut) {
 	put_v(tmp, NUT_VERSION);
 	put_v(tmp, nut->stream_count);
 	put_v(tmp, nut->max_distance);
-	for(i = 0; i < 256; ) {
+	put_v(tmp, nut->timebase_count);
+	for (i = 0; i < nut->timebase_count; i++) {
+		put_v(tmp, nut->tb[i].nom);
+		put_v(tmp, nut->tb[i].den);
+	}
+	for (i = 0; i < 256; ) {
 		fields = 0;
 		flag = nut->ft[i].flags;
 		if (nut->ft[i].pts_delta != timestamp) fields = 1;
@@ -182,8 +187,7 @@ static void put_stream_header(nut_context_t * nut, int id) {
 	put_v(tmp, id); // ### is stream_id staying in spec
 	put_v(tmp, sc->sh.type);
 	put_vb(tmp, sc->sh.fourcc_len, sc->sh.fourcc);
-	put_v(tmp, sc->sh.timebase.nom);
-	put_v(tmp, sc->sh.timebase.den);
+	put_v(tmp, sc->timebase_id);
 	put_v(tmp, sc->msb_pts_shift);
 	put_v(tmp, sc->max_pts_distance);
 	put_v(tmp, sc->sh.decode_delay);
@@ -259,7 +263,7 @@ static void put_syncpoint(nut_context_t * nut) {
 	output_buffer_t * tmp = clear_buffer(nut->tmp_buffer);
 	int i;
 	uint64_t pts = 0;
-	int stream = 0;
+	int timebase = 0;
 	int back_ptr = 0;
 	int keys[nut->stream_count];
 	syncpoint_list_t * s = &nut->syncpoints;
@@ -267,9 +271,9 @@ static void put_syncpoint(nut_context_t * nut) {
 	nut->last_syncpoint = bctello(nut->o);
 
 	for (i = 0; i < nut->stream_count; i++) {
-		if (nut->sc[i].last_dts > 0 && compare_ts(nut, nut->sc[i].last_dts, i, pts, stream) > 0) {
+		if (nut->sc[i].last_dts > 0 && compare_ts(nut, nut->sc[i].last_dts, TO_TB(i), pts, nut->tb[timebase]) > 0) {
 			pts = nut->sc[i].last_dts;
-			stream = i;
+			timebase = nut->sc[i].timebase_id;
 		}
 	}
 
@@ -294,7 +298,7 @@ static void put_syncpoint(nut_context_t * nut) {
 		for (j = 0; j < nut->stream_count; j++) {
 			if (keys[j]) continue;
 			if (!s->pts[i * nut->stream_count + j]) continue;
-			if (compare_ts(nut, s->pts[i * nut->stream_count + j] - 1, j, pts, stream) <= 0) keys[j] = 1;
+			if (compare_ts(nut, s->pts[i * nut->stream_count + j] - 1, TO_TB(j), pts, nut->tb[timebase]) <= 0) keys[j] = 1;
 		}
 		for (j = 0; j < nut->stream_count; j++) n &= keys[j];
 		if (n) { i--; break; }
@@ -302,12 +306,12 @@ static void put_syncpoint(nut_context_t * nut) {
 	back_ptr = (nut->last_syncpoint - s->s[i].pos) / 16;
 
 	for (i = 0; i < nut->stream_count; i++) {
-		nut->sc[i].last_pts = convert_ts(nut, pts, stream, i);
+		nut->sc[i].last_pts = convert_ts(nut, pts, nut->tb[timebase], TO_TB(i));
 		nut->sc[i].last_key = 0;
 		if (nut->sc[i].eor) nut->sc[i].eor = -1; // so we know to ignore this stream in future syncpoints
 	}
 
-	put_v(tmp, pts * nut->stream_count + stream);
+	put_v(tmp, pts * nut->timebase_count + timebase);
 	put_v(tmp, back_ptr);
 
 	put_header(nut->o, tmp, nut->tmp_buffer2, SYNCPOINT_STARTCODE, 0);
@@ -320,15 +324,15 @@ static void put_index(nut_context_t * nut) {
 	syncpoint_list_t * s = &nut->syncpoints;
 	int i;
 	uint64_t max_pts = 0;
-	int stream = 0;
+	int timebase = 0;
 
 	for (i = 0; i < nut->stream_count; i++) {
-		if (compare_ts(nut, nut->sc[i].sh.max_pts, i, max_pts, stream) > 0) {
+		if (compare_ts(nut, nut->sc[i].sh.max_pts, TO_TB(i), max_pts, nut->tb[timebase]) > 0) {
 			max_pts = nut->sc[i].sh.max_pts;
-			stream = i;
+			timebase = nut->sc[i].timebase_id;
 		}
 	}
-	put_v(tmp, max_pts * nut->stream_count + stream);
+	put_v(tmp, max_pts * nut->timebase_count + timebase);
 
 	put_v(tmp, s->len);
 	for (i = 0; i < s->len; i++) {
@@ -392,7 +396,7 @@ static int frame_header(nut_context_t * nut, output_buffer_t * tmp, const nut_pa
 
 	if (fd->len > 2*nut->max_distance) checksum = 1;
 	if (ABS(pts_delta) > sc->max_pts_distance) {
-		fprintf(stderr, "%d > %d || %d - %d > %d   \n", fd->len, nut->max_distance, (int)fd->pts, (int)sc->last_pts, sc->max_pts_distance);
+		fprintf(stderr, "%d > %d || %d - %d > %d   \n", fd->len, 2*nut->max_distance, (int)fd->pts, (int)sc->last_pts, sc->max_pts_distance);
 		checksum = 1;
 	}
 
@@ -461,11 +465,11 @@ void nut_write_frame(nut_context_t * nut, const nut_packet_t * fd, const uint8_t
 
         for (i = 0; i < nut->stream_count; i++) {
 		if (nut->sc[i].last_dts == -1) continue;
-		if (compare_ts(nut, fd->pts, fd->stream, nut->sc[i].last_dts, i) < 0)
+		if (compare_ts(nut, fd->pts, TO_TB(fd->stream), nut->sc[i].last_dts, TO_TB(i)) < 0)
 			fprintf(stderr, "%lld %d (%f) %lld %d (%f) \n",
 				fd->pts, fd->stream, TO_DOUBLE(fd->stream, fd->pts),
 				nut->sc[i].last_dts, i, TO_DOUBLE(i, nut->sc[i].last_dts));
-		assert(compare_ts(nut, fd->pts, fd->stream, nut->sc[i].last_dts, i) >= 0);
+		assert(compare_ts(nut, fd->pts, TO_TB(fd->stream), nut->sc[i].last_dts, TO_TB(i)) >= 0);
 	}
 
 	sc->last_pts = fd->pts;
@@ -534,6 +538,8 @@ nut_context_t * nut_muxer_init(const nut_muxer_opts_t * mopts, const nut_stream_
 	for (nut->stream_count = 0; s[nut->stream_count].type >= 0; nut->stream_count++);
 
 	nut->sc = malloc(sizeof(stream_context_t) * nut->stream_count);
+	nut->tb = malloc(sizeof(nut_timebase_t) * nut->stream_count);
+	nut->timebase_count = 0;
 
 	for (i = 0; i < nut->stream_count; i++) {
 		int j;
@@ -541,7 +547,7 @@ nut_context_t * nut_muxer_init(const nut_muxer_opts_t * mopts, const nut_stream_
 		nut->sc[i].last_pts = 0;
 		nut->sc[i].last_dts = -1;
 		nut->sc[i].msb_pts_shift = 7; // TODO
-		nut->sc[i].max_pts_distance = (s[i].timebase.den + s[i].timebase.nom - 1) / s[i].timebase.nom; // TODO
+		nut->sc[i].max_pts_distance = (s[i].time_base.den + s[i].time_base.nom - 1) / s[i].time_base.nom; // TODO
 		nut->sc[i].eor = 0;
 		nut->sc[i].sh = s[i];
 		nut->sc[i].sh.max_pts = 0;
@@ -553,6 +559,10 @@ nut_context_t * nut_muxer_init(const nut_muxer_opts_t * mopts, const nut_stream_
 		memcpy(nut->sc[i].sh.codec_specific, s[i].codec_specific, s[i].codec_specific_len);
 
 		nut->sc[i].pts_cache = malloc(nut->sc[i].sh.decode_delay * sizeof(int64_t));
+
+		for (j = 0; j < nut->timebase_count; j++) if (compare_ts(nut, 1, s[i].time_base, 1, nut->tb[j]) == 0) break;
+		if (j == nut->timebase_count) nut->tb[nut->timebase_count++] = s[i].time_base;
+		nut->sc[i].timebase_id = j;
 
 		// reorder.c
 		nut->sc[i].reorder_pts_cache = malloc(nut->sc[i].sh.decode_delay * sizeof(int64_t));
@@ -622,6 +632,7 @@ void nut_muxer_uninit(nut_context_t * nut) {
 		free(nut->sc[i].reorder_pts_cache);
 	}
 	free(nut->sc);
+	free(nut->tb);
 
 	for (i = 0; i < nut->info_count; i++) {
 		int j;

@@ -238,6 +238,13 @@ static int get_main_header(nut_context_t * nut) {
 	GET_V(tmp, nut->max_distance);
 	if (nut->max_distance > 65536) nut->max_distance = 65536;
 
+	GET_V(tmp, nut->timebase_count);
+	nut->tb = realloc(nut->tb, nut->timebase_count * sizeof(nut_timebase_t));
+	for (i = 0; i < nut->timebase_count; i++) {
+		GET_V(tmp, nut->tb[i].nom);
+		GET_V(tmp, nut->tb[i].den);
+	}
+
 	for(i = 0; i < 256; ) {
 		int scrap;
 		GET_V(tmp, flag);
@@ -285,8 +292,8 @@ static int get_stream_header(nut_context_t * nut, int id) {
 
 	GET_V(tmp, sc->sh.type);
 	CHECK(get_vb(tmp, &sc->sh.fourcc_len, &sc->sh.fourcc));
-	GET_V(tmp, sc->sh.timebase.nom);
-	GET_V(tmp, sc->sh.timebase.den);
+	GET_V(tmp, sc->timebase_id);
+	sc->sh.time_base = nut->tb[sc->timebase_id];
 	GET_V(tmp, sc->msb_pts_shift);
 	GET_V(tmp, sc->max_pts_distance);
 	GET_V(tmp, sc->sh.decode_delay);
@@ -361,7 +368,7 @@ static void set_global_pts(nut_context_t * nut, uint64_t pts) {
 	TO_PTS(timestamp, pts)
 
 	for (i = 0; i < nut->stream_count; i++) {
-		nut->sc[i].last_pts = convert_ts(nut, timestamp_p, timestamp_s, i);
+		nut->sc[i].last_pts = convert_ts(nut, timestamp_p, nut->tb[timestamp_t], TO_TB(i));
 	}
 }
 
@@ -418,7 +425,7 @@ static int get_index(nut_context_t * nut) {
 	GET_V(tmp, x);
 	for (i = 0; i < nut->stream_count; i++) {
 		TO_PTS(max, x)
-		nut->sc[i].sh.max_pts = convert_ts(nut, max_p, max_s, i);
+		nut->sc[i].sh.max_pts = convert_ts(nut, max_p, nut->tb[max_t], TO_TB(i));
 	}
 
 	GET_V(tmp, x);
@@ -559,11 +566,11 @@ static int get_packet(nut_context_t * nut, nut_packet_t * pd, int * saw_syncpoin
 	// error checking - out of order dts
 	for (i = 0; i < nut->stream_count; i++) {
 		if (nut->sc[i].last_dts == -1) continue;
-		if (compare_ts(nut, pd->pts, pd->stream, nut->sc[i].last_dts, i) < 0)
+		if (compare_ts(nut, pd->pts, TO_TB(pd->stream), nut->sc[i].last_dts, TO_TB(i)) < 0)
 			fprintf(stderr, "%lld %d (%f) %lld %d (%f) \n",
 				pd->pts, pd->stream, TO_DOUBLE(pd->stream, pd->pts),
 				nut->sc[i].last_dts, i, TO_DOUBLE(i, nut->sc[i].last_dts));
-		ERROR(compare_ts(nut, pd->pts, pd->stream, nut->sc[i].last_dts, i) < 0, -ERR_OUT_OF_ORDER);
+		ERROR(compare_ts(nut, pd->pts, TO_TB(pd->stream), nut->sc[i].last_dts, TO_TB(i)) < 0, -ERR_OUT_OF_ORDER);
 	}
 
 	if (saw_syncpoint) *saw_syncpoint = !!after_sync;
@@ -846,13 +853,16 @@ err_out:
 	return err;
 }
 
-static int binary_search_syncpoint(nut_context_t * nut, double time_pos, uint64_t * pts, off_t * start, off_t * end, syncpoint_t * stopper) {
+static int binary_search_syncpoint(nut_context_t * nut, double time_pos, off_t * start, off_t * end, syncpoint_t * stopper) {
 	int i, err = 0;
 	syncpoint_t s;
 	off_t hi, lo;
 	uint64_t hip, lop;
+	uint64_t timebases[nut->timebase_count];
 	syncpoint_list_t * sl = &nut->syncpoints;
 	int a = 0;
+
+	for (i = 0; i < nut->timebase_count; i++) timebases[i] = (uint64_t)(time_pos / nut->tb[i].nom * nut->tb[i].den);
 
 	CHECK(find_basic_syncpoints(nut));
 	// sl->len MUST be >=2, which is the first and last syncpoints in the file
@@ -860,7 +870,7 @@ static int binary_search_syncpoint(nut_context_t * nut, double time_pos, uint64_
 
 	for (i = 0; i < sl->len; i++) {
 		TO_PTS(tmp, sl->s[i].pts)
-		if ((pts[tmp_s] >> 1) <= tmp_p) break;
+		if (timebases[tmp_t] <= tmp_p) break;
 	}
 
 	if (i == sl->len) { // there isn't any syncpoint bigger than requested
@@ -921,7 +931,7 @@ static int binary_search_syncpoint(nut_context_t * nut, double time_pos, uint64_
 			continue;
 		}
 
-		res = s.pts / nut->stream_count > (pts[s.pts % nut->stream_count] >> 1);
+		res = (s.pts / nut->timebase_count > timebases[s.pts % nut->timebase_count]);
 		if (res) {
 			hi = s.pos;
 			hip = s.pts;
@@ -947,7 +957,7 @@ static int binary_search_syncpoint(nut_context_t * nut, double time_pos, uint64_
 	}
 
 	fprintf(stderr, "\n[ (%d,%d) .. %d .. (%d,%d) ] => %d (%d seeks) %d\n",
-		(int)lo, (int)lop, (int)pts[0], (int)hi, (int)hip, (int)(lo - (sl->s[i].back_ptr>>1)), a, sl->s[i].back_ptr);
+		(int)lo, (int)lop, (int)timebases[0], (int)hi, (int)hip, (int)(lo - (sl->s[i].back_ptr>>1)), a, sl->s[i].back_ptr);
 	// at this point, s[i].pts < P < s[i+1].pts, and s[i].flag is set
 	// meaning, there are no more syncpoints between s[i] to s[i+1]
 	*start = (sl->s[i].pos >> 1) - (sl->s[i].back_ptr>>1);
@@ -1045,7 +1055,7 @@ static int linear_search_seek(nut_context_t * nut, int backwards, uint64_t * pts
 			}
 		} else if (stopper && pd.flags&NUT_FLAG_KEY && !(good_key[i]&1)) {
 			TO_PTS(stopper, stopper->pts)
-			if (compare_ts(nut, stopper_p, stopper_s, pd.pts, pd.stream) > 0) {
+			if (compare_ts(nut, stopper_p, nut->tb[stopper_t], pd.pts, TO_TB(pd.stream)) > 0) {
 				good_key[pd.stream] = buf_before<<1;
 				if (stopper_syncpoint) {
 					int n = 1;
@@ -1127,7 +1137,7 @@ err_out:
 
 static void req_to_pts(nut_context_t * nut, double * time_pos, int flags, uint64_t * pts, const int * active_streams) {
 	uint64_t orig_pts = 0;
-	int orig_stream = 0;
+	int orig_timebase = 0;
 	int i;
 
 	for (i = 0; i < nut->stream_count; i++) pts[i] = 0;
@@ -1139,17 +1149,17 @@ static void req_to_pts(nut_context_t * nut, double * time_pos, int flags, uint64
 			uint64_t dts = nut->sc[i].last_dts != -1 ? nut->sc[i].last_dts : nut->sc[i].last_pts;
 			int FIXME; // this is completely wrong with EAGAIN
 			if (!pts[i]) continue;
-			if (compare_ts(nut, orig_pts, orig_stream, dts, i) < 0) {
+			if (compare_ts(nut, orig_pts, nut->tb[orig_timebase], dts, TO_TB(i)) < 0) {
 				orig_pts = dts;
-				orig_stream = i;
+				orig_timebase = nut->sc[i].timebase_id;
 			}
 		}
-		*time_pos += TO_DOUBLE(orig_stream, orig_pts);
+		*time_pos += TO_DOUBLE(orig_timebase, orig_pts);
 	}
 	if (*time_pos < 0.) *time_pos = 0.;
 
 	for (i = 0; i < nut->stream_count; i++) {
-		pts[i] |= (uint64_t)(*time_pos / nut->sc[i].sh.timebase.nom * nut->sc[i].sh.timebase.den) << 1;
+		pts[i] |= (uint64_t)(*time_pos / TO_TB(i).nom * TO_TB(i).den) << 1;
 	}
 }
 
@@ -1208,7 +1218,7 @@ int nut_seek(nut_context_t * nut, double time_pos, int flags, const int * active
 		}
 	}
 
-	if (start == 0) CHECK(binary_search_syncpoint(nut, time_pos, pts, &start, &end, &stopper));
+	if (start == 0) CHECK(binary_search_syncpoint(nut, time_pos, &start, &end, &stopper));
 	else fprintf(stderr, "============= NO BINARY SEARCH\n");
 
 	if (start) { // "unsuccessful" seek needs no linear search
@@ -1239,6 +1249,7 @@ nut_context_t * nut_demuxer_init(nut_demuxer_opts_t * dopts) {
 	nut->syncpoints.eor = NULL;
 
 	nut->sc = NULL;
+	nut->tb = NULL;
 	nut->last_headers = 0;
 	nut->stream_count = 0;
 	nut->dopts = *dopts;
@@ -1262,6 +1273,7 @@ void nut_demuxer_uninit(nut_context_t * nut) {
 	free(nut->syncpoints.pts);
 	free(nut->syncpoints.eor);
 	free(nut->sc);
+	free(nut->tb);
 	free(nut->seek_state);
 	free_buffer(nut->i);
 	free(nut);

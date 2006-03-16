@@ -33,7 +33,7 @@ typedef struct {
 	int type; // -1 means end
 	int fourcc_len;
 	uint8_t * fourcc;
-	nut_timebase_t timebase;
+	nut_timebase_t time_base;
 	int fixed_fps;
 	int decode_delay;
 	int codec_specific_len;

@@ -529,8 +529,8 @@ static int read_headers(void * priv, nut_stream_header_t ** nut_streams) {
 		s[i].type = os->oc->type;
 		s[i].fourcc = os->oc->fourcc;
 		s[i].fourcc_len = os->oc->fourcc_len;
-		s[i].timebase.den = os->time_base_denom;
-		s[i].timebase.nom = os->time_base_nom;
+		s[i].time_base.den = os->time_base_denom;
+		s[i].time_base.nom = os->time_base_nom;
 		s[i].fixed_fps = os->fixed_fps;
 		s[i].decode_delay = os->decode_delay;
 		s[i].codec_specific = os->codec_specific;

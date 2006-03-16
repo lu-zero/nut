@@ -105,6 +105,7 @@ typedef struct {
 	int64_t last_dts;
 	int msb_pts_shift;
 	int max_pts_distance;
+	int timebase_id;
 	nut_stream_header_t sh;
 	int64_t * pts_cache;
 	int64_t eor;
@@ -126,6 +127,9 @@ struct nut_context_s {
 	output_buffer_t * o;
 	output_buffer_t * tmp_buffer;
 	output_buffer_t * tmp_buffer2;
+
+	int timebase_count;
+	nut_timebase_t * tb;
 
 	int stream_count;
 	stream_context_t * sc;
@@ -162,15 +166,15 @@ static inline uint32_t crc32(uint8_t * buf, int len){
 	return crc;
 }
 
-static inline uint64_t convert_ts(nut_context_t * nut, uint64_t sn, int from, int to) {
+static inline uint64_t convert_ts(nut_context_t * nut, uint64_t sn, nut_timebase_t from, nut_timebase_t to) {
 	uint64_t ln, d1, d2;
-	ln = (uint64_t)nut->sc[from].sh.timebase.nom * nut->sc[to].sh.timebase.den;
-	d1 = nut->sc[from].sh.timebase.den;
-	d2 = nut->sc[to].sh.timebase.nom;
+	ln = (uint64_t)from.nom * to.den;
+	d1 = from.den;
+	d2 = to.nom;
 	return (ln / d1 * sn + (ln%d1) * sn / d1) / d2;
 }
 
-static inline int compare_ts(nut_context_t * nut, uint64_t a, int at, uint64_t b, int bt) {
+static inline int compare_ts(nut_context_t * nut, uint64_t a, nut_timebase_t at, uint64_t b, nut_timebase_t bt) {
 	if (convert_ts(nut, a, at, bt) < b) return -1;
 	if (convert_ts(nut, b, bt, at) < a) return  1;
 	return 0;
@@ -190,11 +194,13 @@ static inline int get_dts(int d, int64_t * pts_cache, int pts) {
 #define bctello(bc) ((bc)->file_pos + ((bc)->buf_ptr - (bc)->buf))
 
 #define TO_PTS(prefix, pts) \
-	int prefix##_s = (pts) % nut->stream_count; \
-	uint64_t prefix##_p = (pts) / nut->stream_count;
+	int prefix##_t = (pts) % nut->timebase_count; \
+	uint64_t prefix##_p = (pts) / nut->timebase_count;
 
-#define TO_DOUBLE(stream, pts) ((double)(pts) / nut->sc[(stream)].sh.timebase.den * nut->sc[(stream)].sh.timebase.nom)
+#define TO_DOUBLE(t, pts) ((double)(pts) / nut->tb[t].den * nut->tb[t].nom)
 
-#define TO_DOUBLE_PTS(pts) ((double)((pts) / nut->stream_count) / nut->sc[(pts) % nut->stream_count].sh.timebase.den * nut->sc[(pts) % nut->stream_count].sh.timebase.nom)
+#define TO_DOUBLE_PTS(pts) ((double)((pts) / nut->timebase_count) / nut->tb[(pts) % nut->timebase_count].den * nut->tb[(pts) % nut->timebase_count].nom)
+
+#define TO_TB(i) nut->tb[nut->sc[i].timebase_id]
 
 #endif // _NUT_PRIV_H

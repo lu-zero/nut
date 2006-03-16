@@ -90,8 +90,8 @@ static demuxer_t * demux_open_nut(demuxer_t * demuxer) {
 
 			sh_audio->wf= wf; sh_audio->ds = demuxer->audio;
 			sh_audio->audio.dwSampleSize = 0; // FIXME
-			sh_audio->audio.dwScale = s[i].timebase.nom;
-			sh_audio->audio.dwRate = s[i].timebase.den;
+			sh_audio->audio.dwScale = s[i].time_base.nom;
+			sh_audio->audio.dwRate = s[i].time_base.den;
 			if (s[i].fourcc_len == 4) sh_audio->format = *(uint32_t*)s[i].fourcc;
 			else sh_audio->format = *(uint16_t*)s[i].fourcc; // FIXME
 			sh_audio->channels = s[i].channel_count;
@@ -120,8 +120,8 @@ static demuxer_t * demux_open_nut(demuxer_t * demuxer) {
 			sh_video->ds = demuxer->video;
 			sh_video->disp_w = s[i].width;
 			sh_video->disp_h = s[i].height;
-			sh_video->video.dwScale = s[i].timebase.nom;
-			sh_video->video.dwRate  = s[i].timebase.den;
+			sh_video->video.dwScale = s[i].time_base.nom;
+			sh_video->video.dwRate  = s[i].time_base.den;
 
 			sh_video->fps=(float)sh_video->video.dwRate/(float)sh_video->video.dwScale;
 			sh_video->frametime=(float)sh_video->video.dwScale/(float)sh_video->video.dwRate;
@@ -176,7 +176,7 @@ static int demux_nut_fill_buffer(demuxer_t * demuxer, demux_stream_t * dsds) {
 		}
 	}
 
-	pts = (double)pd.pts * priv->s[pd.stream].timebase.nom / priv->s[pd.stream].timebase.den;
+	pts = (double)pd.pts * priv->s[pd.stream].time_base.nom / priv->s[pd.stream].time_base.den;
 
 	if (pd.stream == demuxer->audio->id)  {
 		ds = demuxer->audio;
@@ -233,7 +233,7 @@ static void demux_seek_nut(demuxer_t * demuxer, float time_pos, float audio_dela
 
 	if (flags & 2) // percent
 		time_pos *= priv->s[0].max_pts *
-				(double)priv->s[0].timebase.nom / priv->s[0].timebase.den;
+				(double)priv->s[0].time_base.nom / priv->s[0].time_base.den;
 
 	ret = nut_seek(nut, time_pos, nutflags, tmp);
 	if (ret < 0) mp_msg(MSGT_HEADER, MSGL_ERR, "NUT error: %s\n", nut_error(-ret));
@@ -245,7 +245,7 @@ static int demux_control_nut(demuxer_t * demuxer, int cmd, void * arg) {
 	switch (cmd) {
 		case DEMUXER_CTRL_GET_TIME_LENGTH:
 			*((double *)arg) = priv->s[0].max_pts *
-				(double)priv->s[0].timebase.nom / priv->s[0].timebase.den;
+				(double)priv->s[0].time_base.nom / priv->s[0].time_base.den;
 			return DEMUXER_CTRL_OK;
 		case DEMUXER_CTRL_GET_PERCENT_POS:
 			if (priv->s[0].max_pts == 0) return DEMUXER_CTRL_DONTKNOW;
