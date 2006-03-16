@@ -739,7 +739,7 @@ int nut_read_headers(nut_context_t * nut, nut_stream_header_t * s []) {
 			uint64_t tmp;
 			CHECK(get_bytes(nut->i, 8, &tmp));
 			while (tmp >> 56 == 'N') {
-				if (tmp == INDEX_STARTCODE) break;
+				if (tmp == INDEX_STARTCODE || tmp == SYNCPOINT_STARTCODE) break;
 				CHECK(get_header(nut->i, NULL));
 				CHECK(get_bytes(nut->i, 8, &tmp));
 			}
