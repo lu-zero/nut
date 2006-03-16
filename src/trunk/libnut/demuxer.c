@@ -1053,7 +1053,7 @@ static int linear_search_seek(nut_context_t * nut, int backwards, uint64_t * pts
 					break;
 				}
 			}
-		} else if (stopper && pd.flags&NUT_FLAG_KEY && !(good_key[i]&1)) {
+		} else if (stopper && pd.flags&NUT_FLAG_KEY && !(good_key[pd.stream]&1)) {
 			TO_PTS(stopper, stopper->pts)
 			if (compare_ts(nut, stopper_p, nut->tb[stopper_t], pd.pts, TO_TB(pd.stream)) > 0) {
 				good_key[pd.stream] = buf_before<<1;
@@ -1067,11 +1067,11 @@ static int linear_search_seek(nut_context_t * nut, int backwards, uint64_t * pts
 				}
 			}
 		}
-		push_frame(nut, &pd);
 		// dts higher than requested pts
 		if (end && nut->sc[pd.stream].last_dts != -1 && nut->sc[pd.stream].last_dts > pts[pd.stream]>>1) break;
 
 		CHECK(skip_buffer(nut->i, pd.len));
+		push_frame(nut, &pd);
 	}
 	if (!end) goto err_out; // forward seek
 
