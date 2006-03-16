@@ -180,7 +180,7 @@ static inline int compare_ts(nut_context_t * nut, uint64_t a, nut_timebase_t at,
 	return 0;
 }
 
-static inline int get_dts(int d, int64_t * pts_cache, int pts) {
+static inline int64_t get_dts(int d, int64_t * pts_cache, int64_t pts) {
 	while (d--) {
 		int64_t t = pts_cache[d];
 		if (t < pts) {
@@ -188,6 +188,11 @@ static inline int get_dts(int d, int64_t * pts_cache, int pts) {
 			pts = t;
 		}
 	}
+	return pts;
+}
+
+static inline int64_t peek_dts(int d, int64_t * pts_cache, int64_t pts) {
+	while (d--) if (pts_cache[d] < pts) pts = pts_cache[d];
 	return pts;
 }
 

@@ -1014,7 +1014,6 @@ static int linear_search_seek(nut_context_t * nut, int backwards, uint64_t * pts
 		if (saw_syncpoint) {
 			int dont_flush = 0;
 			int header_size = bctello(nut->i) - buf_before;
-			nut->i->buf_ptr -= header_size;
 			if (stopper) {
 				if ((!stopper_syncpoint && buf_before > (stopper->pos >> 1) - (stopper->back_ptr>>1) + 15) || stopper_syncpoint == buf_before) {
 					int n = 1;
@@ -1029,6 +1028,7 @@ static int linear_search_seek(nut_context_t * nut, int backwards, uint64_t * pts
 					dont_flush = 1; // give it a chance, we might be able to do this in a single seek
 				}
 			}
+			nut->i->buf_ptr -= header_size;
 			if (!dont_flush) flush_buf(nut->i); // flush at every syncpoint
 			nut->i->buf_ptr += header_size;
 		}
@@ -1068,7 +1068,7 @@ static int linear_search_seek(nut_context_t * nut, int backwards, uint64_t * pts
 			}
 		}
 		// dts higher than requested pts
-		if (end && nut->sc[pd.stream].last_dts != -1 && nut->sc[pd.stream].last_dts > pts[pd.stream]>>1) break;
+		if (end && peek_dts(nut->sc[pd.stream].sh.decode_delay, nut->sc[pd.stream].pts_cache, pd.pts) > (int64_t)(pts[pd.stream]>>1)) break;
 
 		CHECK(skip_buffer(nut->i, pd.len));
 		push_frame(nut, &pd);
