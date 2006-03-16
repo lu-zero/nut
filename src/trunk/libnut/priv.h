@@ -80,9 +80,11 @@ typedef struct {
 } frame_table_t;
 
 typedef struct {
-	off_t pos; // << 1, flag is "is pts correct" (in cache)
+	off_t pos;
 	uint64_t pts; // coded in '% stream_count'
-	int back_ptr; // << 1, flag says if there is another syncpoint between this and next
+	int back_ptr:30;
+	unsigned int seen_next:1;
+	unsigned int pts_valid:1;
 } syncpoint_t;
 
 typedef struct {
