@@ -781,7 +781,7 @@ int nut_read_headers(nut_context_t * nut, nut_stream_header_t * s []) {
 	for (i = 0; i < nut->stream_count; i++) (*s)[i] = nut->sc[i].sh;
 	(*s)[i].type = -1;
 err_out:
-	if (err && err != 2 && !nut->last_headers) {
+	if (err && err != 2 && !nut->seek_status) {
 		if (nut->sc) for (i = 0; i < nut->stream_count; i++) {
 			free(nut->sc[i].sh.fourcc);
 			free(nut->sc[i].sh.codec_specific);
