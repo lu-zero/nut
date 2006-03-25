@@ -283,7 +283,6 @@ static int get_stream_header(nut_context_t * nut, int id) {
 	input_buffer_t itmp, * tmp = new_mem_buffer(&itmp);
 	stream_context_t * sc = &nut->sc[id];
 	int i, err = 0;
-	uint64_t a;
 
 	CHECK(get_header(nut->i, tmp));
 
@@ -297,8 +296,8 @@ static int get_stream_header(nut_context_t * nut, int id) {
 	GET_V(tmp, sc->msb_pts_shift);
 	GET_V(tmp, sc->max_pts_distance);
 	GET_V(tmp, sc->sh.decode_delay);
-	CHECK(get_bytes(tmp, 1, &a));
-	sc->sh.fixed_fps = a & 1;
+	GET_V(tmp, i); // stream_flags
+	sc->sh.fixed_fps = i & 1;
 	CHECK(get_vb(tmp, &sc->sh.codec_specific_len, &sc->sh.codec_specific));
 
 	switch (sc->sh.type) {

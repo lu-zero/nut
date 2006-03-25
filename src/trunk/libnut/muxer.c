@@ -191,7 +191,7 @@ static void put_stream_header(nut_context_t * nut, int id) {
 	put_v(tmp, sc->msb_pts_shift);
 	put_v(tmp, sc->max_pts_distance);
 	put_v(tmp, sc->sh.decode_delay);
-	put_bytes(tmp, 1, sc->sh.fixed_fps ? 1 : 0);
+	put_v(tmp, sc->sh.fixed_fps ? 1 : 0);
 	put_vb(tmp, sc->sh.codec_specific_len, sc->sh.codec_specific);
 
 	switch (sc->sh.type) {
