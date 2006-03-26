@@ -1,34 +1,31 @@
 #include "nutmerge.h"
 #define ABS(x) MAX(x,-x)
 
-typedef struct nutmerge_nut_s {
+struct demuxer_priv_s {
 	nut_context_t * nut;
 	uint8_t * buf;
-} nutmerge_nut_t;
+};
 
 static void * init(FILE * in) {
-	nutmerge_nut_t * nut = malloc(sizeof(nutmerge_nut_t));
+	demuxer_priv_t * nut = malloc(sizeof(demuxer_priv_t));
 	nut_demuxer_opts_t dopts = { { in, NULL, NULL, NULL, 0 } , 0};
 	nut->nut = nut_demuxer_init(&dopts);
 	nut->buf = NULL;
 	return nut;
 }
 
-static void uninit(void * priv) {
-	nutmerge_nut_t * nut = priv;
+static void uninit(demuxer_priv_t * nut) {
 	nut_demuxer_uninit(nut->nut);
 	free(nut->buf);
 	free(nut);
 }
 
-static int read_headers(void * priv, nut_stream_header_t ** nut_streams) {
-	nutmerge_nut_t * nut = priv;
+static int read_headers(demuxer_priv_t * nut, nut_stream_header_t ** nut_streams) {
 	int err = nut_read_headers(nut->nut, nut_streams);
 	return err == 1 ? -1 : ABS(err);
 }
 
-static int get_packet(void * priv, nut_packet_t * p, uint8_t ** buf) {
-	nutmerge_nut_t * nut = priv;
+static int get_packet(demuxer_priv_t * nut, nut_packet_t * p, uint8_t ** buf) {
 	int err;
 	int len;
 	do {

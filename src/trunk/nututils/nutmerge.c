@@ -45,8 +45,7 @@ frame_table_input_t ft_default[] = {
 
 int main(int argc, char * argv []) {
 	FILE * in = NULL, * out = NULL;
-	struct demuxer_t * demuxer = NULL;
-	void * demuxer_priv = NULL;
+	struct demuxer_t demuxer = { .extention = NULL, .priv = NULL };
 	nut_context_t * nut = NULL;
 	nut_stream_header_t * nut_stream = NULL;
 	nut_muxer_opts_t mopts;
@@ -68,9 +67,9 @@ int main(int argc, char * argv []) {
 	extention = argv[1];
 	for (i = 0; argv[1][i]; i++) if (argv[1][i] == '.') extention = &argv[1][i+1];
 	for (i = 0; demuxers[i]; i++)
-		if (!strcmp(demuxers[i]->extention, extention)) demuxer = demuxers[i];
+		if (!strcmp(demuxers[i]->extention, extention)) demuxer = *demuxers[i];
 
-	if (!demuxer) {
+	if (!demuxer.extention) {
 		printf("unsupported file format\n");
 		err = 1;
 		goto err_out;
@@ -79,9 +78,9 @@ int main(int argc, char * argv []) {
 	in = fopen(argv[1], "rb");
 	out = fopen(argv[2], "wb");
 
-	demuxer_priv = demuxer->init(in);
+	demuxer.priv = demuxer.init(in);
 
-	if ((err = demuxer->read_headers(demuxer_priv, &nut_stream))) goto err_out;
+	if ((err = demuxer.read_headers(demuxer.priv, &nut_stream))) goto err_out;
 	mopts.output = (nut_output_stream_t){ .priv = out, .write = NULL };
 	mopts.write_index = 1;
 	mopts.fti = ft_default;
@@ -102,7 +101,7 @@ int main(int argc, char * argv []) {
 	}
 
 	if (stats) fprintf(stats, "%10s%10s%10s%10s\n", "stream", "len", "pts_diff", "flags");
-	while (!(err = demuxer->get_packet(demuxer_priv, &p, &buf))) {
+	while (!(err = demuxer.get_packet(demuxer.priv, &p, &buf))) {
 		int s = p.stream;
 		nut_write_frame_reorder(nut, &p, buf);
 		if (++frames_pos[s] > frames_alloc[s]) {
@@ -141,7 +140,7 @@ int main(int argc, char * argv []) {
 err_out:
 	nut_muxer_uninit_reorder(nut);
 	free(nut_stream);
-	if (demuxer) demuxer->uninit(demuxer_priv);
+	if (demuxer.priv) demuxer.uninit(demuxer.priv);
 	if (in) fclose(in);
 	if (out) fclose(out);
 	if (stats) fclose(stats);

@@ -111,7 +111,7 @@ typedef struct {
 	uint8_t * extra;
 } AVIStreamContext;
 
-typedef struct {
+struct demuxer_priv_s {
 	full_riff_tree_t * riff;
 	MainAVIHeader * avih;
 	AVIStreamContext * stream; // this is an array, free this
@@ -120,7 +120,7 @@ typedef struct {
 	FILE * in;
 	int cur;
 	uint8_t * buf;
-} AVIContext;
+};
 
 static int mk_riff_tree(FILE * in, riff_tree_t * tree) {
 	int left;
@@ -252,7 +252,7 @@ static int avi_read_stream_header(AVIStreamContext * stream, riff_tree_t * tree)
 	return 0;
 }
 
-static int avi_read_main_header(AVIContext * avi, const riff_tree_t * tree) {
+static int avi_read_main_header(demuxer_priv_t * avi, const riff_tree_t * tree) {
 	int i, tmp = 0, err;
 	assert(tree->type == 0);
 	assert(strFOURCC(tree->listname) == mmioFOURCC('h','d','r','l'));
@@ -286,7 +286,7 @@ static int avi_read_main_header(AVIContext * avi, const riff_tree_t * tree) {
 	return 0;
 }
 
-static int avi_read_headers(AVIContext * avi) {
+static int avi_read_headers(demuxer_priv_t * avi) {
 	const riff_tree_t * tree;
 	int i, err;
 	if ((err = get_full_riff_tree(avi->in, avi->riff))) return err;
@@ -330,7 +330,7 @@ static int avi_read_headers(AVIContext * avi) {
 }
 
 static void * init(FILE * in) {
-	AVIContext * avi = malloc(sizeof(AVIContext));
+	demuxer_priv_t * avi = malloc(sizeof(demuxer_priv_t));
 	avi->avih = NULL;
 	avi->stream = NULL;
 	avi->index = NULL;
@@ -341,8 +341,7 @@ static void * init(FILE * in) {
 	return avi;
 }
 
-static void uninit(void * priv) {
-	AVIContext * avi = priv;
+static void uninit(demuxer_priv_t * avi) {
 	if (!avi) return;
 
 	uninit_riff(avi->riff);
@@ -351,8 +350,7 @@ static void uninit(void * priv) {
 	free(avi);
 }
 
-static int read_headers(void * priv, nut_stream_header_t ** nut_streams) {
-	AVIContext * avi = priv;
+static int read_headers(demuxer_priv_t * avi, nut_stream_header_t ** nut_streams) {
 	nut_stream_header_t * s;
 	int i;
 	if ((i = avi_read_headers(avi))) return i;
@@ -404,8 +402,7 @@ static int find_frame_type(FILE * in, int len, int * type) {
 	return 13;
 }
 
-static int get_packet(void * priv, nut_packet_t * p, uint8_t ** buf) {
-	AVIContext * avi = priv;
+static int get_packet(demuxer_priv_t * avi, nut_packet_t * p, uint8_t ** buf) {
 	char fourcc[4];
 	int err = 0;
 	int s; // stream
@@ -541,7 +538,7 @@ err_out:
 FILE * stats = NULL;
 int main(int argc, char * argv []) {
 	FILE * in;
-	AVIContext * avi = NULL;
+	demuxer_priv_t * avi = NULL;
 	int err = 0;
 	int i;
 	if (argc < 2) { printf("bleh, more params you fool...\n"); return 1; }

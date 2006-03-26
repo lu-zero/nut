@@ -10,12 +10,15 @@
 
 extern FILE * stats;
 
+typedef struct demuxer_priv_s demuxer_priv_t;
+
 struct demuxer_t {
 	char * extention;
 	void * (*init)(FILE * in); ///< returns priv
 	/// nut_streams must be free()'d!! nut_streams becomes invalid after uninit!!
-	int (*read_headers)(void * priv, nut_stream_header_t ** nut_streams);
+	int (*read_headers)(demuxer_priv_t * priv, nut_stream_header_t ** nut_streams);
 	/// buf must be handled by demuxer! no free-ing or mallocing done by controller.
-	int (*get_packet)(void * priv, nut_packet_t * p, uint8_t ** buf);
-	void (*uninit)(void * priv);
+	int (*get_packet)(demuxer_priv_t * priv, nut_packet_t * p, uint8_t ** buf);
+	void (*uninit)(demuxer_priv_t * priv);
+	demuxer_priv_t * priv;
 };

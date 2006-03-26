@@ -7,9 +7,6 @@
 
 #define PAGE_ALLOC 65000
 
-struct ogg_s;
-typedef struct ogg_s ogg_t;
-struct ogg_stream_s;
 typedef struct ogg_stream_s ogg_stream_t;
 
 typedef struct ogg_codec_s {
@@ -18,7 +15,7 @@ typedef struct ogg_codec_s {
 	char * fourcc;
 	int fourcc_len;
 	int type;
-	int (*read_headers)(ogg_t * ogg, int stream);
+	int (*read_headers)(demuxer_priv_t * ogg, int stream);
 	int (*get_pts)(ogg_stream_t * os);
 	int (*is_key)(ogg_stream_t * os);
 	void (*uninit)(ogg_stream_t * os);
@@ -53,7 +50,7 @@ struct ogg_stream_s {
 	int channel_count;
 };
 
-struct ogg_s {
+struct demuxer_priv_s {
 	FILE * in;
 	ogg_stream_t * streams;
 	int nstreams;
@@ -71,7 +68,7 @@ typedef struct __attribute__((packed)) ogg_header_s {
 	uint8_t segments;
 } ogg_header_t;
 
-static int vorbis_read_headers(ogg_t * ogg, int stream);
+static int vorbis_read_headers(demuxer_priv_t * ogg, int stream);
 static int vorbis_get_pts(ogg_stream_t * os);
 static void vorbis_uninit(ogg_stream_t * os);
 
@@ -90,7 +87,7 @@ static ogg_codec_t * ogg_codecs[] = {
 	NULL
 };
 
-static int find_stream(ogg_t * ogg, int serial) {
+static int find_stream(demuxer_priv_t * ogg, int serial) {
 	ogg_stream_t * os;
 	int i;
 	for (i = 0; i < ogg->nstreams; i++) {
@@ -109,7 +106,7 @@ static int find_stream(ogg_t * ogg, int serial) {
 	return i;
 }
 
-static int read_page(ogg_t * ogg, int * stream) {
+static int read_page(demuxer_priv_t * ogg, int * stream) {
 	ogg_header_t tmp;
 	ogg_stream_t * os;
 	uint8_t seg[256];
@@ -153,7 +150,7 @@ static int read_page(ogg_t * ogg, int * stream) {
 	return 0;
 }
 
-static int get_headers(ogg_t * ogg) {
+static int get_headers(demuxer_priv_t * ogg) {
 	int i;
 	int err;
 	int stream;
@@ -234,7 +231,7 @@ static int get_bits(bit_packer_t * bp, int bits, uint64_t * res) {
 
 #define CHECK(x) do{ if ((err = (x))) return err; }while(0)
 
-static int vorbis_read_headers(ogg_t * ogg, int stream) {
+static int vorbis_read_headers(demuxer_priv_t * ogg, int stream) {
 	ogg_stream_t * os = &ogg->streams[stream];
 	bit_packer_t bp;
 	uint64_t num;
@@ -494,7 +491,7 @@ static void vorbis_uninit(ogg_stream_t * os) {
 // END
 
 static void * init(FILE * in) {
-	ogg_t * ogg = malloc(sizeof(ogg_t));
+	demuxer_priv_t * ogg = malloc(sizeof(demuxer_priv_t));
 	ogg->streams = NULL;
 	ogg->nstreams = 0;
 	ogg->in = in;
@@ -502,8 +499,7 @@ static void * init(FILE * in) {
 	return ogg;
 }
 
-static void uninit(void * priv) {
-	ogg_t * ogg = priv;
+static void uninit(demuxer_priv_t * ogg) {
 	int i;
 	for (i = 0; i < ogg->nstreams; i++) {
 		if (ogg->streams[i].oc && ogg->streams[i].oc->uninit)
@@ -514,8 +510,7 @@ static void uninit(void * priv) {
 	free(ogg);
 }
 
-static int read_headers(void * priv, nut_stream_header_t ** nut_streams) {
-	ogg_t * ogg = priv;
+static int read_headers(demuxer_priv_t * ogg, nut_stream_header_t ** nut_streams) {
 	nut_stream_header_t * s;
 	int i;
 	int err;
@@ -553,8 +548,7 @@ static int read_headers(void * priv, nut_stream_header_t ** nut_streams) {
 	return 0;
 }
 
-static int get_packet(void * priv, nut_packet_t * p, uint8_t ** buf) {
-	ogg_t * ogg = priv;
+static int get_packet(demuxer_priv_t * ogg, nut_packet_t * p, uint8_t ** buf) {
 	int stream = ogg->last_stream;
 	ogg_stream_t * os = &ogg->streams[stream];
 	int err;
@@ -593,7 +587,7 @@ struct demuxer_t ogg_demuxer = {
 #ifdef OGG_PROG
 int main(int argc, char *argv[]) {
 	FILE * in;
-	ogg_t * ogg = NULL;
+	demuxer_priv_t * ogg = NULL;
 	int err = 0;
 	int i;
 	nut_packet_t p;
