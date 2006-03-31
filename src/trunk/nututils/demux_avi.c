@@ -1,6 +1,3 @@
-#define N 0
-
-
 #include "nutmerge.h"
 #include <string.h>
 
@@ -112,14 +109,14 @@ typedef struct {
 } AVIStreamContext;
 
 struct demuxer_priv_s {
+	FILE * in;
 	full_riff_tree_t * riff;
+	stream_t * s;
 	MainAVIHeader * avih;
 	AVIStreamContext * stream; // this is an array, free this
 	AVIINDEXENTRY * index; // this is an array and data
 	int packets;
-	FILE * in;
 	int cur;
-	uint8_t * buf;
 };
 
 static int mk_riff_tree(FILE * in, riff_tree_t * tree) {
@@ -329,89 +326,58 @@ static int avi_read_headers(demuxer_priv_t * avi) {
 	return 0;
 }
 
-static void * init(FILE * in) {
-	demuxer_priv_t * avi = malloc(sizeof(demuxer_priv_t));
-	avi->avih = NULL;
-	avi->stream = NULL;
-	avi->index = NULL;
-	avi->in = in;
-	avi->riff = init_riff();
-	avi->cur = 0;
-	avi->buf = NULL;
-	return avi;
-}
-
-static void uninit(demuxer_priv_t * avi) {
-	if (!avi) return;
-
-	uninit_riff(avi->riff);
-	free(avi->stream);
-	free(avi->buf);
-	free(avi);
-}
-
-static int read_headers(demuxer_priv_t * avi, nut_stream_header_t ** nut_streams) {
-	nut_stream_header_t * s;
+static int read_headers(demuxer_priv_t * avi, stream_t ** streams) {
 	int i;
 	if ((i = avi_read_headers(avi))) return i;
-	*nut_streams = s = malloc(sizeof(nut_stream_header_t) * (avi->avih->dwStreams + 1 + N));
+	*streams = avi->s = malloc(sizeof(stream_t) * (avi->avih->dwStreams + 1));
 	for (i = 0; i < avi->avih->dwStreams; i++) {
-		s[i].type = avi->stream[i].type;
-		s[i].time_base.den = avi->stream[i].strh->dwRate;
-		s[i].time_base.nom = avi->stream[i].strh->dwScale;
-		s[i].fixed_fps = 1;
-		s[i].decode_delay = !i; // FIXME
-		s[i].codec_specific_len = avi->stream[i].extra_len;
-		s[i].codec_specific = avi->stream[i].extra;
+		extern demuxer_t avi_demuxer;
+		avi->s[i].stream_id = i;
+		avi->s[i].demuxer = avi_demuxer;
+		avi->s[i].demuxer.priv = avi;
+		avi->s[i].packets_alloc = avi->s[i].npackets = 0;
+		avi->s[i].packets = NULL;
+		if (i == 0) avi->s[i].codec_id = e_mpeg4;
+		else avi->s[i].codec_id = e_null;
+
+		avi->s[i].sh.type = avi->stream[i].type;
+		avi->s[i].sh.time_base.den = avi->stream[i].strh->dwRate;
+		avi->s[i].sh.time_base.nom = avi->stream[i].strh->dwScale;
+		avi->s[i].sh.fixed_fps = 1;
+		avi->s[i].sh.decode_delay = !i; // FIXME
+		avi->s[i].sh.codec_specific_len = avi->stream[i].extra_len;
+		avi->s[i].sh.codec_specific = avi->stream[i].extra;
 		if (avi->stream[i].type == 0) { // video
-			s[i].fourcc_len = 4;
-			s[i].fourcc = avi->stream[i].video->biCompression;
+			avi->s[i].sh.fourcc_len = 4;
+			avi->s[i].sh.fourcc = avi->stream[i].video->biCompression;
 
-			s[i].width = avi->stream[i].video->biWidth;
-			s[i].height = avi->stream[i].video->biHeight;
-			s[i].sample_width = 0;
-			s[i].sample_height = 0;
-			s[i].colorspace_type = 0;
+			avi->s[i].sh.width = avi->stream[i].video->biWidth;
+			avi->s[i].sh.height = avi->stream[i].video->biHeight;
+			avi->s[i].sh.sample_width = 0;
+			avi->s[i].sh.sample_height = 0;
+			avi->s[i].sh.colorspace_type = 0;
 		} else { // audio
-			s[i].fourcc_len = 2;
-			s[i].fourcc = avi->stream[i].audio->wFormatTag;
+			avi->s[i].sh.fourcc_len = 2;
+			avi->s[i].sh.fourcc = avi->stream[i].audio->wFormatTag;
 
-			s[i].samplerate_nom = 1;
-			s[i].samplerate_denom = avi->stream[i].audio->nSamplesPerSec;
-			s[i].channel_count = avi->stream[i].audio->nChannels;
+			avi->s[i].sh.samplerate_nom = 1;
+			avi->s[i].sh.samplerate_denom = avi->stream[i].audio->nSamplesPerSec;
+			avi->s[i].sh.channel_count = avi->stream[i].audio->nChannels;
 		}
 	}
-	while (i < N + 2) { s[i] = s[0]; s[i++].decode_delay = 0; }
-	s[i].type = -1;
+	avi->s[i].stream_id = -1;
 	return 0;
 }
 
-static int find_frame_type(FILE * in, int len, int * type) {
-	uint8_t buf[len];
-	int i;
-	if (!len) { *type = 1; return 0; }
-	FREAD(in, len, buf);
-	fseek(in, -len, SEEK_CUR);
-	for (i = 0; i < len; i++) {
-		if (buf[i] != 0xB6) continue;
-
-		if (i == len - 1) return 11;
-		*type = buf[i+1] >> 6;
-		return 0;
-	}
-	return 13;
-}
-
-static int get_packet(demuxer_priv_t * avi, nut_packet_t * p, uint8_t ** buf) {
+static int fill_buffer(demuxer_priv_t * avi) {
 	char fourcc[4];
-	int err = 0;
-	int s; // stream
 	uint32_t len;
+	packet_t p;
 	if (ftell(avi->in) & 1) fgetc(avi->in);
 
 	if (avi->cur >= avi->packets) return -1;
 
-	if ((avi->stream[0].last_pts % 1000) < N && avi->buf) {
+	/*if ((avi->stream[0].last_pts % 1000) < N && avi->buf) {
 		p->next_pts = 0;
 		p->len = 5;
 		p->flags = NUT_FLAG_KEY;
@@ -422,79 +388,100 @@ static int get_packet(demuxer_priv_t * avi, nut_packet_t * p, uint8_t ** buf) {
 		free(avi->buf);
 		avi->buf = NULL;
 		return 0;
-	}
+	}*/
 
 	FREAD(avi->in, 4, fourcc);
 	FREAD(avi->in, 4, &len);
 	FIXENDIAN32(len);
-	p->next_pts = 0;
-	p->len = len;
-	p->flags = (avi->index[avi->cur++].dwFlags & 0x10) ? NUT_FLAG_KEY : 0;
-	p->stream = s = (fourcc[0] - '0') * 10 + (fourcc[1] - '0');
-	if (s == 0) { // 1 frame of video
-		int type;
-		p->pts = avi->stream[0].last_pts++; // FIXME
-		if ((err = find_frame_type(avi->in, len, &type))) return err;
-		if (stats) fprintf(stats, "%c", type==0?'I':type==1?'P':type==2?'B':'S');
-		switch (type) {
-			case 0: // I
-				if (!(p->flags & NUT_FLAG_KEY)) printf("Error detected stream %d frame %d\n", s, (int)p->pts);
-				p->flags |= NUT_FLAG_KEY;
-				break;
-			case 3: // S
-				printf("S-Frame %d\n", (int)ftell(avi->in));
-				//err = 12;
-				//goto err_out;
-				// FALL THROUGH!
-			case 1: { // P
-				off_t where = ftell(avi->in);
-				while (fourcc[0] != 'i') {
-					len += len & 1; // round up
-					fseek(avi->in, len, SEEK_CUR);
-					FREAD(avi->in, 4, fourcc);
-					FREAD(avi->in, 4, &len);
-					FIXENDIAN32(len);
-					if ((fourcc[0] - '0') * 10 + (fourcc[1] - '0') != 0) continue;
-					if ((err = find_frame_type(avi->in, len, &type))) goto err_out;
-					if (type != 2) break;
-					p->pts++;
-				}
-				fseek(avi->in, where, SEEK_SET);
-				break;
-			}
-			case 2: // B
-				p->pts--;
-				break;
-		}
-	} else if (s < avi->avih->dwStreams) { // 0.5 secs of audio or a single packet
-		int samplesize = avi->stream[s].strh->dwSampleSize;
-
-		p->pts = avi->stream[s].last_pts;
-		if (samplesize) avi->stream[s].last_pts += p->len / samplesize;
-		else avi->stream[s].last_pts++;
-
-		if (!(p->flags & NUT_FLAG_KEY)) printf("Error detected stream %d frame %d\n", s, (int)p->pts);
-		p->flags |= NUT_FLAG_KEY;
-	} else {
-		printf("%d %4.4s\n", avi->cur, fourcc);
-		err = 10;
-		goto err_out;
+	p.p.len = len;
+	p.p.flags = (avi->index[avi->cur++].dwFlags & 0x10) ? NUT_FLAG_KEY : 0;
+	p.p.stream = (fourcc[0] - '0') * 10 + (fourcc[1] - '0');
+	p.p.next_pts = p.p.pts = 0;
+	if ((unsigned)(fourcc[0] - '0') > 9 || (unsigned)(fourcc[1] - '0') > 9 || p.p.stream >= avi->avih->dwStreams) {
+		fprintf(stderr, "%d %4.4s\n", avi->cur, fourcc);
+		return 3;
 	}
-	*buf = avi->buf = realloc(avi->buf, p->len);
-	FREAD(avi->in, p->len, *buf);
-err_out:
-	return err;
+	if (p.p.stream == 1) {
+		// 0.5 secs of audio or a single packet
+		int samplesize = avi->stream[p.p.stream].strh->dwSampleSize;
+
+		p.p.pts = avi->stream[p.p.stream].last_pts;
+		if (samplesize) avi->stream[p.p.stream].last_pts += p.p.len / samplesize;
+		else avi->stream[p.p.stream].last_pts++;
+
+		if (!(p.p.flags & NUT_FLAG_KEY)) printf("Error detected stream %d frame %d\n", p.p.stream, (int)p.p.pts);
+		p.p.flags |= NUT_FLAG_KEY;
+	}
+	p.buf = malloc(p.p.len);
+	FREAD(avi->in, p.p.len, p.buf);
+	push_packet(&avi->s[p.p.stream], &p);
+	return 0;
 }
 
-struct demuxer_t avi_demuxer = {
+static demuxer_priv_t * init(FILE * in) {
+	demuxer_priv_t * avi = malloc(sizeof(demuxer_priv_t));
+	avi->avih = NULL;
+	avi->stream = NULL;
+	avi->index = NULL;
+	avi->in = in;
+	avi->riff = init_riff();
+	avi->cur = 0;
+	avi->s = NULL;
+	return avi;
+}
+
+static void uninit(demuxer_priv_t * avi) {
+	uninit_riff(avi->riff);
+	free(avi->stream);
+	free_streams(avi->s);
+	free(avi->s);
+	free(avi);
+}
+
+demuxer_t avi_demuxer = {
 	"avi",
 	init,
 	read_headers,
-	get_packet,
+	fill_buffer,
 	uninit
 };
 
+struct framer_priv_s { stream_t * stream; };
+
+static int n_get_packet(framer_priv_t * mc, packet_t * p) {
+	return get_stream_packet(mc->stream, p);
+}
+
+static int n_setup_headers(framer_priv_t * mc, nut_stream_header_t * s) {
+	*s = mc->stream->sh;
+	return 0; // nothing to do
+}
+
+static framer_priv_t * n_init(stream_t * s) {
+	framer_priv_t * mc = malloc(sizeof(framer_priv_t));
+	mc->stream = s;
+	return mc;
+}
+
+static void n_uninit(framer_priv_t * mc) {
+	free(mc);
+}
+
+framer_t null_framer = {
+	e_null,
+	n_init,
+	n_setup_headers,
+	n_get_packet,
+	n_uninit,
+	NULL
+};
+
+
 #ifdef RIFF_PROG
+void ready_stream(stream_t * streams){}
+void push_packet(stream_t * stream, packet_t * p){}
+void free_streams(stream_t * streams){}
+int get_stream_packet(stream_t * stream, packet_t * p){return 0;}
 void print_riff_tree(riff_tree_t * tree, int indent) {
 	char ind[indent + 1];
 	int i;
@@ -535,6 +522,10 @@ err_out:
 #endif
 
 #ifdef AVI_PROG
+void ready_stream(stream_t * streams){}
+void push_packet(stream_t * stream, packet_t * p){}
+void free_streams(stream_t * streams){}
+int get_stream_packet(stream_t * stream, packet_t * p){return 0;}
 FILE * stats = NULL;
 int main(int argc, char * argv []) {
 	FILE * in;
