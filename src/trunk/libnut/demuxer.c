@@ -268,7 +268,7 @@ static int get_main_header(nut_context_t * nut) {
 				continue;
 			}
 			nut->ft[i].flags = flag;
-			nut->ft[i].stream_plus1 = stream;
+			nut->ft[i].stream = stream;
 			nut->ft[i].mul = mul;
 			nut->ft[i].lsb = size + j;
 			nut->ft[i].pts_delta = timestamp;
@@ -519,12 +519,19 @@ static int get_packet(nut_context_t * nut, nut_packet_t * pd, int * saw_syncpoin
 	flags = nut->ft[tmp].flags;
 	ERROR(flags & FLAG_INVALID, -ERR_NOT_FRAME_NOT_N);
 
-	if (!nut->ft[tmp].stream_plus1) GET_V(nut->i, pd->stream);
-	else pd->stream = nut->ft[tmp].stream_plus1 - 1;
+	if (flags & FLAG_CODED) {
+		int coded_flags;
+		GET_V(nut->i, coded_flags);
+		flags ^= coded_flags;
+	}
+	pd->flags = flags & NUT_API_FLAGS;
+
+	if (flags & FLAG_STREAM_ID) GET_V(nut->i, pd->stream);
+	else pd->stream = nut->ft[tmp].stream;
 
 	ERROR(pd->stream >= nut->stream_count, -ERR_NOT_FRAME_NOT_N);
 
-	if (!nut->ft[tmp].pts_delta) {
+	if (flags & FLAG_CODED_PTS) {
 		uint64_t coded_pts;
 		GET_V(nut->i, coded_pts);
 		if (coded_pts >= (1 << nut->sc[pd->stream].msb_pts_shift))
@@ -539,20 +546,15 @@ static int get_packet(nut_context_t * nut, nut_packet_t * pd, int * saw_syncpoin
 		pd->pts = nut->sc[pd->stream].last_pts + nut->ft[tmp].pts_delta;
 	}
 
-	if (flags & FLAG_CODED) {
-		int coded_flags;
-		GET_V(nut->i, coded_flags);
-		flags ^= coded_flags;
-	}
-	pd->flags = flags & NUT_API_FLAGS;
-
 	if (flags & FLAG_SIZE_MSB) {
 		int size_msb;
 		GET_V(nut->i, size_msb);
 		pd->len = size_msb * nut->ft[tmp].mul + nut->ft[tmp].lsb;
 	} else pd->len = nut->ft[tmp].lsb;
 
-	for (i = 0; i < nut->ft[tmp].reserved; i++) { int scrap; GET_V(nut->i, scrap); }
+	i = nut->ft[tmp].reserved;
+	if (flags & FLAG_RESERVED) GET_V(nut->i, i);
+	while (i--) { int scrap; GET_V(nut->i, scrap); }
 
 	if (flags & FLAG_CHECKSUM) {
 		CHECK(skip_buffer(nut->i, 4)); // header_checksum

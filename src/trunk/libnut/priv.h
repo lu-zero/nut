@@ -19,8 +19,11 @@
 
 #define NUT_API_FLAGS    3
 
+#define FLAG_CODED_PTS   8
+#define FLAG_STREAM_ID  16
 #define FLAG_SIZE_MSB   32
 #define FLAG_CHECKSUM   64
+#define FLAG_RESERVED  128
 #define FLAG_CODED    4096
 #define FLAG_INVALID  8192
 
@@ -73,7 +76,7 @@ typedef struct {
 	uint16_t lsb;
 	int16_t pts_delta;
 	uint8_t reserved;
-	uint8_t stream_plus1;
+	uint8_t stream;
 } frame_table_t;
 
 typedef struct {

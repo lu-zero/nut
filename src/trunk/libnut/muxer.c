@@ -152,15 +152,15 @@ static void put_main_header(nut_context_t * nut) {
 		timestamp = nut->ft[i].pts_delta;
 		if (nut->ft[i].mul != mul) fields = 2;
 		mul = nut->ft[i].mul;
-		if (nut->ft[i].stream_plus1 != stream) fields = 3;
-		stream = nut->ft[i].stream_plus1;
+		if (nut->ft[i].stream != stream) fields = 3;
+		stream = nut->ft[i].stream;
 		if (nut->ft[i].lsb != 0) fields = 4;
 		size = nut->ft[i].lsb;
 
 		for (count = 0; i < 256; count++, i++) {
 			if (i == 'N') { count--; continue; }
 			if (nut->ft[i].flags != flag) break;
-			if (nut->ft[i].stream_plus1 != stream) break;
+			if (nut->ft[i].stream != stream) break;
 			if (nut->ft[i].mul != mul) break;
 			if (nut->ft[i].lsb != size + count) break;
 			if (nut->ft[i].pts_delta != timestamp) break;
@@ -404,22 +404,24 @@ static int frame_header(nut_context_t * nut, output_buffer_t * tmp, const nut_pa
 		int len = 1; // frame code
 		int flags = nut->ft[i].flags;
 		if (flags & FLAG_INVALID) continue;
-		if (nut->ft[i].stream_plus1 && nut->ft[i].stream_plus1 - 1 != fd->stream) continue;
-		if (nut->ft[i].pts_delta && nut->ft[i].pts_delta != pts_delta) continue;
 		if (flags & FLAG_CODED) {
 			flags = fd->flags & NUT_API_FLAGS;
+			if (nut->ft[i].stream != fd->stream) flags |= FLAG_STREAM_ID;
+			if (nut->ft[i].pts_delta != pts_delta) flags |= FLAG_CODED_PTS;
 			if (nut->ft[i].lsb != fd->len) flags |= FLAG_SIZE_MSB;
 			if (checksum) flags |= FLAG_CHECKSUM;
 			flags |= FLAG_CODED;
 		}
+		if ((flags ^ fd->flags) & NUT_API_FLAGS) continue;
+		if (!(flags & FLAG_STREAM_ID) && nut->ft[i].stream != fd->stream) continue;
+		if (!(flags & FLAG_CODED_PTS) && nut->ft[i].pts_delta != pts_delta) continue;
 		if (flags & FLAG_SIZE_MSB) { if ((fd->len - nut->ft[i].lsb) % nut->ft[i].mul) continue; }
 		else { if (nut->ft[i].lsb != fd->len) continue; }
-		if ((flags ^ fd->flags) & NUT_API_FLAGS) continue;
-		if (checksum && !(flags & FLAG_CHECKSUM)) continue;
+		if (!(flags & FLAG_CHECKSUM) && checksum) continue;
 
-		len += nut->ft[i].stream_plus1  ? 0 : v_len(fd->stream);
-		len += nut->ft[i].pts_delta     ? 0 : v_len(coded_pts);
 		len += !(flags & FLAG_CODED)    ? 0 : v_len(flags ^ nut->ft[i].flags);
+		len += !(flags & FLAG_STREAM_ID)? 0 : v_len(fd->stream);
+		len += !(flags & FLAG_CODED_PTS)? 0 : v_len(coded_pts);
 		len += !(flags & FLAG_SIZE_MSB) ? 0 : v_len((fd->len - nut->ft[i].lsb) / nut->ft[i].mul);
 		len += !(flags & FLAG_CHECKSUM) ? 0 : 4;
 		if (!size || len < size) { ftnum = i; coded_flags = flags; size = len; }
@@ -427,9 +429,9 @@ static int frame_header(nut_context_t * nut, output_buffer_t * tmp, const nut_pa
 	assert(ftnum != -1);
 	if (tmp) {
 		put_bytes(tmp, 1, ftnum); // frame_code
-		if (!nut->ft[ftnum].stream_plus1) put_v(tmp, fd->stream);
-		if (!nut->ft[ftnum].pts_delta)    put_v(tmp, coded_pts);
 		if (coded_flags & FLAG_CODED)     put_v(tmp, coded_flags ^ nut->ft[ftnum].flags);
+		if (coded_flags & FLAG_STREAM_ID) put_v(tmp, fd->stream);
+		if (coded_flags & FLAG_CODED_PTS) put_v(tmp, coded_pts);
 		if (coded_flags & FLAG_SIZE_MSB)  put_v(tmp, (fd->len - nut->ft[ftnum].lsb) / nut->ft[ftnum].mul);
 		if (coded_flags & FLAG_CHECKSUM)  put_bytes(tmp, 4, crc32(tmp->buf, bctello(tmp)));
 	}
@@ -517,7 +519,7 @@ nut_context_t * nut_muxer_init(const nut_muxer_opts_t * mopts, const nut_stream_
 				continue;
 			}
 			nut->ft[i].flags = flag;
-			nut->ft[i].stream_plus1 = stream;
+			nut->ft[i].stream = stream;
 			nut->ft[i].mul = mul;
 			nut->ft[i].lsb = size + j;
 			nut->ft[i].pts_delta = timestamp;
