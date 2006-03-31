@@ -263,7 +263,7 @@ static int get_main_header(nut_context_t * nut) {
 
 		for(j = 0; j < count && i < 256; j++, i++) {
 			if (i == 'N') {
-				nut->ft[i].flags = INVALID_FLAG;
+				nut->ft[i].flags = FLAG_INVALID;
 				j--;
 				continue;
 			}

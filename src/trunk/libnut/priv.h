@@ -24,9 +24,6 @@
 #define FLAG_CODED    4096
 #define FLAG_INVALID  8192
 
-#define STREAM_CODED_FLAG 2
-#define INVALID_FLAG 4
-
 #define PREALLOC_SIZE 4096
 
 #define MIN(a,b) ((a) < (b) ? (a) : (b))
