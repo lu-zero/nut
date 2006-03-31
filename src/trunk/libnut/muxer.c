@@ -404,8 +404,6 @@ static int frame_header(nut_context_t * nut, output_buffer_t * tmp, const nut_pa
 		int len = 1; // frame code
 		int flags = nut->ft[i].flags;
 		if (flags & FLAG_INVALID) continue;
-		fprintf(stderr, "%d\n", i);
-		if (nut->ft[i].stream_plus1) { len = 2; }
 		if (nut->ft[i].stream_plus1 && nut->ft[i].stream_plus1 - 1 != fd->stream) continue;
 		if (nut->ft[i].pts_delta && nut->ft[i].pts_delta != pts_delta) continue;
 		if (flags & FLAG_CODED) {
