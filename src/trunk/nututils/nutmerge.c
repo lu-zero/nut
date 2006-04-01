@@ -184,7 +184,7 @@ int main(int argc, char * argv []) {
 
 	for (i = 0; streams[i].stream_id >= 0; i++);
 
-	convert(out, &demuxer, streams, i);
+	err = convert(out, &demuxer, streams, i);
 
 err_out:
 	if (demuxer.priv) demuxer.uninit(demuxer.priv);
