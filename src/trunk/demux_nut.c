@@ -87,18 +87,19 @@ static demuxer_t * demux_open_nut(demuxer_t * demuxer) {
 		case NUT_AUDIO_CLASS: {
 			WAVEFORMATEX *wf= calloc(sizeof(WAVEFORMATEX) + s[i].codec_specific_len, 1);
 			sh_audio_t* sh_audio=new_sh_audio(demuxer, i);
+			int j;
 
 			sh_audio->wf= wf; sh_audio->ds = demuxer->audio;
 			sh_audio->audio.dwSampleSize = 0; // FIXME
 			sh_audio->audio.dwScale = s[i].time_base.nom;
 			sh_audio->audio.dwRate = s[i].time_base.den;
-			if (s[i].fourcc_len == 4) sh_audio->format = *(uint32_t*)s[i].fourcc;
-			else sh_audio->format = *(uint16_t*)s[i].fourcc; // FIXME
+			sh_audio->format = 0;
+			for (j = 0; j < s[i].fourcc_len && j < 4; j++) sh_audio->format |= s[i].fourcc[j]<<(j*8);
 			sh_audio->channels = s[i].channel_count;
 			sh_audio->samplerate = s[i].samplerate_nom / s[i].samplerate_denom;
 			sh_audio->i_bps = 0; // FIXME
 
-			wf->wFormatTag = *(uint16_t*)s[i].fourcc; // FIXME
+			wf->wFormatTag = sh_audio->format;
 			wf->nChannels = s[i].channel_count;
 			wf->nSamplesPerSec = s[i].samplerate_nom / s[i].samplerate_denom;
 			wf->nAvgBytesPerSec = 0; // FIXME
@@ -115,6 +116,7 @@ static demuxer_t * demux_open_nut(demuxer_t * demuxer) {
 		case NUT_VIDEO_CLASS: {
 			BITMAPINFOHEADER * bih = calloc(sizeof(BITMAPINFOHEADER) + s[i].codec_specific_len, 1);
 			sh_video_t * sh_video = new_sh_video(demuxer, i);
+			int j;
 
 			sh_video->bih = bih;
 			sh_video->ds = demuxer->video;
@@ -125,7 +127,8 @@ static demuxer_t * demux_open_nut(demuxer_t * demuxer) {
 
 			sh_video->fps=(float)sh_video->video.dwRate/(float)sh_video->video.dwScale;
 			sh_video->frametime=(float)sh_video->video.dwScale/(float)sh_video->video.dwRate;
-			sh_video->format = *(uint32_t*)s[i].fourcc; // FIXME
+			sh_video->format = 0;
+			for (j = 0; j < s[i].fourcc_len && j < 4; j++) sh_video->format |= s[i].fourcc[j]<<(j*8);
 			if (!s[i].sample_height) sh_video->aspect = 0;
 			else sh_video->aspect = (float)s[i].sample_width / s[i].sample_height;
 			sh_video->i_bps = 0; // FIXME
@@ -135,7 +138,7 @@ static demuxer_t * demux_open_nut(demuxer_t * demuxer) {
 			bih->biHeight = s[i].height;
 			bih->biBitCount = 0; // FIXME
 			bih->biSizeImage = 0; // FIXME
-			bih->biCompression = *(uint32_t*)s[i].fourcc; // FIXME
+			bih->biCompression = sh_video->format;
 
 			if (s[i].codec_specific_len)
 				memcpy(bih + 1, s[i].codec_specific, s[i].codec_specific_len);
