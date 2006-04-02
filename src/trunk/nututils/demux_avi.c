@@ -477,11 +477,13 @@ framer_t null_framer = {
 };
 
 
-#ifdef RIFF_PROG
+#ifdef AVI_PROG
 void ready_stream(stream_t * streams){}
 void push_packet(stream_t * stream, packet_t * p){}
 void free_streams(stream_t * streams){}
 int get_stream_packet(stream_t * stream, packet_t * p){return 0;}
+FILE * stats = NULL;
+
 void print_riff_tree(riff_tree_t * tree, int indent) {
 	char ind[indent + 1];
 	int i;
@@ -500,33 +502,6 @@ void print_riff_tree(riff_tree_t * tree, int indent) {
 	}
 }
 
-FILE * stats = NULL;
-int main(int argc, char * argv []) {
-	FILE * in;
-	full_riff_tree_t * full = init_riff();
-	int err = 0;
-	int i;
-	if (argc < 2) { printf("bleh, more params you fool...\n"); return 1; }
-	in = fopen(argv[1], "r");
-
-	if ((err = get_full_riff_tree(in, full))) goto err_out;
-	for (i = 0; i < full->amount; i++) {
-		print_riff_tree(&full->tree[i], 0);
-	}
-
-err_out:
-	uninit_riff(full);
-	fclose(in);
-	return err;
-}
-#endif
-
-#ifdef AVI_PROG
-void ready_stream(stream_t * streams){}
-void push_packet(stream_t * stream, packet_t * p){}
-void free_streams(stream_t * streams){}
-int get_stream_packet(stream_t * stream, packet_t * p){return 0;}
-FILE * stats = NULL;
 int main(int argc, char * argv []) {
 	FILE * in;
 	demuxer_priv_t * avi = NULL;
@@ -539,6 +514,11 @@ int main(int argc, char * argv []) {
 
 	if ((err = avi_read_headers(avi))) goto err_out;
 
+	for (i = 0; i < avi->riff->amount; i++) {
+		print_riff_tree(&avi->riff->tree[i], 0);
+	}
+
+	printf("\n");
 	printf("Main AVI Header:\n");
 	printf("dwMicroSecPerFrame: %u\n", avi->avih->dwMicroSecPerFrame);
 	printf("dwMaxBytesPerSec: %u\n", avi->avih->dwMaxBytesPerSec);

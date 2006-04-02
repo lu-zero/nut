@@ -24,7 +24,7 @@ to use:
 
 to debug:
 Always look at $?  !
-./riffreader bla.avi;   ./avireader bla.avi
+./avireader bla.avi
 ./oggreader bla.ogg
 
 

@@ -2,10 +2,8 @@ include ../config.mak
 
 CFLAGS += -I../libnut -lm
 
-all: riffreader avireader nutmerge nutindex # oggreader
+all: avireader nutmerge nutindex # oggreader
 
-riffreader: demux_avi.c
-	${CC} ${CFLAGS} -DRIFF_PROG $^ -o $@
 avireader: demux_avi.c
 	${CC} ${CFLAGS} -DAVI_PROG $^ -o $@
 oggreader: demux_ogg.c
@@ -16,4 +14,4 @@ nutindex: nutindex.c
 	${CC} ${CFLAGS} $^ -o $@
 
 clean:
-	rm -f *\~ nutmerge nutindex avireader oggreader riffreader *.o
+	rm -f *\~ nutmerge nutindex avireader oggreader *.o
