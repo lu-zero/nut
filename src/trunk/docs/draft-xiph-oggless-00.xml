@@ -90,6 +90,9 @@
 	global headers described here is suggested to be used in every future
 	codec. Developers should not interchange the two distinct concepts of
 	codec and container.</t>
+
+	<t>New codec developers for maximal interoperability, shall design
+	with one global header in mind.</t>
     </section>
 
     <section title="Minimum container requirements">
@@ -150,6 +153,7 @@
 	    <t>FLAC: flac</t>
 	    <t>Speex: spex</t>
 	    <t>Tarkin: trkn</t> <!-- FIXME: do we need this?! -->
+	    <t>CMML: cmml</t>
 	</list></t>
 
 	<t>If the container uses arbitrary length strings as identifiers, then
@@ -160,6 +164,7 @@
 	    <t>FLAC: flac</t>
 	    <t>Speex: speex</t>
 	    <t>Tarkin: tarkin</t> <!-- FIXME: do we need this?! -->
+	    <t>CMML: cmml</t>
 	</list></t>
     </section>
 
