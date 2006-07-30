@@ -139,7 +139,7 @@
 	</section>
 
 	<section title="Theora">
-	<t>Theora follows the same architecture than Vorbis.</t>
+	<t>Theora follows the same architecture as Vorbis:</t>
 	<list style="symbols">
 	<t>The first header starts with 128,'t','h','e','o','r','a'.</t>
 	<t>The second header starts with 129,'t','h','e','o','r','a' and
@@ -250,12 +250,17 @@
 	<section title="Quicktime">
 	    <t>Quicktime currently lacks an unambigous place for a global header.</t>
 
-	    <t>A simple proposed way is storing a "glbl" chunk inside the track
-	    header, containing the global headers. FIXME!</t>
+	    <t>A simple proposed way is storing the global headers in a "glbl"
+	    atom inside the "stsd" atom.</t>
 	</section>
 
 	<section title="MPEG4">
-	    <t>MPEG4 is based on Quicktime and has an ESDS atom for the purpose. FIXME!</t>
+	    <t>The global header should be stored in the "stsd" atom the same way as
+	    'mp4a' does and object type shall be set correctly in esds.</t>
+
+	    <!-- FIXME: It seems gpac already does it and uses a object type.
+	    That object type should be registered to mp4ra.org.
+	     -- Baptiste COUDURIER -->
 	</section>
     </section>
 </middle>
