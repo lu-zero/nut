@@ -109,16 +109,19 @@
 	<t>If the container can store three headers per stream in an unambiguos
 	and ordered way then they shall be stored in that way. If on the other
 	hand the container is only capable to store a single global header
-	then the three Vorbis headers shall be concatenated without any
-	additional header, footer or seperator between them to recover the
-	three headers from such a global header the following procedure shall
-	be used:
-	<list style="numbers">
+	then the multiple headers shall be concatenated without any additional
+	header, footer or separator between.</t>
+
+	<t>To recover the three headers from such a global header, the following
+	procedures shall be used:</t>
+
+	<section title="Vorbis">
+	<t><list style="numbers">
 	    <t>search for the first occurance of 01,'v','o','r','b','i','s'
 		<list style="none"><t>the found match and the following 23 bytes are the 1st header
 		packet</t></list>
 	    </t>
-    	    <t>search for the 1st occurance of 03,'v','o','r','b','i','s' after here
+    	    <t>search for the first occurance of 03,'v','o','r','b','i','s' after here
 		<list style="symbols">
 		    <t>read an unsigned integer of 32 bits and skip that many bytes</t>
 		    <t>[user_comment_list_length] = read an unsigned integer of 32 bits</t>
@@ -129,18 +132,32 @@
 		</list>
 	    </t>
 	    <t>the match in 2. and what follows until here is the 2nd header packet</t>
-	    <t>search for the 1st occurance of 05,'v','o','r','b','i','s' after here
+	    <t>search for the first occurance of 05,'v','o','r','b','i','s' after here
 		<list style="none"><t>the matching part and what follows is the 3rd header packet</t></list>
 	    </t>
+	</list></t>
+	</section>
+
+	<section title="Theora">
+	<t>Theora follows the same architecture than Vorbis.</t>
+	<list style="symbols">
+	<t>The first header starts with 128,'t','h','e','o','r','a'.</t>
+	<t>The second header starts with 129,'t','h','e','o','r','a' and
+	contains comments in the same way as Vorbis.</t>
+	<t>The third header starts with 130,'t','h','e','o','r','a'.</t>
 	</list>
-	</t>
+	</section>
+
+	<section title="FLAC">
+	<t>FLAC has only one global header packet, starting with the FOURCC fLaC</t>
+	</section>
     </section>
 
     <section title="Storing packets">
-	<t>Each Vorbis packet shall be stored in exactly one "container packet"
-	and one "container packet" must not contain more then one Vorbis packet.</t>
+	<t>Each codec packet shall be stored in exactly one "container packet"
+	and one "container packet" must not contain more then one codec packet.</t>
 	<t>A "container packet" here means the smallest seperateable unit of data
-	in the container</t>
+	in the container.</t>
     </section>
 
     <section title="Codec identifier">
@@ -168,10 +185,13 @@
 	</list></t>
     </section>
 
-    <section title="Example use in common containers">
+    <section title="Preferred use in common containers">
 	<t>What follows are some notes about specific containers. These notes
 	are just informative as they just repeat what is written above or in
 	the specification of the specific container.</t>
+
+	<t>If a codec is not mentioned below, it does not have any special
+	requirements.</t>
 
 	<section title="AVI">
 	    <t>AVI supports everything needed to store Vorbis. This does not
