@@ -1,0 +1,286 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd" [
+    <!ENTITY rfc2119 PUBLIC ''
+	'http://xml.resource.org/public/rfc/bibxml/reference.RFC.2119.xml'>
+    <!ENTITY rfc2361 PUBLIC ''
+	'http://xml.resource.org/public/rfc/bibxml/reference.RFC.2361.xml'>
+    <!ENTITY rfc3533 PUBLIC ''
+	'http://xml.resource.org/public/rfc/bibxml/reference.RFC.3533.xml'>
+]>
+
+<rfc category="std" ipr="full2026" docName="draft-xiph-oggless-00.xml">
+
+<?xml-stylesheet type='text/xsl' href='rfc2629.xslt' ?>
+
+<?rfc toc="yes" ?>
+<?rfc compact="yes" ?>
+<?rfc symrefs="yes" ?>
+<?rfc sortrefs="yes"?>
+<?rfc iprnotified="no" ?>
+<?rfc strict="no" ?>
+
+<front>
+    <title abbrev="Xiph codecs without Ogg">
+	Using Xiph codecs outside the Ogg container
+    </title>
+
+    <author initials="M." surname="Niedermayer" fullname="Michael Niedermayer">
+	<organization>FFmpeg</organization>
+	<address>
+	    <email>michaelni@gmx.at</email>
+	    <uri>http://www.ffmpeg.org/</uri>
+	</address>
+    </author>
+
+    <author initials="A." surname="Beregszaszi" fullname="Alex Beregszaszi">
+	<organization>Siqon</organization>
+	<address>
+    	    <email>alex@siqon.com</email>
+	    <uri>http://www.siqon.com/</uri>
+	</address>
+    </author>
+
+    <date month="July" year="2006"/>
+    <abstract>
+	<t>This document describes a way for using codecs made by Xiph in
+	other container formats than their own Ogg format.</t>
+    </abstract>
+</front>
+
+<middle>
+    <section title="Requirements notation">
+        <t>The key words "MUST", "MUST NOT", "REQUIRED", "SHALL",
+        "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY",
+        and "OPTIONAL" in this document are to be interpreted as
+        described in <xref target="RFC2119"/>.</t>
+    </section>
+
+    <section title="Security Considerations">
+	<t>None.</t>
+    </section>
+
+    <section title="Introduction">
+	<t>The Xiph Foundation develops and maintains several audio and video
+	codecs. All of these codecs are bound technically to their container
+	format <xref target="RFC3533">Ogg</xref>.</t>
+
+	<t>The Ogg container format organizes only data packets, but has no
+	knowledge of the content of these packets. Different codec outputs
+	are stored in these packets. It neither has a field for storing global
+	headers of these codecs, if they may present. Headers are just stored
+	the same way as other data packets, without any notation.</t>
+
+	<t>Vorbis and Theora are designed to be stored in the Ogg container format
+	and FLAC and Speex have been adapted to it. All of them can have more
+	headers, at most three of them. These headers are stored in individual
+	packets.</t>
+
+	<t>Other container formats have a global header section and packets only
+	contain frame data and never headers. Such formats include AVI, ASF,
+	Matroska, MPEG4 and NUT. Quicktime can be extended with support. MPEG
+	formats are lack of this hiearachy.</t>
+
+	<t>With this proposal it will be possible to losslessly move codecs between
+	Ogg and the above mentioned formats which support global headers.</t>
+    </section>
+
+    <section title="Other codecs">
+	<t>Altought this document handles only Ogg codecs, the way of storing
+	global headers described here is suggested to be used in every future
+	codec. Developers should not interchange the two distinct concepts of
+	codec and container.</t>
+    </section>
+
+    <section title="Minimum container requirements">
+	<t>This appendix only explains how to store Vorbis in containers which
+	support at least one global header per stream, can seperate individual
+	Vorbis packets and support variable bitrate and variable number of
+	samples per packet.</t>
+	<t>Storage of Vorbis in other containers is outside the scope of this
+	appendix.</t>
+    </section>
+
+    <!-- FIXME: change this to a global manner -->
+    <section title="Storing global header">
+	<t>If the container can store three headers per stream in an unambiguos
+	and ordered way then they shall be stored in that way. If on the other
+	hand the container is only capable to store a single global header
+	then the three Vorbis headers shall be concatenated without any
+	additional header, footer or seperator between them to recover the
+	three headers from such a global header the following procedure shall
+	be used:
+	<list style="numbers">
+	    <t>search for the first occurance of 01,'v','o','r','b','i','s'
+		<list style="none"><t>the found match and the following 23 bytes are the 1st header
+		packet</t></list>
+	    </t>
+    	    <t>search for the 1st occurance of 03,'v','o','r','b','i','s' after here
+		<list style="symbols">
+		    <t>read an unsigned integer of 32 bits and skip that many bytes</t>
+		    <t>[user_comment_list_length] = read an unsigned integer of 32 bits</t>
+		    <t>iterate [user_comment_list_length] times {</t>
+		    <t>read an unsigned integer of 32 bits and skip that many bytes</t>
+		    <t>}</t>
+		    <t>skip 1 byte</t>
+		</list>
+	    </t>
+	    <t>the match in 2. and what follows until here is the 2nd header packet</t>
+	    <t>search for the 1st occurance of 05,'v','o','r','b','i','s' after here
+		<list style="none"><t>the matching part and what follows is the 3rd header packet</t></list>
+	    </t>
+	</list>
+	</t>
+    </section>
+
+    <section title="Storing packets">
+	<t>Each Vorbis packet shall be stored in exactly one "container packet"
+	and one "container packet" must not contain more then one Vorbis packet.</t>
+	<t>A "container packet" here means the smallest seperateable unit of data
+	in the container</t>
+    </section>
+
+    <section title="Codec identifier">
+	<t>If the container uses four character codes (FOURCC;
+	<xref target="RFC2361">AVI</xref> and <xref target="FOURCC">Fourcc.org</xref>),
+	then the following identifiers shall be used:
+	<list style="symbols">
+	    <t>Vorbis: vrbs</t>
+	    <t>Theora: theo</t>
+	    <t>FLAC: flac</t>
+	    <t>Speex: spex</t>
+	    <t>Tarkin: trkn</t> <!-- FIXME: do we need this?! -->
+	</list></t>
+
+	<t>If the container uses arbitrary length strings as identifiers, then
+	the following identifiers shall be used:
+	<list style="symbols">
+	    <t>Vorbis: vorbis</t>
+	    <t>Theora: theora</t>
+	    <t>FLAC: flac</t>
+	    <t>Speex: speex</t>
+	    <t>Tarkin: tarkin</t> <!-- FIXME: do we need this?! -->
+	</list></t>
+    </section>
+
+    <section title="Example use in common containers">
+	<t>What follows are some notes about specific containers. These notes
+	are just informative as they just repeat what is written above or in
+	the specification of the specific container.</t>
+
+	<section title="AVI">
+	    <t>AVI supports everything needed to store Vorbis. This does not
+	    mean that all application will support Vorbis in AVI, as Vorbis is
+	    rather different from other audio codecs commonly stored in AVI.</t>
+
+	    <t>AVI supports a single global header like WAV does, the three
+	    Vorbis headers shall be stored in it and only in it as described above</t>
+
+	    <t>dwSampleSize must be set to zero as Vorbis is VBR, many applications
+	    do this incorrectly for other VBR codecs and consequently VBR audio
+	    in avi becomes problematic</t>
+
+	    <t>AVI does not have timestamps, but each chunk has a constant duration,
+	    while Vorbis packets can have one of two durations. If now the AVI header
+	    is setup so that each AVI chunk has the same duration as the smaller
+	    duration of the two possibilities in Vorbis, then simply inserting empty
+	    AVI chunks will allow every AVI chunk to have the correct duration. This
+	    is of course not the most beautifull solution, but it is the only way to
+	    keep things exact. Additionally note, that empty chunks have been used
+	    since ages in AVI to lengthen the duration of video chunks.</t>
+	</section>
+
+	<section title="ASF">
+	    <t>ASF supports a single global header per stream and has timestamps so
+	    storing Vorbis in it should be possible.</t>
+	</section>
+
+	<section title="Matroska">
+	    <t><xref target="Matroska">Matroska</xref> supports storing three
+	    headers using a Vorbis-Matroska specific format, which should be used.</t>
+
+	    <t>Note, the above procedure to split one header into three works
+	    with the Vorbis-Matroska specific format too.</t>
+	</section>
+
+	<section title="NUT">
+	    <t><xref target="NUT">NUT</xref> supports a single global header per
+	    stream so the 3->1 merge and and the 1->3 split procedure above must be used.</t>
+
+	    <t>In addition to that, there is nothing special with storing Vorbis
+	    in NUT.</t>
+	</section>
+
+	<section title="MPEG-PS and MPEG-TS">
+	    <t>These containers neither support a global header, nor provide the
+	    neccessary packet seperation or framing, so storing Vorbis in them is
+	    outside the scope of this document.</t>
+	</section>
+
+	<section title="WAV">
+	    <t>WAV does not provide the neccessary packet seperation or framing,
+	    so storing Vorbis in it is outside the scope of this document.</t>
+	</section>
+
+	<section title="Quicktime">
+	    <t>Quicktime currently lacks an unambigous place for a global header.</t>
+
+	    <t>A simple proposed way is storing a "glbl" chunk inside the track
+	    header, containing the global headers. FIXME!</t>
+	</section>
+
+	<section title="MPEG4">
+	    <t>MPEG4 is based on Quicktime and has an ESDS atom for the purpose. FIXME!</t>
+	</section>
+    </section>
+</middle>
+
+<back>
+    <references>
+	&rfc2119;
+	&rfc2361;
+	&rfc3533;
+
+	<reference anchor="ASF">
+	    <front>
+		<title>Advanced Systems Format (ASF) by Microsoft. http://www.microsoft.com/windows/windowsmedia/forpros/format/asfspec.aspx</title>
+	    </front>
+	</reference>
+
+	<reference anchor="FOURCC">
+	    <front>
+		<title>Fourcc.org, a collection of four character codes. http://www.fourcc.org/</title>
+	    </front>
+	</reference>
+
+	<reference anchor="Matroska">
+	    <front>
+		<title>Matroska, the extensible open standard Audio/Video container.
+		http://www.matroska.org/</title>
+	    </front>
+	</reference>
+
+	<reference anchor="MPEG4">
+	    <front>
+		<title>MPEG-4 Part 14: MPEG-4 File Format: The designated
+		container file format for MPEG-4 content, which is based on
+		Part 12.</title>
+	    </front>
+	    <seriesInfo name="ISO/IEC" value="14496-14:2003" />
+	</reference>
+
+	<reference anchor="NUT">
+	    <front>
+		<title>NUT, an efficient container format. http://www.nut.hu/</title>
+	    </front>
+	</reference>
+
+	<reference anchor="Quicktime">
+	    <front>
+		<title>QuickTime File Format by Apple. http://www.digitalpreservation.gov/formats/fdd/fdd000052.shtml</title>
+	    </front>
+	</reference>
+    </references>
+</back>
+
+</rfc>
