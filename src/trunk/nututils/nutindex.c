@@ -275,7 +275,7 @@ static int find_copy_index(input_buffer_t * in, output_buffer_t * out, off_t * e
 	if (tmp != INDEX_STARTCODE) return 2;
 
 	GET_V(in, forward_ptr);
-	if (forward_ptr > 4) { // checksum
+	if (forward_ptr > 4096) { // checksum
 		skip_buffer(in, 4);
 		if (crc32(in->buf, in->buf_ptr - in->buf)) return 4;
 	}
@@ -307,12 +307,14 @@ static int find_copy_index(input_buffer_t * in, output_buffer_t * out, off_t * e
 	put_v(out, tmp + new_idx_len/16); // the new first syncpoint position
 	printf("%d => %d (%d)\n", (int)tmp, (int)(tmp + new_idx_len/16), new_idx_len);
 
+	forward_ptr += new_idx_len-idx_len;
+
 	idx_len = (in->filesize - 12) - bctello(in); // from where we are, until the index_ptr and checksum, copy everything
 	if (get_data(in, idx_len, out->buf_ptr)) return 1;
 	out->buf_ptr += idx_len;
 
 	put_bytes(out, 8, new_idx_len); // index_ptr
-	put_bytes(out, 4, crc32(out->buf, bctello(out))); // checksum
+	put_bytes(out, 4, crc32(out->buf_ptr - (forward_ptr - 4), forward_ptr - 4)); // checksum
 
 	return 0;
 }
