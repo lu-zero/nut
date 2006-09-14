@@ -81,7 +81,7 @@ typedef struct {
 
 typedef struct {
 	off_t pos;
-	uint64_t pts; // coded in '% stream_count'
+	uint64_t pts; // coded in '% timebase_count'
 	int back_ptr:30;
 	unsigned int seen_next:1;
 	unsigned int pts_valid:1;
