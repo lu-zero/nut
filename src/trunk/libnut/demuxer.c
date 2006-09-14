@@ -455,7 +455,7 @@ static int get_index(nut_context_t * nut) {
 			if (type) {
 				flag = x & 1;
 				x >>= 1;
-				while (x--) sl->pts[n++ * nut->stream_count + i] = flag;
+				while (x--) if (n < sl->len) sl->pts[n++ * nut->stream_count + i] = flag;
 				if (n < sl->len) sl->pts[n++ * nut->stream_count + i] = !flag;
 			} else {
 				while (x != 1) {
@@ -885,7 +885,7 @@ static int binary_search_syncpoint(nut_context_t * nut, double time_pos, off_t *
 		goto err_out;
 	}
 	if (i == 0) { // there isn't any syncpoint smaller than requested
-		int FIXME; // pos might not be accurate
+		int FIXME; // pos might not be accurate - if this function is called when there really is an index
 		seek_buf(nut->i, sl->s[0].pos, SEEK_SET); // seeking to first syncpoint
 		clear_dts_cache(nut);
 		nut->last_syncpoint = 0;
@@ -992,6 +992,7 @@ static int linear_search_seek(nut_context_t * nut, int backwards, uint64_t * pts
 		if (!nut->seek_status) seek_buf(nut->i, start, SEEK_SET);
 		nut->seek_status = 1;
 		// find closest syncpoint by linear search, SHOULD be one pointed by back_ptr...
+		// FIXME EAGAIN you should rewind here
 		CHECK(find_syncpoint(nut, 0, &s, 0));
 		clear_dts_cache(nut);
 		nut->last_syncpoint = 0; // last_key is invalid
@@ -1008,7 +1009,7 @@ static int linear_search_seek(nut_context_t * nut, int backwards, uint64_t * pts
 				break;
 			}
 		}
-		if (back_ptr > (nut->seek_status>>1)) stopper = NULL; // bad stopper, it points to a different back_ptr
+		if (back_ptr > (nut->seek_status>>1)) stopper = NULL; // bad stopper, it points to a different back_ptr FIXME so?..
 	}
 
 	if (!(nut->seek_status & 1)) while (bctello(nut->i) < end || !end) {
