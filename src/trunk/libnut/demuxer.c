@@ -375,7 +375,10 @@ static int get_syncpoint(nut_context_t * nut) {
 	int after_seek = nut->last_syncpoint ? 0 : 1;
 	input_buffer_t itmp, * tmp = new_mem_buffer(&itmp);
 
-	nut->last_syncpoint = s.pos = bctello(nut->i) - 8;
+	s.pos = bctello(nut->i) - 8;
+
+	if (nut->last_syncpoint == s.pos) after_seek = 1; // don't go through the same syncpoint twice
+	nut->last_syncpoint = s.pos;
 
 	CHECK(get_header(nut->i, tmp));
 
@@ -973,26 +976,19 @@ err_out:
 	return err;
 }
 
-static int linear_search_seek(nut_context_t * nut, int backwards, uint64_t * pts, off_t start, off_t end, syncpoint_t * stopper) {
+static int linear_search_seek(nut_context_t * nut, int backwards, seek_state_t * state, off_t start, off_t end, syncpoint_t * stopper) {
 	syncpoint_list_t * sl = &nut->syncpoints;
 	int i, err = 0;
-	off_t good_key[nut->stream_count]; // lsb is "has pts been found bigger than requested pts"
 	off_t min_pos = 0;
-	uint64_t old_last_pts[nut->stream_count];
 	off_t buf_before = 0;
 	off_t stopper_syncpoint = 0;
-
-	for (i = 0; i < nut->stream_count; i++) {
-		good_key[i] = nut->seek_state ? nut->seek_state[i].good_key : 0;
-		old_last_pts[i] = nut->seek_state ? nut->seek_state[i].old_last_pts : nut->sc[i].last_pts;
-	}
 
 	if (nut->seek_status <= 1) {
 		syncpoint_t s;
 		if (!nut->seek_status) seek_buf(nut->i, start, SEEK_SET);
 		nut->seek_status = 1;
 		// find closest syncpoint by linear search, SHOULD be one pointed by back_ptr...
-		// FIXME EAGAIN you should rewind here
+		buf_before = bctello(nut->i);
 		CHECK(find_syncpoint(nut, 0, &s, 0));
 		clear_dts_cache(nut);
 		nut->last_syncpoint = 0; // last_key is invalid
@@ -1010,31 +1006,24 @@ static int linear_search_seek(nut_context_t * nut, int backwards, uint64_t * pts
 			}
 		}
 		if (back_ptr > (nut->seek_status>>1)) stopper = NULL; // bad stopper, it points to a different back_ptr FIXME so?..
+		if (stopper_syncpoint > bctello(nut->i)) stopper_syncpoint = 0; // don't premature
 	}
 
 	if (!(nut->seek_status & 1)) while (bctello(nut->i) < end || !end) {
 		int saw_syncpoint;
 		nut_packet_t pd;
 		buf_before = bctello(nut->i);
-		CHECK(get_packet(nut, &pd, &saw_syncpoint)); // FIXME we're counting on syncpoint cache!!
+		CHECK(get_packet(nut, &pd, &saw_syncpoint)); // FIXME we're counting on syncpoint cache!! for the good_key later, and stopper_syncpoint
 
 		if (saw_syncpoint) {
-			int dont_flush = 0;
-			if (stopper) {
-				if ((!stopper_syncpoint && buf_before > stopper->pos - stopper->back_ptr + 15) || stopper_syncpoint == buf_before) {
-					int n = 1;
-					stopper_syncpoint = buf_before;
-					for (i = 0; i < nut->stream_count; i++) {
-						if (!(pts[i] & 1)) {
-							if (good_key[i]>>1) n = 0;
-							else good_key[i] |= 1; // flag that we don't care about this stream
-						}
-					}
-					if (n) break; // no inactive streams, stop now
-					dont_flush = 1; // give it a chance, we might be able to do this in a single seek
-				}
+			if (stopper && !stopper_syncpoint && buf_before > stopper->pos - stopper->back_ptr + 15) {
+				int n = 1;
+				stopper_syncpoint = buf_before;
+				for (i = 0; i < nut->stream_count; i++) if (!state[i].active && state[i].good_key) n = 0;
+				if (n) break; // no inactive streams have keyframes between stopper and stopper_syncpoint, stop now
 			}
-			if (!dont_flush) { // flush at every syncpoint
+			if (buf_before != stopper_syncpoint) {  // flush at every syncpoint - except stopper_syncpoint
+								// give it a chance, we might be able to do this in a single seek
 				int header_size = bctello(nut->i) - buf_before;
 				nut->i->buf_ptr -= header_size;
 				flush_buf(nut->i);
@@ -1042,42 +1031,41 @@ static int linear_search_seek(nut_context_t * nut, int backwards, uint64_t * pts
 			}
 		}
 
-		if (pts[pd.stream] & 1) { // active stream
-			if (end && pd.pts > pts[pd.stream]>>1) {
+		if (state[pd.stream].active) {
+			if (end && pd.pts > state[pd.stream].pts) { // higher than requested pts
 				int n = 1;
-				good_key[pd.stream] |= 1;
-				for (i = 0; i < nut->stream_count; i++) {
-					if ((pts[i] & 1) && !(good_key[i] & 1)) n = 0;
-				}
+				state[pd.stream].pts_higher = 1;
+				for (i = 0; i < nut->stream_count; i++) if (state[i].active && !state[i].pts_higher) n = 0;
 				if (n) break; // pts for all active streams higher than requested pts
 			}
 			if (pd.flags & NUT_FLAG_KEY) {
-				if (pd.pts <= pts[pd.stream]>>1) {
-					good_key[pd.stream] = buf_before<<1;
-					if (pd.flags & NUT_FLAG_EOR) good_key[pd.stream] = 0;
+				if (pd.pts <= state[pd.stream].pts) {
+					state[pd.stream].good_key = buf_before;
+					if (pd.flags & NUT_FLAG_EOR) state[pd.stream].good_key = 0;
 				}
-				if (!end && pd.pts >= pts[pd.stream]>>1) { // forward seek end
-					if (saw_syncpoint) nut->last_syncpoint = 0;
+				if (!end && pd.pts >= state[pd.stream].pts) { // forward seek end
 					nut->i->buf_ptr -= bctello(nut->i) - buf_before;
 					break;
 				}
 			}
-		} else if (stopper && pd.flags&NUT_FLAG_KEY && !(good_key[pd.stream]&1)) {
+		} else if (stopper && pd.flags&NUT_FLAG_KEY) {
+			off_t back_ptr = stopper->pos - stopper->back_ptr;
 			TO_PTS(stopper, stopper->pts)
-			if (compare_ts(nut, stopper_p, nut->tb[stopper_t], pd.pts, TO_TB(pd.stream)) > 0) {
-				good_key[pd.stream] = buf_before<<1;
-				if (stopper_syncpoint) {
+			// only relavent if pts is smaller than stopper, and we passed stopper's back_ptr
+			if (compare_ts(nut, pd.pts, TO_TB(pd.stream), stopper_p, nut->tb[stopper_t]) < 0 && buf_before >= back_ptr) {
+				if (!stopper_syncpoint) state[pd.stream].good_key = 1;
+				else if (state[pd.stream].good_key) {
 					int n = 1;
-					for (i = 0; i < nut->stream_count; i++) {
-						if (!(pts[i] & 1) && !(good_key[i]&1) && good_key[i]>>1 < stopper_syncpoint) n = 0;
-					}
-					// smart linear search stop, keyframe for every inactive stream after stopper_syncpoint
+					state[pd.stream].good_key = 0;
+					for (i = 0; i < nut->stream_count; i++) if (!state[i].active && state[i].good_key) n = 0;
+					// smart linear search stop
+					// keyframe for every inactive stream (which had a keyframe in stopper area), after stopper_syncpoint
 					if (n) break;
 				}
 			}
 		}
 		// dts higher than requested pts
-		if (end && peek_dts(nut->sc[pd.stream].sh.decode_delay, nut->sc[pd.stream].pts_cache, pd.pts) > (int64_t)(pts[pd.stream]>>1)) break;
+		if (end && peek_dts(nut->sc[pd.stream].sh.decode_delay, nut->sc[pd.stream].pts_cache, pd.pts) > (int64_t)state[pd.stream].pts) break;
 
 		CHECK(skip_buffer(nut->i, pd.len));
 		push_frame(nut, &pd);
@@ -1085,12 +1073,12 @@ static int linear_search_seek(nut_context_t * nut, int backwards, uint64_t * pts
 	if (!end) goto err_out; // forward seek
 
 	for (i = 0; i < nut->stream_count; i++) {
-		if (!(pts[i] & 1)) continue;
-		if (good_key[i]>>1 && (!min_pos || good_key[i]>>1 < min_pos)) min_pos = good_key[i]>>1;
+		if (!state[i].active) continue;
+		if (state[i].good_key && (!min_pos || state[i].good_key < min_pos)) min_pos = state[i].good_key;
 	}
 	if (!min_pos) {
 		fprintf(stderr, "BIG FAT WARNING\n");
-		for (i = 0; i < nut->stream_count; i++) fprintf(stderr, "%d: %d\n", i, (int)good_key[i]);
+		for (i = 0; i < nut->stream_count; i++) fprintf(stderr, "%d: %d\n", i, (int)state[i].good_key);
 		min_pos = nut->seek_status >> 1;
 	}
 
@@ -1118,9 +1106,7 @@ err_out:
 	if (err != 2) { // unless EAGAIN
 		if (err) {
 			if (err == -ERR_NOT_SEEKABLE) { // a failed seek - then go back to before everything started
-				for (i = 0; i < nut->stream_count; i++) {
-					nut->sc[i].last_pts = old_last_pts[i];
-				}
+				for (i = 0; i < nut->stream_count; i++) nut->sc[i].last_pts = state[i].old_last_pts;
 				seek_buf(nut->i, nut->before_seek, SEEK_SET);
 			} else { // some NUT error, let's just go back to last good syncpoint
 				err = 0;
@@ -1130,60 +1116,54 @@ err_out:
 			clear_dts_cache(nut);
 		}
 		nut->seek_status = 0;
-		free(nut->seek_state);
-		nut->seek_state = NULL;
-	} else {
-		// for EAGAIN, store state
-		if (!nut->seek_state) nut->seek_state = malloc(nut->stream_count * 2 * sizeof(*nut->seek_state));
-		for (i = 0; i < nut->stream_count; i++) {
-			nut->seek_state[i].good_key = good_key[i];
-			nut->seek_state[i].old_last_pts = old_last_pts[i];
-		}
-		if (buf_before) nut->i->buf_ptr -= bctello(nut->i) - buf_before; // rewind
+	} else if (buf_before) {
+		nut->i->buf_ptr -= bctello(nut->i) - buf_before; // rewind
+		if (nut->i->buf_ptr < nut->i->buf) nut->i->buf_ptr = nut->i->buf; // special case, possible with find_syncpoint
 	}
 	return err;
-}
-
-static void req_to_pts(nut_context_t * nut, double * time_pos, int flags, uint64_t * pts, const int * active_streams) {
-	uint64_t orig_pts = 0;
-	int orig_timebase = 0;
-	int i;
-
-	for (i = 0; i < nut->stream_count; i++) pts[i] = 0;
-	if (active_streams) for (i = 0; active_streams[i] != -1; i++) pts[active_streams[i]] = 1;
-	else for (i = 0; i < nut->stream_count; i++) pts[i] = 1;
-
-	if (flags & 1) {
-		for (i = 0; i < nut->stream_count; i++) {
-			uint64_t dts = nut->sc[i].last_dts != -1 ? nut->sc[i].last_dts : nut->sc[i].last_pts;
-			int FIXME; // this is completely wrong with EAGAIN
-			if (!pts[i]) continue;
-			if (compare_ts(nut, orig_pts, nut->tb[orig_timebase], dts, TO_TB(i)) < 0) {
-				orig_pts = dts;
-				orig_timebase = nut->sc[i].timebase_id;
-			}
-		}
-		*time_pos += TO_DOUBLE(orig_timebase, orig_pts);
-	}
-	if (*time_pos < 0.) *time_pos = 0.;
-
-	for (i = 0; i < nut->stream_count; i++) {
-		pts[i] |= (uint64_t)(*time_pos / TO_TB(i).nom * TO_TB(i).den) << 1;
-	}
 }
 
 int nut_seek(nut_context_t * nut, double time_pos, int flags, const int * active_streams) {
 	int err = 0;
 	off_t start = 0, end = 0;
-	uint64_t pts[nut->stream_count];
+	seek_state_t state[nut->stream_count];
 	int backwards = flags & 1 ? time_pos < 0 : 1;
 	syncpoint_t stopper = { 0, 0, 0, 0, 0 };
 
 	if (!nut->i->isc.seek) return -ERR_NOT_SEEKABLE;
 
-	req_to_pts(nut, &time_pos, flags, pts, active_streams);
-
 	if (!nut->before_seek) nut->before_seek = bctello(nut->i);
+
+	if (!nut->seek_state) {
+		int i;
+		for (i = 0; i < nut->stream_count; i++) {
+			state[i].old_last_pts = nut->sc[i].last_pts;
+			state[i].active = active_streams ? 0 : 1;
+			state[i].good_key = state[i].pts_higher = 0;
+		}
+		if (active_streams) for (i = 0; active_streams[i] != -1; i++) state[active_streams[i]].active = 1;
+
+		if (flags & 1) { // relative seek
+			uint64_t orig_pts = 0;
+			int orig_timebase = 0;
+			for (i = 0; i < nut->stream_count; i++) {
+				uint64_t dts = nut->sc[i].last_dts != -1 ? nut->sc[i].last_dts : nut->sc[i].last_pts;
+				if (!state[i].active) continue;
+				if (compare_ts(nut, orig_pts, nut->tb[orig_timebase], dts, TO_TB(i)) < 0) {
+					orig_pts = dts;
+					orig_timebase = nut->sc[i].timebase_id;
+				}
+			}
+			time_pos += TO_DOUBLE(orig_timebase, orig_pts);
+		}
+		if (time_pos < 0.) time_pos = 0.;
+
+		for (i = 0; i < nut->stream_count; i++) state[i].pts = (uint64_t)(time_pos / TO_TB(i).nom * TO_TB(i).den);
+		nut->seek_time_pos = time_pos;
+	} else {
+		memcpy(state, nut->seek_state, sizeof state);
+		time_pos = nut->seek_time_pos;
+	}
 
 	if (nut->syncpoints.len) {
 		syncpoint_list_t * sl = &nut->syncpoints;
@@ -1199,18 +1179,18 @@ int nut_seek(nut_context_t * nut, double time_pos, int flags, const int * active
 			if (!sl->s[i].pts_valid) continue;
 			for (j = 0; j < nut->stream_count; j++) {
 				uint64_t tmp;
-				if (!(pts[j]&1)) continue;
+				if (!state[j].active) continue;
 				tmp = sl->pts[i * nut->stream_count + j];
 				if (tmp--) { // -- because all pts array os off-by-one. zero indicate no keyframe.
-					if (tmp > (pts[j]>>1)) { if (!last_sync) last_sync = i; }
+					if (tmp > state[j].pts) { if (!last_sync) last_sync = i; }
 					else sync[j] = (i-1);
 				}
 				tmp = sl->eor[i * nut->stream_count + j];
-				if (tmp--) if (tmp <= (pts[j]>>1)) sync[j] = -(i+1); // flag stream eor
+				if (tmp--) if (tmp <= state[j].pts) sync[j] = -(i+1); // flag stream eor
 			}
 		}
 		for (i = 0; i < nut->stream_count; i++) {
-			if (!(pts[i] & 1)) continue;
+			if (!state[i].active) continue;
 			if (sync[i] < -1) { backup = MAX(backup, -sync[i] - 1); continue; } // eor stream
 			if (good_sync == -2 || good_sync > sync[i]) good_sync = sync[i];
 		}
@@ -1232,9 +1212,9 @@ int nut_seek(nut_context_t * nut, double time_pos, int flags, const int * active
 
 	if (start) { // "unsuccessful" seek needs no linear search
 		if (!(flags & 2)) { // regular seek
-			CHECK(linear_search_seek(nut, backwards, pts, start, end, stopper.pos ? &stopper : NULL));
+			CHECK(linear_search_seek(nut, backwards, state, start, end, stopper.pos ? &stopper : NULL));
 		} else { // forwards seek, find keyframe
-			CHECK(linear_search_seek(nut, backwards, pts, end, 0, NULL));
+			CHECK(linear_search_seek(nut, backwards, state, end, 0, NULL));
 		}
 	}
 	fprintf(stderr, "DONE SEEK\n");
@@ -1242,6 +1222,11 @@ err_out:
 	if (err != 2) { // unless EAGAIN
 		flush_buf(nut->i);
 		nut->before_seek = 0;
+		free(nut->seek_state);
+		nut->seek_state = NULL;
+	} else {
+		if (!nut->seek_state) nut->seek_state = malloc(sizeof state);
+		memcpy(nut->seek_state, state, sizeof state);
 	}
 	return err;
 }

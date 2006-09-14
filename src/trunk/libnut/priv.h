@@ -122,6 +122,14 @@ typedef struct {
 	int total_frames;
 } stream_context_t;
 
+typedef struct {
+	int active;
+	uint64_t pts; // requested pts;
+	uint64_t old_last_pts;
+	off_t good_key;
+	int pts_higher; // for active streams
+} seek_state_t;
+
 struct nut_context_s {
 	nut_muxer_opts_t mopts;
 	nut_demuxer_opts_t dopts;
@@ -147,10 +155,8 @@ struct nut_context_s {
 
 	off_t before_seek; // position before any seek mess
 	off_t seek_status;
-	struct {
-		off_t good_key;
-		uint64_t old_last_pts;
-	} * seek_state; // for linear search, so we can go back as if nothing happenned
+	seek_state_t * seek_state; // array per stream count
+	double seek_time_pos;
 
 	syncpoint_list_t syncpoints;
 
