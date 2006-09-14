@@ -1181,7 +1181,7 @@ int nut_seek(nut_context_t * nut, double time_pos, int flags, const int * active
 				uint64_t tmp;
 				if (!state[j].active) continue;
 				tmp = sl->pts[i * nut->stream_count + j];
-				if (tmp--) { // -- because all pts array os off-by-one. zero indicate no keyframe.
+				if (tmp--) { // -- because all pts array is off-by-one. zero indicate no keyframe.
 					if (tmp > state[j].pts) { if (!last_sync) last_sync = i; }
 					else sync[j] = (i-1);
 				}
