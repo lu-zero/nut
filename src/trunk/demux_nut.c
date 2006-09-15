@@ -29,7 +29,8 @@ static size_t mp_read(void * h, size_t len, uint8_t * buf) {
 static off_t mp_seek(void * h, long long pos, int whence) {
 	stream_t * stream = (stream_t*)h;
 
-	if (stream->end_pos < stream_tell(stream)) stream->end_pos = stream_tell(stream);
+	if (stream->end_pos < stream_tell(stream))
+		stream->end_pos = stream_tell(stream);
 
 	if (whence == SEEK_CUR) pos += stream_tell(stream);
 	else if (whence == SEEK_END) pos += stream->end_pos;
@@ -75,7 +76,8 @@ static demuxer_t * demux_open_nut(demuxer_t * demuxer) {
 	int i;
 
 	if ((ret = nut_read_headers(nut, &s))) {
-		if (ret < 0) mp_msg(MSGT_HEADER, MSGL_ERR, "NUT error: %s\n", nut_error(-ret));
+		if (ret < 0) mp_msg(MSGT_HEADER, MSGL_ERR, "NUT error: %s\n",
+		                                           nut_error(-ret));
 		nut_demuxer_uninit(nut);
 		free(priv);
 		return NULL;
@@ -85,8 +87,10 @@ static demuxer_t * demux_open_nut(demuxer_t * demuxer) {
 
 	for (i = 0; s[i].type != -1 && i < 2; i++) switch(s[i].type) {
 		case NUT_AUDIO_CLASS: {
-			WAVEFORMATEX *wf= calloc(sizeof(WAVEFORMATEX) + s[i].codec_specific_len, 1);
-			sh_audio_t* sh_audio=new_sh_audio(demuxer, i);
+			WAVEFORMATEX *wf =
+				calloc(sizeof(WAVEFORMATEX) +
+				              s[i].codec_specific_len, 1);
+			sh_audio_t* sh_audio = new_sh_audio(demuxer, i);
 			int j;
 
 			sh_audio->wf= wf; sh_audio->ds = demuxer->audio;
@@ -94,27 +98,33 @@ static demuxer_t * demux_open_nut(demuxer_t * demuxer) {
 			sh_audio->audio.dwScale = s[i].time_base.nom;
 			sh_audio->audio.dwRate = s[i].time_base.den;
 			sh_audio->format = 0;
-			for (j = 0; j < s[i].fourcc_len && j < 4; j++) sh_audio->format |= s[i].fourcc[j]<<(j*8);
+			for (j = 0; j < s[i].fourcc_len && j < 4; j++)
+				sh_audio->format |= s[i].fourcc[j]<<(j*8);
 			sh_audio->channels = s[i].channel_count;
-			sh_audio->samplerate = s[i].samplerate_nom / s[i].samplerate_denom;
+			sh_audio->samplerate =
+				s[i].samplerate_nom / s[i].samplerate_denom;
 			sh_audio->i_bps = 0; // FIXME
 
 			wf->wFormatTag = sh_audio->format;
 			wf->nChannels = s[i].channel_count;
-			wf->nSamplesPerSec = s[i].samplerate_nom / s[i].samplerate_denom;
+			wf->nSamplesPerSec =
+				s[i].samplerate_nom / s[i].samplerate_denom;
 			wf->nAvgBytesPerSec = 0; // FIXME
 			wf->nBlockAlign = 0; // FIXME
 			wf->wBitsPerSample = 0; // FIXME
 			wf->cbSize = s[i].codec_specific_len;
 			if (s[i].codec_specific_len)
-				memcpy(wf + 1, s[i].codec_specific, s[i].codec_specific_len);
+				memcpy(wf + 1, s[i].codec_specific,
+			                       s[i].codec_specific_len);
 
 			demuxer->audio->id = i;
 			demuxer->audio->sh= demuxer->a_streams[i];
 			break;
 		}
 		case NUT_VIDEO_CLASS: {
-			BITMAPINFOHEADER * bih = calloc(sizeof(BITMAPINFOHEADER) + s[i].codec_specific_len, 1);
+			BITMAPINFOHEADER * bih =
+				calloc(sizeof(BITMAPINFOHEADER) +
+				              s[i].codec_specific_len, 1);
 			sh_video_t * sh_video = new_sh_video(demuxer, i);
 			int j;
 
@@ -125,15 +135,19 @@ static demuxer_t * demux_open_nut(demuxer_t * demuxer) {
 			sh_video->video.dwScale = s[i].time_base.nom;
 			sh_video->video.dwRate  = s[i].time_base.den;
 
-			sh_video->fps=(float)sh_video->video.dwRate/(float)sh_video->video.dwScale;
-			sh_video->frametime=(float)sh_video->video.dwScale/(float)sh_video->video.dwRate;
+			sh_video->fps = sh_video->video.dwRate/
+			                  (float)sh_video->video.dwScale;
+			sh_video->frametime = 1./sh_video->fps;
 			sh_video->format = 0;
-			for (j = 0; j < s[i].fourcc_len && j < 4; j++) sh_video->format |= s[i].fourcc[j]<<(j*8);
+			for (j = 0; j < s[i].fourcc_len && j < 4; j++)
+				sh_video->format |= s[i].fourcc[j]<<(j*8);
 			if (!s[i].sample_height) sh_video->aspect = 0;
-			else sh_video->aspect = (float)s[i].sample_width / s[i].sample_height;
+			else sh_video->aspect =
+				s[i].sample_width / (float)s[i].sample_height;
 			sh_video->i_bps = 0; // FIXME
 
-			bih->biSize = sizeof(BITMAPINFOHEADER) + s[i].codec_specific_len;
+			bih->biSize = sizeof(BITMAPINFOHEADER) +
+			                     s[i].codec_specific_len;
 			bih->biWidth = s[i].width;
 			bih->biHeight = s[i].height;
 			bih->biBitCount = 0; // FIXME
@@ -141,7 +155,8 @@ static demuxer_t * demux_open_nut(demuxer_t * demuxer) {
 			bih->biCompression = sh_video->format;
 
 			if (s[i].codec_specific_len)
-				memcpy(bih + 1, s[i].codec_specific, s[i].codec_specific_len);
+				memcpy(bih + 1, s[i].codec_specific,
+						s[i].codec_specific_len);
 
 			demuxer->video->id = i;
 			demuxer->video->sh = demuxer->v_streams[i];
@@ -166,20 +181,26 @@ static int demux_nut_fill_buffer(demuxer_t * demuxer, demux_stream_t * dsds) {
 
 	while (1) {
 		ret = nut_read_next_packet(nut, &pd);
-		if (ret < 0) { mp_msg(MSGT_HEADER, MSGL_ERR, "NUT error: %s\n", nut_error(-ret)); continue; }
+		if (ret < 0) {
+			mp_msg(MSGT_HEADER, MSGL_ERR, "NUT error: %s\n",
+			                               nut_error(-ret));
+			continue;
+		}
 		if (ret == 1) return 0; // EOF
 		if (pd.type == e_frame) break;
 		// else, skip this packet
 		while ((ret = nut_skip_packet(nut, &pd.len))) {
 			if (ret < 0) {
-				mp_msg(MSGT_HEADER, MSGL_ERR, "NUT error: %s\n", nut_error(-ret));
+				mp_msg(MSGT_HEADER, MSGL_ERR,
+				           "NUT error: %s\n", nut_error(-ret));
 				break;
 			}
 			if (ret == 1) return 0; // EOF
 		}
 	}
 
-	pts = (double)pd.pts * priv->s[pd.stream].time_base.nom / priv->s[pd.stream].time_base.den;
+	pts = (double)pd.pts * priv->s[pd.stream].time_base.nom /
+	                       priv->s[pd.stream].time_base.den;
 
 	if (pd.stream == demuxer->audio->id)  {
 		ds = demuxer->audio;
@@ -193,7 +214,8 @@ static int demux_nut_fill_buffer(demuxer_t * demuxer, demux_stream_t * dsds) {
 	else {
 		while ((ret = nut_skip_packet(nut, &pd.len))) {
 			if (ret < 0) {
-				mp_msg(MSGT_HEADER, MSGL_ERR, "NUT error: %s\n", nut_error(-ret));
+				mp_msg(MSGT_HEADER, MSGL_ERR,
+				            "NUT error: %s\n", nut_error(-ret));
 				break;
 			}
 			if (ret == 1) return 0; // EOF
@@ -212,7 +234,8 @@ static int demux_nut_fill_buffer(demuxer_t * demuxer, demux_stream_t * dsds) {
 
 	while ((ret = nut_read_frame(nut, &pd.len, dp->buffer))) {
 		if (ret < 0) {
-			mp_msg(MSGT_HEADER, MSGL_ERR, "NUT error: %s\n", nut_error(-ret));
+			mp_msg(MSGT_HEADER, MSGL_ERR,
+			                  "NUT error: %s\n", nut_error(-ret));
 			break;
 		}
 		if (ret == 1) return 0; // EOF
@@ -236,10 +259,12 @@ static void demux_seek_nut(demuxer_t * demuxer, float time_pos, float audio_dela
 
 	if (flags & 2) // percent
 		time_pos *= priv->s[0].max_pts *
-				(double)priv->s[0].time_base.nom / priv->s[0].time_base.den;
+		               (double)priv->s[0].time_base.nom /
+		                       priv->s[0].time_base.den;
 
 	ret = nut_seek(nut, time_pos, nutflags, tmp);
-	if (ret < 0) mp_msg(MSGT_HEADER, MSGL_ERR, "NUT error: %s\n", nut_error(-ret));
+	if (ret < 0)
+		mp_msg(MSGT_HEADER, MSGL_ERR, "NUT error: %s\n", nut_error(-ret));
 	if (sh_audio) resync_audio_stream(sh_audio);
 }
 
@@ -248,11 +273,14 @@ static int demux_control_nut(demuxer_t * demuxer, int cmd, void * arg) {
 	switch (cmd) {
 		case DEMUXER_CTRL_GET_TIME_LENGTH:
 			*((double *)arg) = priv->s[0].max_pts *
-				(double)priv->s[0].time_base.nom / priv->s[0].time_base.den;
+				(double)priv->s[0].time_base.nom /
+				        priv->s[0].time_base.den;
 			return DEMUXER_CTRL_OK;
 		case DEMUXER_CTRL_GET_PERCENT_POS:
-			if (priv->s[0].max_pts == 0) return DEMUXER_CTRL_DONTKNOW;
-			*((int *)arg) = priv->last_pts * 100 / (double)priv->s[0].max_pts;
+			if (priv->s[0].max_pts == 0)
+				return DEMUXER_CTRL_DONTKNOW;
+			*((int *)arg) = priv->last_pts * 100 /
+			                (double)priv->s[0].max_pts;
 			return DEMUXER_CTRL_OK;
 		default:
 			return DEMUXER_CTRL_NOTIMPL;
