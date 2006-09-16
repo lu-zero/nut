@@ -651,8 +651,8 @@ void nut_muxer_uninit(nut_context_t * nut) {
 
 	free_buffer(nut->tmp_buffer);
 	free_buffer(nut->tmp_buffer2);
-	free_buffer(nut->o); // flushes file
 	fprintf(stderr, "TOTAL: %d bytes data, %d bytes overhead, %.2lf%% overhead\n", total,
-		(int)ftell(nut->mopts.output.priv) - total, (double)(ftell(nut->mopts.output.priv) - total) / total*100);
+		(int)bctello(nut->o) - total, (double)(bctello(nut->o) - total) / total*100);
+	free_buffer(nut->o); // flushes file
 	free(nut);
 }
