@@ -1,3 +1,6 @@
+// (C) 2005-2006 Oded Shimon
+// This file is available under the MIT/X license, see LICENSE
+
 #include <inttypes.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -1208,7 +1211,7 @@ int nut_seek(nut_context_t * nut, double time_pos, int flags, const int * active
 	}
 
 	if (start == 0) CHECK(binary_search_syncpoint(nut, time_pos, &start, &end, &stopper));
-	else fprintf(stderr, "============= NO BINARY SEARCH\n");
+	else fprintf(stderr, "============= NO BINARY SEARCH   \n");
 
 	if (start) { // "unsuccessful" seek needs no linear search
 		if (!(flags & 2)) { // regular seek

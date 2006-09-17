@@ -1,3 +1,6 @@
+// (C) 2005-2006 Oded Shimon
+// This file is available under the MIT/X license, see LICENSE
+
 #include <inttypes.h>
 #include <stdlib.h>
 #include <stdio.h>
