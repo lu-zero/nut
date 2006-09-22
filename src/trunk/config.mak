@@ -5,5 +5,5 @@ CFLAGS = -Os -Wall -g
 CFLAGS += -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64
 
 CC = cc
-
-
+RANLIB  = ranlib
+AR = ar

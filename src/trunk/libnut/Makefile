@@ -1,10 +1,13 @@
 include ../config.mak
 
-all: libnut.so
+all: libnut.a
 
-libnut.so: muxer.o demuxer.o reorder.o
-	${CC} ${CFLAGS} -shared $^ -o $@
+libnut.a: muxer.o demuxer.o reorder.o
+	rm -f $@
+	${AR} rc $@ $^
+	$(RANLIB) $@
+
 .c.o: priv.h nut.h
-	${CC} ${CFLAGS} -fPIC $^ -c -o $@
+	${CC} ${CFLAGS} $^ -c -o $@
 clean:
 	rm -f *\~ libnut.so *.o
