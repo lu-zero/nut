@@ -12,5 +12,6 @@ libnut.so: muxer.o demuxer.o reorder.o
 
 .c.o: priv.h nut.h
 	${CC} ${CFLAGS} $^ -c -o $@
+
 clean:
-	rm -f *\~ libnut.so *.o
+	rm -f *\~ libnut.so libnut.a *.o
