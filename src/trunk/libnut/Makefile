@@ -7,6 +7,9 @@ libnut.a: muxer.o demuxer.o reorder.o
 	${AR} rc $@ $^
 	$(RANLIB) $@
 
+libnut.so: muxer.o demuxer.o reorder.o
+	${CC} ${CFLAGS} -shared $^ -o $@
+
 .c.o: priv.h nut.h
 	${CC} ${CFLAGS} $^ -c -o $@
 clean:
