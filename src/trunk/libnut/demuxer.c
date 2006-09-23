@@ -29,8 +29,11 @@ static int ready_read_buf(input_buffer_t * bc, int amount) {
 	if (bc->read_len - pos < amount && !bc->is_mem) {
 		amount += 10; // ### + PREALLOC_SIZE ?
 		if (bc->write_len - pos < amount) {
-			bc->write_len = amount + pos + PREALLOC_SIZE;
-			bc->buf = bc->alloc->realloc(bc->buf, bc->write_len);
+			int new_len = amount + pos + PREALLOC_SIZE;
+			uint8_t * buf = bc->alloc->realloc(bc->buf, new_len);
+			if (!buf) return 0;
+			bc->write_len = new_len;
+			bc->buf = buf;
 			bc->buf_ptr = bc->buf + pos;
 		}
 		bc->read_len += bc->isc.read(bc->isc.priv, amount - (bc->read_len - pos), bc->buf + bc->read_len);
