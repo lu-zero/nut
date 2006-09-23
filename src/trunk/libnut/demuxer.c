@@ -740,7 +740,9 @@ int nut_read_headers(nut_context_t * nut, nut_stream_header_t * s []) {
 		CHECK(get_main_header(nut));
 
 		if (!nut->sc) {
+			ERROR(SIZE_MAX/sizeof(stream_context_t) < nut->stream_count+1, -ERR_OUT_OF_MEM);
 			nut->sc = nut->alloc->malloc(sizeof(stream_context_t) * nut->stream_count);
+			ERROR(!nut->sc, -ERR_OUT_OF_MEM);
 			for (i = 0; i < nut->stream_count; i++) {
 				nut->sc[i].last_pts = 0;
 				nut->sc[i].last_dts = 0;
@@ -764,7 +766,9 @@ int nut_read_headers(nut_context_t * nut, nut_stream_header_t * s []) {
 			}
 			CHECK(get_stream_header(nut, i));
 			if (!nut->sc[i].pts_cache) {
+				ERROR(SIZE_MAX/sizeof(int64_t) < nut->sc[i].sh.decode_delay, -ERR_OUT_OF_MEM);
 				nut->sc[i].pts_cache = nut->alloc->malloc(nut->sc[i].sh.decode_delay * sizeof(int64_t));
+				ERROR(!nut->sc[i].pts_cache, -ERR_OUT_OF_MEM);
 				for (j = 0; j < nut->sc[i].sh.decode_delay; j++)
 					nut->sc[i].pts_cache[j] = -1;
 			}
@@ -807,6 +811,7 @@ int nut_read_headers(nut_context_t * nut, nut_stream_header_t * s []) {
 		nut->before_seek = 0;
 	}
 	*s = nut->alloc->malloc(sizeof(nut_stream_header_t) * (nut->stream_count + 1));
+	ERROR(!*s, -ERR_OUT_OF_MEM);
 	for (i = 0; i < nut->stream_count; i++) (*s)[i] = nut->sc[i].sh;
 	(*s)[i].type = -1;
 err_out:
@@ -1252,6 +1257,7 @@ err_out:
 		nut->seek_state = NULL;
 	} else {
 		if (!nut->seek_state) nut->seek_state = nut->alloc->malloc(sizeof state);
+		if (!nut->seek_state) return -ERR_OUT_OF_MEM;
 		memcpy(nut->seek_state, state, sizeof state);
 	}
 	return err;
