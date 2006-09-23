@@ -30,7 +30,7 @@ static int ready_read_buf(input_buffer_t * bc, int amount) {
 		amount += 10; // ### + PREALLOC_SIZE ?
 		if (bc->write_len - pos < amount) {
 			bc->write_len = amount + pos + PREALLOC_SIZE;
-			bc->buf = realloc(bc->buf, bc->write_len);
+			bc->buf = bc->alloc->realloc(bc->buf, bc->write_len);
 			bc->buf_ptr = bc->buf + pos;
 		}
 		bc->read_len += bc->isc.read(bc->isc.priv, amount - (bc->read_len - pos), bc->buf + bc->read_len);
@@ -87,11 +87,13 @@ static input_buffer_t * new_mem_buffer(input_buffer_t * bc) {
 	bc->file_pos = 0;
 	bc->filesize = 0;
 	bc->buf_ptr = bc->buf = NULL;
+	bc->alloc = NULL;
 	return bc;
 }
 
-static input_buffer_t * new_input_buffer(nut_input_stream_t isc) {
-	input_buffer_t * bc = new_mem_buffer(malloc(sizeof(input_buffer_t)));
+static input_buffer_t * new_input_buffer(nut_alloc_t * alloc, nut_input_stream_t isc) {
+	input_buffer_t * bc = new_mem_buffer(alloc->malloc(sizeof(input_buffer_t)));
+	bc->alloc = alloc;
 	bc->is_mem = 0;
 	bc->isc = isc;
 	bc->file_pos = isc.file_pos;
@@ -104,10 +106,10 @@ static input_buffer_t * new_input_buffer(nut_input_stream_t isc) {
 }
 
 static void free_buffer(input_buffer_t * bc) {
-	assert(!bc->is_mem);
 	if (!bc) return;
-	free(bc->buf);
-	free(bc);
+	assert(!bc->is_mem);
+	bc->alloc->free(bc->buf);
+	bc->alloc->free(bc);
 }
 
 static int get_bytes(input_buffer_t * bc, int count, uint64_t * val) {
@@ -194,12 +196,12 @@ static int get_data(input_buffer_t * bc, int len, uint8_t * buf) {
 	return len;
 }
 
-static int get_vb(input_buffer_t * in, int * len, uint8_t ** buf) {
+static int get_vb(nut_alloc_t * alloc, input_buffer_t * in, int * len, uint8_t ** buf) {
 	uint64_t tmp;
 	int err;
 	if ((err = get_v(in, &tmp))) return err;
 	*len = tmp;
-	*buf = realloc(*buf, tmp);
+	*buf = alloc->realloc(*buf, tmp);
 	if (get_data(in, tmp, *buf) != tmp) return buf_eof(in);
 	return 0;
 }
@@ -242,7 +244,7 @@ static int get_main_header(nut_context_t * nut) {
 	if (nut->max_distance > 65536) nut->max_distance = 65536;
 
 	GET_V(tmp, nut->timebase_count);
-	nut->tb = realloc(nut->tb, nut->timebase_count * sizeof(nut_timebase_t));
+	nut->tb = nut->alloc->realloc(nut->tb, nut->timebase_count * sizeof(nut_timebase_t));
 	for (i = 0; i < nut->timebase_count; i++) {
 		GET_V(tmp, nut->tb[i].nom);
 		GET_V(tmp, nut->tb[i].den);
@@ -293,7 +295,7 @@ static int get_stream_header(nut_context_t * nut, int id) {
 	ERROR(i != id, -ERR_BAD_STREAM_ORDER);
 
 	GET_V(tmp, sc->sh.type);
-	CHECK(get_vb(tmp, &sc->sh.fourcc_len, &sc->sh.fourcc));
+	CHECK(get_vb(nut->alloc, tmp, &sc->sh.fourcc_len, &sc->sh.fourcc));
 	GET_V(tmp, sc->timebase_id);
 	sc->sh.time_base = nut->tb[sc->timebase_id];
 	GET_V(tmp, sc->msb_pts_shift);
@@ -301,7 +303,7 @@ static int get_stream_header(nut_context_t * nut, int id) {
 	GET_V(tmp, sc->sh.decode_delay);
 	GET_V(tmp, i); // stream_flags
 	sc->sh.fixed_fps = i & 1;
-	CHECK(get_vb(tmp, &sc->sh.codec_specific_len, &sc->sh.codec_specific));
+	CHECK(get_vb(nut->alloc, tmp, &sc->sh.codec_specific_len, &sc->sh.codec_specific));
 
 	switch (sc->sh.type) {
 		case NUT_VIDEO_CLASS:
@@ -345,9 +347,9 @@ static int add_syncpoint(nut_context_t * nut, syncpoint_t sp, uint64_t * pts, ui
 	i++;
 	if (sl->len + 1 > sl->alloc_len) {
 		sl->alloc_len += PREALLOC_SIZE/4;
-		sl->s = realloc(sl->s, sl->alloc_len * sizeof(syncpoint_t));
-		sl->pts = realloc(sl->pts, sl->alloc_len * nut->stream_count * sizeof(uint64_t));
-		sl->eor = realloc(sl->eor, sl->alloc_len * nut->stream_count * sizeof(uint64_t));
+		sl->s = nut->alloc->realloc(sl->s, sl->alloc_len * sizeof(syncpoint_t));
+		sl->pts = nut->alloc->realloc(sl->pts, sl->alloc_len * nut->stream_count * sizeof(uint64_t));
+		sl->eor = nut->alloc->realloc(sl->eor, sl->alloc_len * nut->stream_count * sizeof(uint64_t));
 	}
 	memmove(sl->s + i + 1, sl->s + i, (sl->len - i) * sizeof(syncpoint_t));
 	memmove(sl->pts + (i + 1) * nut->stream_count, sl->pts + i * nut->stream_count, (sl->len - i) * nut->stream_count * sizeof(uint64_t));
@@ -436,9 +438,9 @@ static int get_index(nut_context_t * nut) {
 
 	GET_V(tmp, x);
 	sl->alloc_len = sl->len = x;
-	sl->s = realloc(sl->s, sl->alloc_len * sizeof(syncpoint_t));
-	sl->pts = realloc(sl->pts, sl->alloc_len * sizeof(uint64_t) * nut->stream_count);
-	sl->eor = realloc(sl->eor, sl->alloc_len * sizeof(uint64_t) * nut->stream_count);
+	sl->s = nut->alloc->realloc(sl->s, sl->alloc_len * sizeof(syncpoint_t));
+	sl->pts = nut->alloc->realloc(sl->pts, sl->alloc_len * sizeof(uint64_t) * nut->stream_count);
+	sl->eor = nut->alloc->realloc(sl->eor, sl->alloc_len * sizeof(uint64_t) * nut->stream_count);
 
 	for (i = 0; i < sl->len; i++) {
 		GET_V(tmp, sl->s[i].pos);
@@ -718,7 +720,7 @@ int nut_read_headers(nut_context_t * nut, nut_stream_header_t * s []) {
 		CHECK(get_main_header(nut));
 
 		if (!nut->sc) {
-			nut->sc = malloc(sizeof(stream_context_t) * nut->stream_count);
+			nut->sc = nut->alloc->malloc(sizeof(stream_context_t) * nut->stream_count);
 			for (i = 0; i < nut->stream_count; i++) {
 				nut->sc[i].last_pts = 0;
 				nut->sc[i].last_dts = 0;
@@ -742,7 +744,7 @@ int nut_read_headers(nut_context_t * nut, nut_stream_header_t * s []) {
 			}
 			CHECK(get_stream_header(nut, i));
 			if (!nut->sc[i].pts_cache) {
-				nut->sc[i].pts_cache = malloc(nut->sc[i].sh.decode_delay * sizeof(int64_t));
+				nut->sc[i].pts_cache = nut->alloc->malloc(nut->sc[i].sh.decode_delay * sizeof(int64_t));
 				for (j = 0; j < nut->sc[i].sh.decode_delay; j++)
 					nut->sc[i].pts_cache[j] = -1;
 			}
@@ -784,17 +786,17 @@ int nut_read_headers(nut_context_t * nut, nut_stream_header_t * s []) {
 		if (nut->before_seek) seek_buf(nut->i, nut->before_seek, SEEK_SET);
 		nut->before_seek = 0;
 	}
-	*s = malloc(sizeof(nut_stream_header_t) * (nut->stream_count + 1));
+	*s = nut->alloc->malloc(sizeof(nut_stream_header_t) * (nut->stream_count + 1));
 	for (i = 0; i < nut->stream_count; i++) (*s)[i] = nut->sc[i].sh;
 	(*s)[i].type = -1;
 err_out:
 	if (err && err != 2 && !nut->seek_status) {
 		if (nut->sc) for (i = 0; i < nut->stream_count; i++) {
-			free(nut->sc[i].sh.fourcc);
-			free(nut->sc[i].sh.codec_specific);
-			free(nut->sc[i].pts_cache);
+			nut->alloc->free(nut->sc[i].sh.fourcc);
+			nut->alloc->free(nut->sc[i].sh.codec_specific);
+			nut->alloc->free(nut->sc[i].pts_cache);
 		}
-		free(nut->sc);
+		nut->alloc->free(nut->sc);
 		nut->sc = NULL;
 		nut->stream_count = 0;
 	}
@@ -1225,19 +1227,20 @@ err_out:
 	if (err != 2) { // unless EAGAIN
 		flush_buf(nut->i);
 		nut->before_seek = 0;
-		free(nut->seek_state);
+		nut->alloc->free(nut->seek_state);
 		nut->seek_state = NULL;
 	} else {
-		if (!nut->seek_state) nut->seek_state = malloc(sizeof state);
+		if (!nut->seek_state) nut->seek_state = nut->alloc->malloc(sizeof state);
 		memcpy(nut->seek_state, state, sizeof state);
 	}
 	return err;
 }
 
 nut_context_t * nut_demuxer_init(nut_demuxer_opts_t * dopts) {
-	nut_context_t * nut = malloc(sizeof(nut_context_t));
+	nut_context_t * nut;
 
-	nut->i = new_input_buffer(dopts->input);
+	if (dopts->alloc.malloc) nut = dopts->alloc.malloc(sizeof(nut_context_t));
+	else nut = malloc(sizeof(nut_context_t));
 
 	nut->syncpoints.len = 0;
 	nut->syncpoints.alloc_len = 0;
@@ -1254,6 +1257,17 @@ nut_context_t * nut_demuxer_init(nut_demuxer_opts_t * dopts) {
 	nut->before_seek = 0;
 	nut->last_syncpoint = 0;
 	nut->seek_state = NULL;
+
+	nut->alloc = &nut->dopts.alloc;
+
+	if (!nut->alloc->malloc) {
+		nut->alloc->malloc = malloc;
+		nut->alloc->realloc = realloc;
+		nut->alloc->free = free;
+	}
+
+	nut->i = new_input_buffer(nut->alloc, dopts->input);
+
 	return nut;
 }
 
@@ -1261,19 +1275,19 @@ void nut_demuxer_uninit(nut_context_t * nut) {
 	int i;
 	if (!nut) return;
 	for (i = 0; i < nut->stream_count; i++) {
-		free(nut->sc[i].sh.fourcc);
-		free(nut->sc[i].sh.codec_specific);
-		free(nut->sc[i].pts_cache);
+		nut->alloc->free(nut->sc[i].sh.fourcc);
+		nut->alloc->free(nut->sc[i].sh.codec_specific);
+		nut->alloc->free(nut->sc[i].pts_cache);
 	}
 
-	free(nut->syncpoints.s);
-	free(nut->syncpoints.pts);
-	free(nut->syncpoints.eor);
-	free(nut->sc);
-	free(nut->tb);
-	free(nut->seek_state);
+	nut->alloc->free(nut->syncpoints.s);
+	nut->alloc->free(nut->syncpoints.pts);
+	nut->alloc->free(nut->syncpoints.eor);
+	nut->alloc->free(nut->sc);
+	nut->alloc->free(nut->tb);
+	nut->alloc->free(nut->seek_state);
 	free_buffer(nut->i);
-	free(nut);
+	nut->alloc->free(nut);
 }
 
 const char * nut_error(int error) {

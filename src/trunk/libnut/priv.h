@@ -62,6 +62,7 @@ typedef struct {
 	int read_len;  // data in memory
 	off_t file_pos;
 	off_t filesize;
+	nut_alloc_t * alloc;
 } input_buffer_t;
 
 typedef struct {
@@ -71,6 +72,7 @@ typedef struct {
 	uint8_t * buf_ptr;
 	int write_len; // memory allocated
 	off_t file_pos;
+	nut_alloc_t * alloc;
 } output_buffer_t;
 
 typedef struct {
@@ -136,6 +138,7 @@ typedef struct {
 struct nut_context_s {
 	nut_muxer_opts_t mopts;
 	nut_demuxer_opts_t dopts;
+	nut_alloc_t * alloc;
 	input_buffer_t * i;
 	output_buffer_t * o;
 	output_buffer_t * tmp_buffer;

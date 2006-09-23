@@ -23,29 +23,30 @@ static void ready_write_buf(output_buffer_t * bc, int amount) {
         if (bc->is_mem) {
 		int tmp = bc->buf_ptr - bc->buf;
 		bc->write_len = tmp + amount + PREALLOC_SIZE;
-		bc->buf = realloc(bc->buf, bc->write_len);
+		bc->buf = bc->alloc->realloc(bc->buf, bc->write_len);
 		bc->buf_ptr = bc->buf + tmp;
 	} else {
 		flush_buf(bc);
 		if (bc->write_len < amount) {
-			free(bc->buf);
+			bc->alloc->free(bc->buf);
 			bc->write_len = amount + PREALLOC_SIZE;
-			bc->buf_ptr = bc->buf = malloc(bc->write_len);
+			bc->buf_ptr = bc->buf = bc->alloc->malloc(bc->write_len);
 		}
 	}
 }
 
-static output_buffer_t * new_mem_buffer() {
-	output_buffer_t * bc = malloc(sizeof(output_buffer_t));
+static output_buffer_t * new_mem_buffer(nut_alloc_t * alloc) {
+	output_buffer_t * bc = alloc->malloc(sizeof(output_buffer_t));
+	bc->alloc = alloc;
 	bc->write_len = PREALLOC_SIZE;
 	bc->is_mem = 1;
 	bc->file_pos = 0;
-	bc->buf_ptr = bc->buf = malloc(bc->write_len);
+	bc->buf_ptr = bc->buf = alloc->malloc(bc->write_len);
 	return bc;
 }
 
-static output_buffer_t * new_output_buffer(nut_output_stream_t osc) {
-	output_buffer_t * bc = new_mem_buffer();
+static output_buffer_t * new_output_buffer(nut_alloc_t * alloc, nut_output_stream_t osc) {
+	output_buffer_t * bc = new_mem_buffer(alloc);
 	bc->is_mem = 0;
 	bc->osc = osc;
 	if (!bc->osc.write) bc->osc.write = stream_write;
@@ -55,8 +56,8 @@ static output_buffer_t * new_output_buffer(nut_output_stream_t osc) {
 static void free_buffer(output_buffer_t * bc) {
 	if (!bc) return;
 	if (!bc->is_mem) flush_buf(bc);
-	free(bc->buf);
-	free(bc);
+	bc->alloc->free(bc->buf);
+	bc->alloc->free(bc);
 }
 
 static output_buffer_t * clear_buffer(output_buffer_t * bc) {
@@ -282,9 +283,9 @@ static void put_syncpoint(nut_context_t * nut) {
 
 	if (s->alloc_len <= s->len) {
 		s->alloc_len += PREALLOC_SIZE;
-		s->s = realloc(s->s, s->alloc_len * sizeof(syncpoint_t));
-		s->pts = realloc(s->pts, s->alloc_len * nut->stream_count * sizeof(uint64_t));
-		s->eor = realloc(s->eor, s->alloc_len * nut->stream_count * sizeof(uint64_t));
+		s->s = nut->alloc->realloc(s->s, s->alloc_len * sizeof(syncpoint_t));
+		s->pts = nut->alloc->realloc(s->pts, s->alloc_len * nut->stream_count * sizeof(uint64_t));
+		s->eor = nut->alloc->realloc(s->eor, s->alloc_len * nut->stream_count * sizeof(uint64_t));
 	}
 
 	for (i = 0; i < nut->stream_count; i++) {
@@ -487,15 +488,27 @@ void nut_write_frame(nut_context_t * nut, const nut_packet_t * fd, const uint8_t
 }
 
 nut_context_t * nut_muxer_init(const nut_muxer_opts_t * mopts, const nut_stream_header_t s[], const nut_info_packet_t info[]) {
-	nut_context_t * nut = malloc(sizeof(nut_context_t));
+	nut_context_t * nut;
 	int i;
 	// TODO check that all input is valid
 
-	nut->o = new_output_buffer(mopts->output);
-	nut->tmp_buffer = new_mem_buffer(); // general purpose buffer
-	nut->tmp_buffer2 = new_mem_buffer(); //  for packet_headers
-	nut->max_distance = mopts->max_distance;
+	if (mopts->alloc.malloc) nut = mopts->alloc.malloc(sizeof(nut_context_t));
+	else nut = malloc(sizeof(nut_context_t));
+
 	nut->mopts = *mopts;
+
+	nut->alloc = &nut->mopts.alloc;
+
+	if (!nut->alloc->malloc) {
+		nut->alloc->malloc = malloc;
+		nut->alloc->realloc = realloc;
+		nut->alloc->free = free;
+	}
+
+	nut->o = new_output_buffer(nut->alloc, mopts->output);
+	nut->tmp_buffer = new_mem_buffer(nut->alloc); // general purpose buffer
+	nut->tmp_buffer2 = new_mem_buffer(nut->alloc); //  for packet_headers
+	nut->max_distance = mopts->max_distance;
 
 	if (nut->max_distance > 65536) nut->max_distance = 65536;
 
@@ -542,8 +555,8 @@ nut_context_t * nut_muxer_init(const nut_muxer_opts_t * mopts, const nut_stream_
 
 	for (nut->stream_count = 0; s[nut->stream_count].type >= 0; nut->stream_count++);
 
-	nut->sc = malloc(sizeof(stream_context_t) * nut->stream_count);
-	nut->tb = malloc(sizeof(nut_timebase_t) * nut->stream_count);
+	nut->sc = nut->alloc->malloc(sizeof(stream_context_t) * nut->stream_count);
+	nut->tb = nut->alloc->malloc(sizeof(nut_timebase_t) * nut->stream_count);
 	nut->timebase_count = 0;
 
 	for (i = 0; i < nut->stream_count; i++) {
@@ -557,20 +570,20 @@ nut_context_t * nut_muxer_init(const nut_muxer_opts_t * mopts, const nut_stream_
 		nut->sc[i].sh = s[i];
 		nut->sc[i].sh.max_pts = 0;
 
-		nut->sc[i].sh.fourcc = malloc(s[i].fourcc_len);
+		nut->sc[i].sh.fourcc = nut->alloc->malloc(s[i].fourcc_len);
 		memcpy(nut->sc[i].sh.fourcc, s[i].fourcc, s[i].fourcc_len);
 
-		nut->sc[i].sh.codec_specific = malloc(s[i].codec_specific_len);
+		nut->sc[i].sh.codec_specific = nut->alloc->malloc(s[i].codec_specific_len);
 		memcpy(nut->sc[i].sh.codec_specific, s[i].codec_specific, s[i].codec_specific_len);
 
-		nut->sc[i].pts_cache = malloc(nut->sc[i].sh.decode_delay * sizeof(int64_t));
+		nut->sc[i].pts_cache = nut->alloc->malloc(nut->sc[i].sh.decode_delay * sizeof(int64_t));
 
 		for (j = 0; j < nut->timebase_count; j++) if (compare_ts(nut, 1, s[i].time_base, 1, nut->tb[j]) == 0) break;
 		if (j == nut->timebase_count) nut->tb[nut->timebase_count++] = s[i].time_base;
 		nut->sc[i].timebase_id = j;
 
 		// reorder.c
-		nut->sc[i].reorder_pts_cache = malloc(nut->sc[i].sh.decode_delay * sizeof(int64_t));
+		nut->sc[i].reorder_pts_cache = nut->alloc->malloc(nut->sc[i].sh.decode_delay * sizeof(int64_t));
 		for (j = 0; j < nut->sc[i].sh.decode_delay; j++) nut->sc[i].reorder_pts_cache[j] = nut->sc[i].pts_cache[j] = -1;
 		nut->sc[i].next_pts = 0;
 		nut->sc[i].packets = NULL;
@@ -585,16 +598,16 @@ nut_context_t * nut_muxer_init(const nut_muxer_opts_t * mopts, const nut_stream_
 	if (info) {
 		for (nut->info_count = 0; info[nut->info_count].count >= 0; nut->info_count++);
 
-		nut->info = malloc(sizeof(nut_info_packet_t) * nut->info_count);
+		nut->info = nut->alloc->malloc(sizeof(nut_info_packet_t) * nut->info_count);
 
 		for (i = 0; i < nut->info_count; i++) {
 			int j;
 			nut->info[i] = info[i];
-			nut->info[i].fields = malloc(sizeof(nut_info_field_t) * info[i].count);
+			nut->info[i].fields = nut->alloc->malloc(sizeof(nut_info_field_t) * info[i].count);
 			for (j = 0; j < info[i].count; j++) {
 				nut->info[i].fields[j] = info[i].fields[j];
 				if (info[i].fields[j].data) {
-					nut->info[i].fields[j].data = malloc(info[i].fields[j].val);
+					nut->info[i].fields[j].data = nut->alloc->malloc(info[i].fields[j].val);
 					memcpy(nut->info[i].fields[j].data, info[i].fields[j].data, info[i].fields[j].val);
 				}
 			}
@@ -631,31 +644,31 @@ void nut_muxer_uninit(nut_context_t * nut) {
 		fprintf(stderr, "packet size: %.2lf ", (double)nut->sc[i].tot_size / nut->sc[i].total_frames);
 		fprintf(stderr, "packet overhead: %.2lf\n", (double)nut->sc[i].overhead / nut->sc[i].total_frames);
 
-		free(nut->sc[i].sh.fourcc);
-		free(nut->sc[i].sh.codec_specific);
-		free(nut->sc[i].pts_cache);
-		free(nut->sc[i].reorder_pts_cache);
+		nut->alloc->free(nut->sc[i].sh.fourcc);
+		nut->alloc->free(nut->sc[i].sh.codec_specific);
+		nut->alloc->free(nut->sc[i].pts_cache);
+		nut->alloc->free(nut->sc[i].reorder_pts_cache);
 	}
-	free(nut->sc);
-	free(nut->tb);
+	nut->alloc->free(nut->sc);
+	nut->alloc->free(nut->tb);
 
 	for (i = 0; i < nut->info_count; i++) {
 		int j;
-		for (j = 0; j < nut->info[i].count; j++) free(nut->info[i].fields[j].data);
-		free(nut->info[i].fields);
+		for (j = 0; j < nut->info[i].count; j++) nut->alloc->free(nut->info[i].fields[j].data);
+		nut->alloc->free(nut->info[i].fields);
 	}
-	free(nut->info);
+	nut->alloc->free(nut->info);
 
 	fprintf(stderr, "Syncpoints: %d size: %d\n", nut->syncpoints.len, nut->sync_overhead);
 
-	free(nut->syncpoints.s);
-	free(nut->syncpoints.pts);
-	free(nut->syncpoints.eor);
+	nut->alloc->free(nut->syncpoints.s);
+	nut->alloc->free(nut->syncpoints.pts);
+	nut->alloc->free(nut->syncpoints.eor);
 
 	free_buffer(nut->tmp_buffer);
 	free_buffer(nut->tmp_buffer2);
 	fprintf(stderr, "TOTAL: %d bytes data, %d bytes overhead, %.2lf%% overhead\n", total,
 		(int)bctello(nut->o) - total, (double)(bctello(nut->o) - total) / total*100);
 	free_buffer(nut->o); // flushes file
-	free(nut);
+	nut->alloc->free(nut);
 }

@@ -66,7 +66,14 @@ typedef struct {
 } frame_table_input_t;
 
 typedef struct {
+	void * (*malloc)(size_t size);
+	void * (*realloc)(void *ptr, size_t size);
+	void (*free)(void *ptr);
+} nut_alloc_t;
+
+typedef struct {
 	nut_output_stream_t output;
+	nut_alloc_t alloc;
 	int write_index;
 	int max_distance;
 	frame_table_input_t * fti;
@@ -74,6 +81,7 @@ typedef struct {
 
 typedef struct {
 	nut_input_stream_t input;
+	nut_alloc_t alloc;
 	int read_index;
 	//int cache_syncpoints;
 } nut_demuxer_opts_t;
