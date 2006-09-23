@@ -84,6 +84,7 @@ static uint8_t * get_buf(input_buffer_t * bc, off_t start) {
 }
 
 static input_buffer_t * new_mem_buffer(input_buffer_t * bc) {
+	if (!bc) return NULL;
 	bc->read_len = 0;
 	bc->write_len = 0;
 	bc->is_mem = 1;
@@ -96,6 +97,7 @@ static input_buffer_t * new_mem_buffer(input_buffer_t * bc) {
 
 static input_buffer_t * new_input_buffer(nut_alloc_t * alloc, nut_input_stream_t isc) {
 	input_buffer_t * bc = new_mem_buffer(alloc->malloc(sizeof(input_buffer_t)));
+	if (!bc) return NULL;
 	bc->alloc = alloc;
 	bc->is_mem = 0;
 	bc->isc = isc;
@@ -1261,6 +1263,8 @@ nut_context_t * nut_demuxer_init(nut_demuxer_opts_t * dopts) {
 	if (dopts->alloc.malloc) nut = dopts->alloc.malloc(sizeof(nut_context_t));
 	else nut = malloc(sizeof(nut_context_t));
 
+	if (!nut) return NULL;
+
 	nut->syncpoints.len = 0;
 	nut->syncpoints.alloc_len = 0;
 	nut->syncpoints.s = NULL;
@@ -1286,6 +1290,11 @@ nut_context_t * nut_demuxer_init(nut_demuxer_opts_t * dopts) {
 	}
 
 	nut->i = new_input_buffer(nut->alloc, dopts->input);
+
+	if (!nut->i) {
+		nut->alloc->free(nut);
+		return NULL;
+	}
 
 	return nut;
 }
