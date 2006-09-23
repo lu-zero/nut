@@ -129,6 +129,7 @@ static int convert(FILE * out, demuxer_t * demuxer, stream_t * streams, int stre
 	mopts.write_index = 1;
 	mopts.fti = ft_default;
 	mopts.max_distance = 32768;
+	mopts.alloc.malloc = NULL;
 	nut = nut_muxer_init(&mopts, nut_stream, NULL);
 
 	if (stats) fprintf(stats, "%10s%10s%10s%10s\n", "stream", "len", "pts_diff", "flags");
