@@ -51,6 +51,7 @@ enum errors {
 	ERR_BAD_STREAM_ORDER,
 	ERR_NOSTREAM_STARTCODE,
 	ERR_BAD_EOF,
+	ERR_OUT_OF_MEM,
 };
 
 typedef struct {

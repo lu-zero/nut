@@ -437,10 +437,13 @@ static int get_index(nut_context_t * nut) {
 	}
 
 	GET_V(tmp, x);
+	ERROR(SIZE_MAX/x < sizeof(syncpoint_t) || SIZE_MAX/x < sizeof(uint64_t) * nut->stream_count, -ERR_OUT_OF_MEM);
+
 	sl->alloc_len = sl->len = x;
 	sl->s = nut->alloc->realloc(sl->s, sl->alloc_len * sizeof(syncpoint_t));
 	sl->pts = nut->alloc->realloc(sl->pts, sl->alloc_len * sizeof(uint64_t) * nut->stream_count);
 	sl->eor = nut->alloc->realloc(sl->eor, sl->alloc_len * sizeof(uint64_t) * nut->stream_count);
+	ERROR(!sl->s || !sl->pts || !sl->eor, -ERR_OUT_OF_MEM);
 
 	for (i = 0; i < sl->len; i++) {
 		GET_V(tmp, sl->s[i].pos);
