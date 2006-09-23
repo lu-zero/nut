@@ -202,7 +202,7 @@ static int get_vb(nut_alloc_t * alloc, input_buffer_t * in, int * len, uint8_t *
 	if ((err = get_v(in, &tmp))) return err;
 	*len = tmp;
 	*buf = alloc->realloc(*buf, *len);
-	if (get_data(in, *len, *buf) != tmp) return buf_eof(in);
+	if (get_data(in, *len, *buf) != *len) return buf_eof(in);
 	return 0;
 }
 
