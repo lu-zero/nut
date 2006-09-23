@@ -348,7 +348,8 @@ static int add_syncpoint(nut_context_t * nut, syncpoint_t sp, uint64_t * pts, ui
 				}
 				sl->s[i].pts_valid = 1;
 			}
-			return i;
+			if (out) *out = i;
+			return 0;
 		}
 		break;
 	}
