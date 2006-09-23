@@ -205,6 +205,7 @@ static int get_vb(nut_alloc_t * alloc, input_buffer_t * in, int * len, uint8_t *
 	if ((err = get_v(in, &tmp))) return err;
 	*len = tmp;
 	*buf = alloc->realloc(*buf, *len);
+	if (!*buf) return -ERR_OUT_OF_MEM;
 	if (get_data(in, *len, *buf) != *len) return buf_eof(in);
 	return 0;
 }
@@ -247,7 +248,9 @@ static int get_main_header(nut_context_t * nut) {
 	if (nut->max_distance > 65536) nut->max_distance = 65536;
 
 	GET_V(tmp, nut->timebase_count);
+	ERROR(SIZE_MAX/sizeof(nut_timebase_t) < nut->timebase_count, -ERR_OUT_OF_MEM);
 	nut->tb = nut->alloc->realloc(nut->tb, nut->timebase_count * sizeof(nut_timebase_t));
+	ERROR(!nut->tb, -ERR_OUT_OF_MEM);
 	for (i = 0; i < nut->timebase_count; i++) {
 		GET_V(tmp, nut->tb[i].nom);
 		GET_V(tmp, nut->tb[i].den);
@@ -326,7 +329,7 @@ err_out:
 	return err;
 }
 
-static int add_syncpoint(nut_context_t * nut, syncpoint_t sp, uint64_t * pts, uint64_t * eor) {
+static int add_syncpoint(nut_context_t * nut, syncpoint_t sp, uint64_t * pts, uint64_t * eor, int * out) {
 	syncpoint_list_t * sl = &nut->syncpoints;
 	int i, j;
 
@@ -349,10 +352,18 @@ static int add_syncpoint(nut_context_t * nut, syncpoint_t sp, uint64_t * pts, ui
 	}
 	i++;
 	if (sl->len + 1 > sl->alloc_len) {
+		void * a, * b, * c;
 		sl->alloc_len += PREALLOC_SIZE/4;
-		sl->s = nut->alloc->realloc(sl->s, sl->alloc_len * sizeof(syncpoint_t));
-		sl->pts = nut->alloc->realloc(sl->pts, sl->alloc_len * nut->stream_count * sizeof(uint64_t));
-		sl->eor = nut->alloc->realloc(sl->eor, sl->alloc_len * nut->stream_count * sizeof(uint64_t));
+		if (SIZE_MAX/sl->alloc_len < sizeof(syncpoint_t) ||
+		    SIZE_MAX/sl->alloc_len < sizeof(uint64_t) * nut->stream_count)
+			return -ERR_OUT_OF_MEM;
+		a = nut->alloc->realloc(sl->s, sl->alloc_len * sizeof(syncpoint_t));
+		b = nut->alloc->realloc(sl->pts, sl->alloc_len * nut->stream_count * sizeof(uint64_t));
+		c = nut->alloc->realloc(sl->eor, sl->alloc_len * nut->stream_count * sizeof(uint64_t));
+		if (!a || !b || !c) return -ERR_OUT_OF_MEM;
+		sl->s = a;
+		sl->pts = b;
+		sl->eor = c;
 	}
 	memmove(sl->s + i + 1, sl->s + i, (sl->len - i) * sizeof(syncpoint_t));
 	memmove(sl->pts + (i + 1) * nut->stream_count, sl->pts + i * nut->stream_count, (sl->len - i) * nut->stream_count * sizeof(uint64_t));
@@ -365,7 +376,8 @@ static int add_syncpoint(nut_context_t * nut, syncpoint_t sp, uint64_t * pts, ui
 		sl->eor[i * nut->stream_count + j] = eor ? eor[j] : 0;
 	}
 	sl->len++;
-	return i;
+	if (out) *out = i;
+	return 0;
 }
 
 static void set_global_pts(nut_context_t * nut, uint64_t pts) {
@@ -408,10 +420,10 @@ static int get_syncpoint(nut_context_t * nut) {
 			eor[i] = nut->sc[i].eor;
 			nut->sc[i].eor = 0;
 		}
-		if (after_seek) add_syncpoint(nut, s, NULL, NULL);
+		if (after_seek) CHECK(add_syncpoint(nut, s, NULL, NULL, NULL));
 		else {
 			s.pts_valid = 1;
-			i = add_syncpoint(nut, s, pts, eor);
+			CHECK(add_syncpoint(nut, s, pts, eor, &i));
 			nut->syncpoints.s[i - 1].seen_next = 1;
 		}
 	} /*else {
@@ -854,7 +866,7 @@ static int find_basic_syncpoints(nut_context_t * nut) {
 		if (!nut->seek_status) seek_buf(nut->i, 0, SEEK_SET);
 		nut->seek_status = 1;
 		CHECK(find_syncpoint(nut, 0, &s, 0));
-		add_syncpoint(nut, s, NULL, NULL);
+		CHECK(add_syncpoint(nut, s, NULL, NULL, NULL));
 		nut->seek_status = 0;
 	}
 
@@ -864,7 +876,7 @@ static int find_basic_syncpoints(nut_context_t * nut) {
 		if (!nut->seek_status) seek_buf(nut->i, 0, SEEK_END);
 		nut->seek_status = 1;
 		CHECK(find_syncpoint(nut, 1, &s, 0));
-		i = add_syncpoint(nut, s, NULL, NULL);
+		CHECK(add_syncpoint(nut, s, NULL, NULL, &i));
 		assert(i == sl->len-1);
 		sl->s[i].seen_next = 1;
 		nut->seek_status = 0;
@@ -960,7 +972,8 @@ static int binary_search_syncpoint(nut_context_t * nut, double time_pos, off_t *
 			lop = s.pts;
 		}
 		if (1/*nut->dopts.cache_syncpoints || sl->len == 2*/) {
-			int tmp = add_syncpoint(nut, s, NULL, NULL);
+			int tmp;
+			CHECK(add_syncpoint(nut, s, NULL, NULL, &tmp));
 			if (!res) i = tmp;
 		}/* else if (sl->len == 3) {
 			if (s.pts > pts) {
@@ -1312,6 +1325,7 @@ const char * nut_error(int error) {
 		case ERR_NOSTREAM_STARTCODE: return "Expected stream startcode not found.";
 		case ERR_BAD_EOF: return "Invalid forward_ptr!";
 		case ERR_VLC_TOO_LONG: return "VLC too long";
+		case ERR_OUT_OF_MEM: return "Out of memory";
 	}
 	return NULL;
 }
