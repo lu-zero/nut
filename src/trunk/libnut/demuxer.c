@@ -734,7 +734,7 @@ int nut_read_headers(nut_context_t * nut, nut_stream_header_t * s []) {
 				if (tmp == MAIN_STARTCODE) break;
 			}
 			ERROR(tmp != MAIN_STARTCODE, -ERR_NO_HEADERS);
-			nut->last_headers = bctello(nut->i);
+			nut->last_headers = bctello(nut->i) - 8;
 			flush_buf(nut->i);
 		}
 
@@ -919,8 +919,7 @@ static int binary_search_syncpoint(nut_context_t * nut, double time_pos, off_t *
 		goto err_out;
 	}
 	if (i == 0) { // there isn't any syncpoint smaller than requested
-		int FIXME; // pos might not be accurate - if this function is called when there really is an index
-		seek_buf(nut->i, sl->s[0].pos, SEEK_SET); // seeking to first syncpoint
+		seek_buf(nut->i, nut->last_headers, SEEK_SET); // seeking to "begginning of file", the headers
 		clear_dts_cache(nut);
 		nut->last_syncpoint = 0;
 		goto err_out;
