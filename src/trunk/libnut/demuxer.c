@@ -339,6 +339,8 @@ static int add_syncpoint(nut_context_t * nut, syncpoint_t sp, uint64_t * pts, ui
 		if (sl->s[i].pos > sp.pos) continue;
 		if (sp.pos < sl->s[i].pos + 16) { // syncpoint already in list
 			sl->s[i].pos = sp.pos;
+			assert(!sl->s[i].pts || sl->s[i].pts == sp.pts);
+			sl->s[i].pts = sp.pts;
 			if (pts) {
 				for (j = 0; j < nut->stream_count; j++) {
 					assert(!sl->s[i].pts_valid || sl->pts[i * nut->stream_count + j] == pts[j]);
@@ -919,7 +921,8 @@ static int binary_search_syncpoint(nut_context_t * nut, double time_pos, off_t *
 		goto err_out;
 	}
 	if (i == 0) { // there isn't any syncpoint smaller than requested
-		seek_buf(nut->i, nut->last_headers, SEEK_SET); // seeking to "begginning of file", the headers
+		if (sl->s[0].pts) seek_buf(nut->i, sl->s[0].pos, SEEK_SET);
+		else seek_buf(nut->i, nut->last_headers, SEEK_SET); // seeking to "begginning of file", the headers
 		clear_dts_cache(nut);
 		nut->last_syncpoint = 0;
 		goto err_out;
