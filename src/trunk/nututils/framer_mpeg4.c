@@ -1,5 +1,5 @@
 // (C) 2005-2006 Oded Shimon
-// This file is available under the MIT/X license, see LICENSE
+// This file is available under the MIT/X license, see COPYING
 
 #include "nutmerge.h"
 
