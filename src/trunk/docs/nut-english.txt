@@ -37,9 +37,13 @@ id. No other packets may intervene between these header packets. For
 robustness, a NUT file needs to include backup copies of the headers.
 In the absence of valid headers at the beginning of the file,
 processes attempting to read a NUT file are recommended to search for
-backup headers beginning at each power-of-two byte offset in the file.
+backup headers beginning at each power-of-two byte offset in the file,
+and before end of file.
 Simple stop conditions are provided to ensure that this search
-algorithm is bounded logarithmically in file length.
+algorithm is bounded logarithmically in file length. This stop condition
+is finding any valid NUT packet (such as a syncpoint) during the search,
+as no packets are allowed between a search start until a reapeted header
+set.
 
 Metadata - Info Packets
 
@@ -47,7 +51,7 @@ The NUT main header and stream headers may be followed by metadata
 "info" packets, which contain (mostly textual, but other formats are
 possible) information on the file, on particular streams, or on
 particular time intervals ("chapters") of the file, such as: title,
-author, language, etc. One should not that info packets may occur at
+author, language, etc. One should note that info packets may occur at
 other locations in a file, particulatly in a file that is being
 generated/transmitted in real time; however, a process interpreting a
 NUT file should not make any attempt to search for info packets except
@@ -76,7 +80,7 @@ on the underlying media when it is available.
 
 On the other hand, all NUT files except live streams (which have no
 concept of "end of file") must include an index at the end of the
-file, followed by a fixed-size 32-bit integer that is an offset
+file, followed by a fixed-size 64-bit integer that is an offset
 backwards from end-of-file at which the final index packet begins.
 This is the only fixed-size field specified by NUT, and makes it
 possible to locate an index stored at the end of the file without
