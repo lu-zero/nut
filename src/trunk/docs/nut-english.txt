@@ -137,6 +137,11 @@ parameters are stored in the stream header (including NUT fields and
 the opaque global header object) are constant for the duration of the
 stream.
 
+Each stream has a last_pts context. For compression, every frame's
+pts is coded relatively to the last_pts. In order for demuxing to resume
+from arbitrary points in the file, all last_pts contexes are reset by
+syncpoints.
+
 Frames
 
 NUT is built on the model that video, audio, and subtitle streams all
@@ -239,5 +244,6 @@ Syncpoints must be followed by a frame, and must be placed after headers
 (except those at end of file).
 The timestamp coded in the syncpoint is a global timestamp, which is used
 to reset the last_pts context of all streams, and to find the appropriate
-syncpoint when seeking. back_ptr is explained in greater detail in the
-Seeking section.
+syncpoint when seeking. Demuxing can only begin at syncpoints for proper
+last_pts context across all streams, including after seeking.
+back_ptr is explained in greater detail in the Seeking section.
