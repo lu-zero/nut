@@ -194,6 +194,11 @@ following the framecode byte. By careful construction of the framecode
 table in the main header, an average overhead of significantly less
 than 2 bytes per frame can be achieved for single-stream files at low
 bitrates.
+Framecodes can also be flagged as invalid, and seeing such a framecode
+indicates a damaged file. The frame code 0x4E ('N') is a special invalid
+framecode which marks that the next packet is a NUT packet, and not a
+frame. The following 7 bytes, combined with 'N', is the full startcode of
+the NUT packet.
 
 Syncpoints
 
