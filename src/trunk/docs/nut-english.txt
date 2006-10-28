@@ -272,3 +272,11 @@ All these conditions make it impossible for a demuxer to read, skip or
 buffer a large amount of data from a file because of damaged data. Also
 max_pts_distance prevents an overly large pts caused by damaged data to
 cause a player to get stuck.
+
+Error Recovery
+
+The recommended method for recovering from errors once damage has been
+detected, is to linear search the file from current position to the
+closest syncpoint startcode found, and resume demuxing from there. If
+possible, before the linear search, rewind to the last syncpoint seen, in
+case a syncpoint was already skipped due to demuxing damaged data.
