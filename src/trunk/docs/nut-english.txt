@@ -202,4 +202,14 @@ the NUT packet.
 
 Syncpoints
 
-...
+Syncpoints are mini-NUT packets, which serve for seeking, error recovery,
+and error checking. They contain a startcode like all NUT packets, a
+timestamp, a back_ptr, and a CRC on the packet itself. Syncpoints must be
+placed every 32kb (or whatever max_distance is set to in the main header,
+64kb at most), unless between the 2 syncpoints is a single frame.
+Syncpoints must be followed by a frame, and must be placed after headers
+(except those at end of file).
+The timestamp coded in the syncpoint is a global timestamp, which is used
+to reset the last_pts context of all streams, and to find the appropriate
+syncpoint when seeking. back_ptr is explained in greater detail in the
+Seeking section.
