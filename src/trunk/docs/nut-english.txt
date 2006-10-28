@@ -43,6 +43,20 @@ The packet_footer consists of reserved_bytes, which is room for any
 reserved fields which can be skipped by old demuxers, and a CRC covering
 the packet from after the packet_header until the CRC itself.
 
+Variable Length Coding
+
+Almost all fields in NUT are coded using VLCs. VLCs allow for compact
+storage of small integers, which still being extendible to infinitely
+large integers. The syntax is of a VLC is, per byte, a 1 bit flag stating
+if there are more bits to the integer, and 7 bits to be prepended to the
+lsb of the integer, shifting the previous value to the left.
+Stuffing is allowed in VLCs by adding 0x80 bytes before the actual value,
+but a maximum of 8 bytes of stuffing is allowed in any VLC outside of a
+NUT packet. The only such fields are forward_ptr and fields in frame
+headers. This is to prevent demuxers from looping on a large of amount of
+damaged bytes of 0x80. Fields inside a NUT packet are protected by a CRC
+whcih can be checked before decoding.
+
 Header Structure
 
 A NUT file must begin with a magic identification string, followed by
