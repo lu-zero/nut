@@ -1,0 +1,196 @@
+
+
+!!! DRAFT DRAFT DRAFT !!!
+
+DRAFT USAGE / SEMANTICS / RATIONALE SECTIONS FOR NUT SPEC
+
+
+Overview of NUT
+
+Unlike many popular containers, a NUT file can largely be viewed as a
+byte stream, as opposed to having a global block structure. NUT files
+consist of a sequence of packets, which can contain global headers,
+file metadata, stream headers for the individual media streams,
+optional index data to accelerate seeking, and, of course, the actual
+encoded media frames. Aside from frames, all packets begin with a
+64-bit startcode, the first byte of which is 0x4E, the ASCII character
+'N'. In addition to identifying the type of packet to follow, these
+startcodes (combined with CRC) allow for reliable resynchronization
+when reading damaged or incomplete files. Packets have a common
+structure that enables a process reading the file both to verify
+packet contents and to bypass uninteresting packets without having to
+be aware of the specific packet type.
+
+In order to facilitate identification and playback of NUT files,
+strict rules are imposed on the location and order of packets and
+streams. Streams can be of class video, audio, subtitle, or
+user-defined data. Additional classes may be added in a later version
+of the NUT specification. Streams must be numbered consecutively
+beginning from 0. This allows simple and compact reference to streams
+in packet types where overhead must be kept to a minimum.
+
+Header Structure
+
+A NUT file must begin with a magic identification string, followed by
+the main header and a stream header for each stream, ordered by stream
+id. No other packets may intervene between these header packets. For
+robustness, a NUT file needs to include backup copies of the headers.
+In the absence of valid headers at the beginning of the file,
+processes attempting to read a NUT file are recommended to search for
+backup headers beginning at each power-of-two byte offset in the file.
+Simple stop conditions are provided to ensure that this search
+algorithm is bounded logarithmically in file length.
+
+Metadata - Info Packets
+
+The NUT main header and stream headers may be followed by metadata
+"info" packets, which contain (mostly textual, but other formats are
+possible) information on the file, on particular streams, or on
+particular time intervals ("chapters") of the file, such as: title,
+author, language, etc. One should not that info packets may occur at
+other locations in a file, particulatly in a file that is being
+generated/transmitted in real time; however, a process interpreting a
+NUT file should not make any attempt to search for info packets except
+in their usual location, i.e. following the headers. It is intended
+that processes presenting the contents of a NUT file will make
+automated responses to information stored in these packets, e.g.
+selecting a subtitle language based on the user's preferred list of
+languages, or providing a visual list of chapters to the user.
+Therefore, the format of info packets and the data they are to contain
+has been carefully specified and is aligned with International
+Standards for language codes and so forth. For this reason it is also
+important that info packets be stored in the correct locations, so
+that processes making automated responses to these packets can operate
+correctly.
+
+Index
+
+An index packet to facilitate O(1) seek-to-time operations may follow
+the headers. If an index packet does exist here, it should be placed
+after info packets, rather than before. Since the contents of the
+index depend on knowing the complete contents of the file, most
+processes generating NUT files are not expected to store an index with
+the headers. This option is merely provided for applications where it
+makes sense, to allow the index to be read without any seek operations
+on the underlying media when it is available.
+
+On the other hand, all NUT files except live streams (which have no
+concept of "end of file") must include an index at the end of the
+file, followed by a fixed-size 32-bit integer that is an offset
+backwards from end-of-file at which the final index packet begins.
+This is the only fixed-size field specified by NUT, and makes it
+possible to locate an index stored at the end of the file without
+resorting to unreliable heuristics.
+
+Streams
+
+A NUT file consists of one or more streams, intended to be presented
+simultaneously in synchronization with one another. Use of streams as
+independent entities is discouraged, and the nature of NUT's ordering
+requirements on frames makes it highly disadvantageous to store
+anything except the audio/video/subtitle/etc. components of a single
+presentation together in a single NUT file. Nonlinear playback order,
+scripting, and such are topics outside the scope of NUT, and should be
+handled at a higher protocol layer should they be desired (for
+example, using several NUT files with an external script file to
+control their playback in combination).
+
+With each stream, a single media encoding format is associated. The
+stream headers convey properties of the encoding, such as video frame
+dimensions, sample rates, and the compression standard ("codec") used
+(if any). Stream headers may also carry with them an opaque, binary
+object in a codec-specific format, containing global parameters for
+the stream such as codebooks. Both the compression format and whatever
+parameters are stored in the stream header (including NUT fields and
+the opaque global header object) are constant for the duration of the
+stream.
+
+Frames
+
+NUT is built on the model that video, audio, and subtitle streams all
+consist of a sequence of "frames", where the specific definition of
+frame is left partly to the codec, but should be roughly interpreted
+as the smallest unit of data which can be decoded (not necessarily
+independently; it may depend on previously-decoded frames) to a
+complete presentation unit occupying an interval of time. In
+particular, video frames correspond to the usual idea of a frame as a
+picture that is displayed beginning at its assigned timestamp until it
+is replaced by a subsequent picture with a later timestamp. Subtitle
+frames should be thought of as individual subtitles in the case of
+simple text-only streams, or as events that alter the presentation in
+the case of more advanced subtitle formats. Audio frames are merely
+intervals of samples; their length is determined by the compression
+format used.
+
+Frames need not be decoded in their presentation order. NUT allows for
+arbitrary out-of-order frame systems, from classic MPEG-1-style B
+frames to H.264 B pyramid and beyond, using a simple notion of "delay"
+and an implicitly-determined "decode timestamp" (dts). Out-of-order
+decoding is not limited to video streams; it is available to audio
+streams as well, and, given the right conditions, even subtitle
+streams, should a subtitle format choose to make use of such a
+capability.
+
+Central to NUT is the notion that EVERY frame has a timestamp. This
+differs from other major container formats which allow timestamps to
+be omitted for some or even most frames. The decision to explicitly
+timestamp each frame allows for powerful high-level seeking and
+editing in applications without any interaction with the codec level.
+This makes it possible to develop applications which are completely
+unaware of the codecs used, and allows applications which do need to
+perform decoding to be more properly factored.
+
+Keyframes
+
+NUT defines a "key frame" as any frame such that the frame itself and
+all subsequent (with regard to presentation time) frames of the stream
+can be decoded successfully without reference to prior (with regard to
+storage/decoding order) frames in the stream. This definition may
+sometimes be bent on a per-codec basis, particularly with audio
+formats where there is MDCT window overlap or similar.
+
+The concept of key frames is central to seeking, and key frames will
+be the targets of the seek-to-time operation.
+
+Representation of Time
+
+NUT represents all timestamps as exact integer multiples of a rational
+number "time base". Files can have multiple time bases in order to
+accurately represent the time units of each stream. The set of
+available time bases is defined in the main header, while each stream
+header indicates which time base the corresponding stream will use.
+
+Effective use of time bases both allows for compact representation of
+timestamps, minimizing overhead, and enriches the information
+contained in the file. For example, a process interpreting a NUT file
+with a video time base of 1/25 second knows it can convert the video
+to fixed-framerate 25 fps content or present it faithfully on a PAL
+display.
+
+The scope of the media contained in a NUT file is a single contiguous
+interval of time. Timestamps need not begin at zero, but they may not
+jump backwards. Any large forward jump in timestamps must be
+interpreted as a frame with a large presentation interval, not as a
+discontinuity in the presentation. Without conditions such as these,
+NUT could not guarantee correct seeking in efficient time bounds.
+
+Aside from provisions made for out-of-order decoding, all frames in a
+NUT file must be strictly ordered by timestamp. For the purpose of
+sorting frames, all timestamps are treated as rational numbers derived
+from a coded integer timestamp and the associated time base, and
+compared under the standard ordering on the rational numbers.
+
+Frame Coding
+
+Each frame begins with a "framecode", a single byte which indexes a
+table in the main header. This table can associate properties such as
+stream id, size, relative timestamp, keyframe flag, etc. with the
+frame that follows, or allow the values to be explicitly coded
+following the framecode byte. By careful construction of the framecode
+table in the main header, an average overhead of significantly less
+than 2 bytes per frame can be achieved for single-stream files at low
+bitrates.
+
+Syncpoints
+
+...
