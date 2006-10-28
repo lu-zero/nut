@@ -247,3 +247,28 @@ to reset the last_pts context of all streams, and to find the appropriate
 syncpoint when seeking. Demuxing can only begin at syncpoints for proper
 last_pts context across all streams, including after seeking.
 back_ptr is explained in greater detail in the Seeking section.
+
+Error Checking
+
+There are several ways to detect a damaged stream in NUT during demuxing:
+1. Invalid framecode - If a framecode which has been marked as invalid in
+   the main header is found as the framecode in a frame header, then the
+   stream is damaged. For this reason, 0x00 and 0xFF are recommended to be
+   set as invalid frame codes in NUT.
+2. Bad CRC on a NUT packet, packet_header, or frame header - fairly
+   obvious.
+3. Decoded frame size causes a distance from the last syncpoint to be
+   bigger than max_distance, and frame does not follow a syncpoint.
+4. Decoded frame size is bigger than max_distance*2, and frame header does
+   not have a CRC.
+5. Decoded frame pts is more than max_pts_distance higher than last_pts,
+   and frame header does not have a CRC.
+6. A VLC is found with more than 8 bytes of stuffing in a frame header or
+   forward_ptr.
+7. Streams are found to not be strictly interleaved by comparing dts and
+   pts - a precise formula for this check can be found in the spec.
+
+All these conditions make it impossible for a demuxer to read, skip or
+buffer a large amount of data from a file because of damaged data. Also
+max_pts_distance prevents an overly large pts caused by damaged data to
+cause a player to get stuck.
