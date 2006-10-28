@@ -1035,11 +1035,11 @@ static int linear_search_seek(nut_context_t * nut, int backwards, seek_state_t *
 		off_t back_ptr = stopper->pos - stopper->back_ptr;
 		for (i = 1; i < sl->len; i++) {
 			if (sl->s[i].pos > back_ptr + 15) {
+				// no need to worry about this being exact or not - if we're using stopper, that means we don't have an index
 				if (sl->s[i-1].seen_next) stopper_syncpoint = sl->s[i].pos;
 				break;
 			}
 		}
-		if (back_ptr > (nut->seek_status>>1)) stopper = NULL; // bad stopper, it points to a different back_ptr FIXME so?..
 		if (stopper_syncpoint > bctello(nut->i)) stopper_syncpoint = 0; // don't premature
 	}
 
