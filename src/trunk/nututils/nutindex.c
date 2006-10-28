@@ -332,6 +332,8 @@ int main(int argc, char * argv[]) {
 		fprintf(stderr, "bleh\n");
 		return 1;
 	}
+	printf("Note! This program produces less error resiliant files by moving the main headers!\n");
+
 	in = new_input_buffer(&iin, fin);
 	out = new_output_buffer(&oout, fout);
 	CHECK(find_copy_index(in, mem, &end));
