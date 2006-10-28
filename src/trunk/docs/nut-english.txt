@@ -29,6 +29,20 @@ of the NUT specification. Streams must be numbered consecutively
 beginning from 0. This allows simple and compact reference to streams
 in packet types where overhead must be kept to a minimum.
 
+Packet Structure
+
+Every NUT packet has a packet_header and a packet_footer.
+The packet_header consists of a 64-bit startcode, a forward_ptr, and an
+optional CRC on the packet header if the forward_ptr is larger than 4k.
+The forward_ptr gives the size of the packet from after the packet_header
+until the end of the packet_footer. The optional CRC is to prevent a
+demuxer from seeing a damaged startcode and forward_ptr with a high size,
+causing it to skip or buffer a large part of the file, only to find it is
+not really a NUT packet.
+The packet_footer consists of reserved_bytes, which is room for any
+reserved fields which can be skipped by old demuxers, and a CRC covering
+the packet from after the packet_header until the CRC itself.
+
 Header Structure
 
 A NUT file must begin with a magic identification string, followed by
