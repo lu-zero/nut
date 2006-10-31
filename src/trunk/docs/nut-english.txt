@@ -255,6 +255,17 @@ divided by 16. The reason for this is that the minimum size for a
 syncpoint is 16 bytes:
 8 startcode + 1 forward_ptr + 1 timestamp + 1 back_ptr + 4 checksum + 1 frame_code
 
+End of Relevance
+EOR is a flag that can be attributed to a frame in any stream, and marks
+the end of relavence of a stream on presentation, such as a subtitle
+stream currently showing no subtitles on screen. EOR flag can only be
+given to zero byte frames, and must be set as keyframe as well. Once EOR
+is seen on such a stream, the stream is set EOR until the next keyframe on
+that stream. Streams which are set EOR are ignored by back_ptr in
+syncpoints until EOR is unset. The significance of EOR is to set the
+stream as irrelevant when seeking and searching for optimal keyframes to
+begin demuxing.
+
 Error Checking
 
 There are several ways to detect a damaged stream in NUT during demuxing:
