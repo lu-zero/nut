@@ -20,12 +20,12 @@ demuxer_t * ndemuxers[] = {
 
 extern framer_t vorbis_framer;
 extern framer_t mpeg4_framer;
-extern framer_t null_framer;
+extern framer_t mp3_framer;
 
 framer_t * nframers[] = {
 	&vorbis_framer,
 	&mpeg4_framer,
-	&null_framer,
+	&mp3_framer,
 	NULL
 };
 

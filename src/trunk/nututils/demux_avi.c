@@ -332,6 +332,25 @@ static int avi_read_headers(demuxer_priv_t * avi) {
 static int read_headers(demuxer_priv_t * avi, stream_t ** streams) {
 	int i;
 	if ((i = avi_read_headers(avi))) return i;
+	for (i = 0; i < avi->avih->dwStreams; i++) {
+		if (avi->stream[i].type == 0) { // video
+			char * fourccs[] = {"FMP4","fmp4","DIVX","divx",
+			                    "DIV1","div1","MP4S","mp4s",
+			                    "xvid","XVID","XviD","XVIX",
+			                    "M4S2","m4s2","mp4v","MP4V"
+			                    "DX50","dx50","BLZ0",
+			};
+			int j;
+			for (j = sizeof(fourccs)/sizeof(fourccs[0]); j--; ) {
+				if (!strncmp(avi->stream[i].video->biCompression, fourccs[j], 4)) break;
+			}
+			if (j == -1) return 18;
+		} else {
+			if (avi->stream[i].audio->wFormatTag[0] != 0x55 ||
+			    avi->stream[i].audio->wFormatTag[1] != 0x00) return 19;
+		}
+	}
+
 	*streams = avi->s = malloc(sizeof(stream_t) * (avi->avih->dwStreams + 1));
 	for (i = 0; i < avi->avih->dwStreams; i++) {
 		extern demuxer_t avi_demuxer;
@@ -340,19 +359,18 @@ static int read_headers(demuxer_priv_t * avi, stream_t ** streams) {
 		avi->s[i].demuxer.priv = avi;
 		avi->s[i].packets_alloc = avi->s[i].npackets = 0;
 		avi->s[i].packets = NULL;
-		if (i == 0) avi->s[i].codec_id = e_mpeg4;
-		else avi->s[i].codec_id = e_null;
 
 		avi->s[i].sh.type = avi->stream[i].type;
 		avi->s[i].sh.time_base.den = avi->stream[i].strh->dwRate;
 		avi->s[i].sh.time_base.nom = avi->stream[i].strh->dwScale;
 		avi->s[i].sh.fixed_fps = 1;
-		avi->s[i].sh.decode_delay = !i; // FIXME
 		avi->s[i].sh.codec_specific_len = avi->stream[i].extra_len;
 		avi->s[i].sh.codec_specific = avi->stream[i].extra;
 		if (avi->stream[i].type == 0) { // video
 			avi->s[i].sh.fourcc_len = 4;
 			avi->s[i].sh.fourcc = avi->stream[i].video->biCompression;
+			avi->s[i].codec_id = e_mpeg4;
+			avi->s[i].sh.decode_delay = 1;
 
 			avi->s[i].sh.width = avi->stream[i].video->biWidth;
 			avi->s[i].sh.height = avi->stream[i].video->biHeight;
@@ -360,8 +378,10 @@ static int read_headers(demuxer_priv_t * avi, stream_t ** streams) {
 			avi->s[i].sh.sample_height = 0;
 			avi->s[i].sh.colorspace_type = 0;
 		} else { // audio
-			avi->s[i].sh.fourcc_len = 2;
-			avi->s[i].sh.fourcc = avi->stream[i].audio->wFormatTag;
+			avi->s[i].sh.fourcc_len = 4;
+			avi->s[i].sh.fourcc = "mp3 ";
+			avi->s[i].codec_id = e_mp3;
+			avi->s[i].sh.decode_delay = 0;
 
 			avi->s[i].sh.samplerate_nom = 1;
 			avi->s[i].sh.samplerate_denom = avi->stream[i].audio->nSamplesPerSec;
@@ -447,36 +467,6 @@ demuxer_t avi_demuxer = {
 	read_headers,
 	fill_buffer,
 	uninit
-};
-
-struct framer_priv_s { stream_t * stream; };
-
-static int n_get_packet(framer_priv_t * mc, packet_t * p) {
-	return get_stream_packet(mc->stream, p);
-}
-
-static int n_setup_headers(framer_priv_t * mc, nut_stream_header_t * s) {
-	*s = mc->stream->sh;
-	return 0; // nothing to do
-}
-
-static framer_priv_t * n_init(stream_t * s) {
-	framer_priv_t * mc = malloc(sizeof(framer_priv_t));
-	mc->stream = s;
-	return mc;
-}
-
-static void n_uninit(framer_priv_t * mc) {
-	free(mc);
-}
-
-framer_t null_framer = {
-	e_null,
-	n_init,
-	n_setup_headers,
-	n_get_packet,
-	n_uninit,
-	NULL
 };
 
 

@@ -20,7 +20,7 @@ typedef struct stream_s stream_t;
 enum nutmerge_codecs {
 	e_vorbis,
 	e_mpeg4,
-	e_null,
+	e_mp3,
 };
 
 typedef struct {
