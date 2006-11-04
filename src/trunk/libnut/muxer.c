@@ -658,6 +658,7 @@ void nut_muxer_uninit(nut_context_t * nut) {
 	int total = 0;
 	if (!nut) return;
 
+	if (nut->last_headers < (1<<23)) put_headers(nut); // force 3rd copy of main headers
 	put_headers(nut);
 	if (nut->mopts.write_index) put_index(nut);
 
