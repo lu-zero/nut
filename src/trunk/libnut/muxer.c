@@ -231,7 +231,7 @@ static void put_info(nut_context_t * nut, const nut_info_packet_t * info) {
 	int i;
 
 	put_v(tmp, info->stream_id_plus1);
-	put_v(tmp, info->chapter_id);
+	put_s(tmp, info->chapter_id);
 	for (i = 0; i < nut->timebase_count; i++) if (compare_ts(nut, 1, info->chapter_tb, 1, nut->tb[i]) == 0) break;
 	put_v(tmp, info->chapter_start * nut->timebase_count + i);
 	put_v(tmp, info->chapter_len);
