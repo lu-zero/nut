@@ -1,3 +1,6 @@
+PREFIX = /usr/local
+prefix = $(DESTDIR)$(PREFIX)
+
 CFLAGS = -Os -Wall -g
 #CFLAGS = -fomit-frame-pointer -g -Wall
 
