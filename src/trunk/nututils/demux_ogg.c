@@ -165,10 +165,7 @@ int main(int argc, char *argv[]) {
 	nut_packet_t p;
 	uint8_t * buf;
 
-	if (argc < 2) {
-		printf("bleh, more params you fool...\n");
-		return 1;
-	}
+	if (argc < 2) { printf("bleh, more params you fool...\n"); return 1; }
 
 	in = fopen(argv[1], "r");
 	ogg = init(in);
