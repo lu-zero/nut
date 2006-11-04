@@ -19,7 +19,7 @@
 #define FIXENDIAN16(a) do{}while(0)
 #endif
 
-#define FREAD(file, len, var) do { if (fread((var), 1, (len), (file)) != (len)) return 1; }while(0)
+#define FREAD(file, len, var) do { if (fread((var), 1, (len), (file)) != (len)) return err_unexpected_eof; }while(0)
 
 typedef struct riff_tree_s {
 	uint32_t len;
@@ -208,12 +208,12 @@ static int avi_read_stream_header(AVIStreamContext * stream, riff_tree_t * tree)
 
 	for (i = 0; i < tree->amount; i++) {
 		if (tree->tree[i].type == 1 && !strncmp(tree->tree[i].name, "strh", 4)) {
-			if (tree->tree[i].len != 56) return 2;
+			if (tree->tree[i].len != 56) return err_avi_bad_strh_len;
 			stream->strh = (AVIStreamHeader*)tree->tree[i].data;
 			break;
 		}
 	}
-	if (i == tree->amount) return 3;
+	if (i == tree->amount) return err_avi_no_strh;
 
 	for(i = 2; i < 12; i++) FIXENDIAN32(((uint32_t*)stream->strh)[i]);
 
@@ -222,7 +222,7 @@ static int avi_read_stream_header(AVIStreamContext * stream, riff_tree_t * tree)
 			int len = tree->tree[i].len;
 			switch(strFOURCC(stream->strh->fccType)) {
 				case mmioFOURCC('v','i','d','s'):
-					if (len < 40) return 4;
+					if (len < 40) return err_avi_bad_vids_len;
 					stream->type = 0;
 					stream->video = (BITMAPINFOHEADER*)tree->tree[i].data;
 					for(j = 0; j < 3; j++)  FIXENDIAN32(((uint32_t*)stream->video)[j]);
@@ -232,7 +232,7 @@ static int avi_read_stream_header(AVIStreamContext * stream, riff_tree_t * tree)
 					if (len > 40) stream->extra = (uint8_t*)tree->tree[i].data + 40;
 					break;
 				case mmioFOURCC('a','u','d','s'):
-					if (len < 18) return 5;
+					if (len < 18) return err_avi_bad_auds_len;
 					stream->type = 1;
 					stream->audio = (WAVEFORMATEX *)tree->tree[i].data;
 					for(j = 1; j < 2; j++) FIXENDIAN16(((uint16_t*)stream->audio)[j]);
@@ -242,12 +242,12 @@ static int avi_read_stream_header(AVIStreamContext * stream, riff_tree_t * tree)
 					if (len > 18) stream->extra = (uint8_t*)tree->tree[i].data + 18;
 					break;
 				default:
-					return 6;
+					return err_avi_bad_strf_type;
 			}
 			break;
 		}
 	}
-	if (i == tree->amount) return 7;
+	if (i == tree->amount) return err_avi_no_strf;
 
 	return 0;
 }
@@ -259,16 +259,16 @@ static int avi_read_main_header(demuxer_priv_t * avi, const riff_tree_t * tree) 
 
 	for (i = 0; i < tree->amount; i++) {
 		if (tree->tree[i].type == 1 && !strncmp(tree->tree[i].name, "avih", 4)) {
-			if (tree->tree[i].len != 56) return 8;
+			if (tree->tree[i].len != 56) return err_avi_bad_avih_len;
 			avi->avih = (MainAVIHeader*)tree->tree[i].data;
 			break;
 		}
 	}
-	if (i == tree->amount) return 9;
+	if (i == tree->amount) return err_avi_no_avih;
 
 	for(i = 0; i < 14; i++) FIXENDIAN32(((uint32_t*)avi->avih)[i]);
 
-	if (avi->avih->dwStreams > 200) return 10;
+	if (avi->avih->dwStreams > 200) return err_avi_stream_overflow;
 	avi->stream = malloc(avi->avih->dwStreams * sizeof(AVIStreamContext));
 	for (i = 0; i < avi->avih->dwStreams; i++) {
 		avi->stream[i].video = NULL;
@@ -282,7 +282,7 @@ static int avi_read_main_header(demuxer_priv_t * avi, const riff_tree_t * tree) 
 			if ((err = avi_read_stream_header(&avi->stream[tmp++], &tree->tree[i]))) return err;
 		}
 	}
-	if (tmp != avi->avih->dwStreams) return 11;
+	if (tmp != avi->avih->dwStreams) return err_avi_no_strl;
 	return 0;
 }
 
@@ -291,16 +291,16 @@ static int avi_read_headers(demuxer_priv_t * avi) {
 	int i, err;
 	if ((err = get_full_riff_tree(avi->in, avi->riff))) return err;
 	tree = &avi->riff->tree[0];
-	if (tree->type != 0) return 12;
-	if (strncmp(tree->name, "RIFF", 4)) return 13;
-	if (strncmp(tree->listname, "AVI ", 4)) return 14;
+	if (tree->type != 0) return err_avi_bad_riff;
+	if (strncmp(tree->name, "RIFF", 4)) return err_avi_bad_riff;
+	if (strncmp(tree->listname, "AVI ", 4)) return err_avi_bad_avi;
 	for (i = 0; i < tree->amount; i++) {
 		if (tree->tree[i].type == 0 && !strncmp(tree->tree[i].listname, "hdrl", 4)) {
 			if ((err = avi_read_main_header(avi, &tree->tree[i]))) return err;
 			break;
 		}
 	}
-	if (i == tree->amount) return 15;
+	if (i == tree->amount) return err_avi_no_hdrl;
 	for (i = 0; i < avi->riff->amount; i++) {
 		int j;
 		tree = &avi->riff->tree[i];
@@ -318,14 +318,14 @@ static int avi_read_headers(demuxer_priv_t * avi) {
 		}
 		if (j != tree->amount) break;
 	}
-	if (i == avi->riff->amount) return 16;
+	if (i == avi->riff->amount) return err_avi_no_idx;
 	for (i = 0; i < tree->amount; i++) {
 		if (tree->tree[i].type == 0 && !strncmp(tree->tree[i].listname, "movi", 4)) {
 			fseek(avi->in, tree->tree[i].offset + 12, SEEK_SET);
 			break;
 		}
 	}
-	if (i == tree->amount) return 17;
+	if (i == tree->amount) return err_avi_no_movi;
 	return 0;
 }
 
@@ -344,10 +344,10 @@ static int read_headers(demuxer_priv_t * avi, stream_t ** streams) {
 			for (j = sizeof(fourccs)/sizeof(fourccs[0]); j--; ) {
 				if (!strncmp(avi->stream[i].video->biCompression, fourccs[j], 4)) break;
 			}
-			if (j == -1) return 18;
+			if (j == -1) return err_avi_no_video_codec;
 		} else {
 			if (avi->stream[i].audio->wFormatTag[0] != 0x55 ||
-			    avi->stream[i].audio->wFormatTag[1] != 0x00) return 19;
+			    avi->stream[i].audio->wFormatTag[1] != 0x00) return err_avi_no_audio_codec;
 		}
 	}
 
@@ -422,7 +422,7 @@ static int fill_buffer(demuxer_priv_t * avi) {
 	p.p.next_pts = p.p.pts = 0;
 	if ((unsigned)(fourcc[0] - '0') > 9 || (unsigned)(fourcc[1] - '0') > 9 || p.p.stream >= avi->avih->dwStreams) {
 		fprintf(stderr, "%d %4.4s\n", avi->cur, fourcc);
-		return 3;
+		return err_avi_bad_packet;
 	}
 	if (p.p.stream == 1) {
 		// 0.5 secs of audio or a single packet

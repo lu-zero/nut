@@ -195,5 +195,34 @@ err_out:
 	if (in) fclose(in);
 	if (out) fclose(out);
 	if (stats) fclose(stats);
+	if (err) switch ((enum nutmerge_errors)err) {
+#define ERR_CASE(a) case a: fprintf(stderr, "%s\n", #a); break;
+		ERR_CASE(err_unexpected_eof)
+		ERR_CASE(err_avi_bad_riff)
+		ERR_CASE(err_avi_bad_avi)
+		ERR_CASE(err_avi_no_avih)
+		ERR_CASE(err_avi_no_strl)
+		ERR_CASE(err_avi_no_strh)
+		ERR_CASE(err_avi_no_strf)
+		ERR_CASE(err_avi_no_hdrl)
+		ERR_CASE(err_avi_no_idx)
+		ERR_CASE(err_avi_no_movi)
+		ERR_CASE(err_avi_bad_avih_len)
+		ERR_CASE(err_avi_bad_strh_len)
+		ERR_CASE(err_avi_bad_vids_len)
+		ERR_CASE(err_avi_bad_auds_len)
+		ERR_CASE(err_avi_bad_strf_type)
+		ERR_CASE(err_avi_stream_overflow)
+		ERR_CASE(err_avi_no_video_codec)
+		ERR_CASE(err_avi_no_audio_codec)
+		ERR_CASE(err_avi_bad_packet)
+		ERR_CASE(err_mpeg4_no_frame_type)
+		ERR_CASE(err_bad_oggs_magic)
+		ERR_CASE(err_ogg_no_codec)
+		ERR_CASE(err_ogg_non_interleaved)
+		ERR_CASE(err_vorbis_header)
+		ERR_CASE(err_vorbis_packet)
+#undef ERR_CASE
+	}
 	return err;
 }

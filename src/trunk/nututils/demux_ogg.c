@@ -57,7 +57,7 @@ static int read_page(demuxer_priv_t * ogg, int * stream) {
 	int len, tot = 0;
 
 	FREAD(ogg->in, 27, tmp_header);
-	if (strncmp(tmp_header, "OggS", 5)) return 2; // including version
+	if (strncmp(tmp_header, "OggS", 5)) return err_bad_oggs_magic; // including version
 
 	serial = (tmp_header[14] << 24) |
 		 (tmp_header[15] << 16) |
@@ -111,7 +111,7 @@ static int read_headers(demuxer_priv_t * ogg, stream_t ** streams) {
 			if (codecs[j].magic_len > ogg->s[i].packets[0].p.len) continue;
 			if (!memcmp(codecs[j].magic, ogg->s[i].packets[0].buf, codecs[j].magic_len)) break;
 		}
-		if (!codecs[j].magic) return 6;
+		if (!codecs[j].magic) return err_ogg_no_codec;
 		ogg->s[i].codec_id = codecs[j].id;
 	}
 
@@ -124,7 +124,7 @@ static int fill_buffer(demuxer_priv_t * ogg) {
 	int err, dummy;
 
 	if ((err = read_page(ogg, &dummy))) return err;
-	if (ogg->stream_count != ogg->nstreams) return 2;
+	if (ogg->stream_count != ogg->nstreams) return err_ogg_non_interleaved;
 
 	return 0;
 }

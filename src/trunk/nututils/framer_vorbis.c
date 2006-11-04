@@ -37,7 +37,7 @@ static int get_bits(bit_packer_t * bp, int bits, uint64_t * res) {
 	uint64_t val = 0;
 	int pos = 0;
 	bp->left -= bits;
-	if (bp->left < 0) return 1;
+	if (bp->left < 0) return err_vorbis_header;
 
 	if (!bits) return 0;
 	if (bp->pos) {
@@ -88,7 +88,7 @@ static int setup_headers(framer_priv_t * vc, nut_stream_header_t * s) {
 	}
 	for (i = 0; i < 3; i++) { memcpy(p, pd[i].buf, pd[i].p.len); p += pd[i].p.len; }
 
-	if (pd[0].p.len < 30) { err = 1; goto err_out; }
+	if (pd[0].p.len < 30) { err = err_vorbis_header; goto err_out; }
 	p = pd[0].buf;
 	channels = p[11];
 	sample_rate = (p[15] << 24) | (p[14] << 16) | (p[13] << 8) | p[12];
@@ -116,7 +116,7 @@ static int setup_headers(framer_priv_t * vc, nut_stream_header_t * s) {
 	bp.left = pd[2].p.len*8;
 	bp.pos = 0;
 
-	CHECK(get_bits(&bp, 8, &num)); if (num != 5) { err = 2; goto err_out; }
+	CHECK(get_bits(&bp, 8, &num)); if (num != 5) { err = err_vorbis_header; goto err_out; }
 	CHECK(get_bits(&bp, 8*6, NULL)); // "vorbis"
 
 	// codebook
@@ -158,7 +158,7 @@ static int setup_headers(framer_priv_t * vc, nut_stream_header_t * s) {
 				break;
 			case 2: j = dimentions * entries; break;
 			default:
-				err = 3;
+				err = err_vorbis_header;
 				goto err_out;
 		}
 		if (j >= 0) {
@@ -212,7 +212,7 @@ static int setup_headers(framer_priv_t * vc, nut_stream_header_t * s) {
 				CHECK(get_bits(&bp, classes[class_list[j]]*rangebits, NULL));
 			}
 			}}
-		} else { err = 5; goto err_out; } // unknown floor
+		} else { err = err_vorbis_header; goto err_out; } // unknown floor
 	}
 
 	// residues
@@ -220,7 +220,7 @@ static int setup_headers(framer_priv_t * vc, nut_stream_header_t * s) {
 	for (; i > 0; i--) {
 		int j, classifications;
 		CHECK(get_bits(&bp, 16, &num));
-		if ((int)num > 2) { err = 6; goto err_out; } // unkown residue
+		if ((int)num > 2) { err = err_vorbis_header; goto err_out; } // unkown residue
 		CHECK(get_bits(&bp, 24, NULL)); // residue_begin
 		CHECK(get_bits(&bp, 24, NULL)); // residue_end
 		CHECK(get_bits(&bp, 24, NULL)); // residue_partition_size
@@ -249,7 +249,7 @@ static int setup_headers(framer_priv_t * vc, nut_stream_header_t * s) {
 	for (; i > 0; i--) {
 		int submaps = 1;
 		CHECK(get_bits(&bp, 16, &num)); // type
-		if (num) { err = 7; goto err_out; } // bad mapping type
+		if (num) { err = err_vorbis_header; goto err_out; } // bad mapping type
 		CHECK(get_bits(&bp, 1, &num)); // is submaps
 		if (num) {
 			CHECK(get_bits(&bp, 4, &num));
@@ -261,7 +261,7 @@ static int setup_headers(framer_priv_t * vc, nut_stream_header_t * s) {
 			CHECK(get_bits(&bp, ilog(channels - 1) * 2 * (num + 1), NULL));
 		}
 		CHECK(get_bits(&bp, 2, &num)); // reserved
-		if (num) { err = 8; goto err_out; }
+		if (num) { err = err_vorbis_header; goto err_out; }
 		if (submaps > 1) CHECK(get_bits(&bp, 4 * channels, NULL));
 		CHECK(get_bits(&bp, submaps*(8+8+8), NULL));
 	}
@@ -275,7 +275,7 @@ static int setup_headers(framer_priv_t * vc, nut_stream_header_t * s) {
 		CHECK(get_bits(&bp, 16 + 16 + 8, NULL));
 	}
 	CHECK(get_bits(&bp, 1, &num)); // framing
-	if (!num) { err = 9; goto err_out; }
+	if (!num) { err = err_vorbis_header; goto err_out; }
 
 err_out:
 	for (i = 0; i < pd_read; i++) free(pd[i].buf);
@@ -297,7 +297,7 @@ static int get_packet(framer_priv_t * vc, packet_t * p) {
 	bp.pos = 0;
 	CHECK(get_bits(&bp, 1, NULL));
 	CHECK(get_bits(&bp, ilog(vc->mode_count - 1), &num));
-	if ((int)num >= vc->mode_count) return 10; // ERROR
+	if ((int)num >= vc->mode_count) return err_vorbis_packet; // ERROR
 
 	mode = vc->modes[num];
 	prevbs = nextbs = mybs = vc->blocksize[mode];
@@ -316,7 +316,7 @@ static int get_packet(framer_priv_t * vc, packet_t * p) {
 	p->p.next_pts = vc->pts;
 	p->p.flags = NUT_FLAG_KEY;
 err_out:
-	return err;
+	return err == err_vorbis_header ? err_vorbis_packet : err;
 }
 
 static framer_priv_t * init(stream_t * s) {

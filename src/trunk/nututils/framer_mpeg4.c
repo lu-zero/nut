@@ -15,7 +15,7 @@ static int find_frame_type(int len, uint8_t * buf, int * type) {
 		*type = *buf >> 6;
 		return 0;
 	}
-	return 13;
+	return err_mpeg4_no_frame_type;
 }
 
 #define CHECK(x) do{ if ((err = (x))) return err; }while(0)
