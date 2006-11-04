@@ -4,12 +4,12 @@ all: libnut.a
 
 install:
 	install -d $(prefix)/lib
-	install libnut.so $(prefix)/lib
+	install -m 644 libnut.a $(prefix)/lib
 	install -d $(prefix)/include
-	install nut.h $(prefix)/include
+	install -m 644 nut.h $(prefix)/include
 
 uninstall:
-	rm -f $(prefix)/lib/libnut.so
+	rm -f $(prefix)/lib/libnut.a
 	rm -f $(prefix)/include/nut.h
 
 libnut.a: muxer.o demuxer.o reorder.o
