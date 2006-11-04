@@ -226,7 +226,7 @@ static void put_stream_header(nut_context_t * nut, int id) {
 	put_header(nut->o, tmp, nut->tmp_buffer2, STREAM_STARTCODE, 0);
 }
 
-static void put_info(nut_context_t * nut, nut_info_packet_t * info) {
+static void put_info(nut_context_t * nut, const nut_info_packet_t * info) {
 	output_buffer_t * tmp = clear_buffer(nut->tmp_buffer);
 	int i;
 
@@ -455,13 +455,9 @@ static int frame_header(nut_context_t * nut, output_buffer_t * tmp, const nut_pa
 	return size;
 }
 
-void nut_write_frame(nut_context_t * nut, const nut_packet_t * fd, const uint8_t * buf) {
-	stream_context_t * sc = &nut->sc[fd->stream];
-	output_buffer_t * tmp;
-	int i;
-
-	if (bctello(nut->o) > (1 << 23)) { // main header repetition
-		i = 23; // ### magic value for header repetition
+static void check_header_repetition(nut_context_t * nut) {
+	if (bctello(nut->o) > (1 << 23)) {
+		int i = 23; // ### magic value for header repetition
 		if (bctello(nut->o) > (1 << 25)) {
 			for (i = 26; bctello(nut->o) > (1 << i); i++);
 			i--;
@@ -470,6 +466,14 @@ void nut_write_frame(nut_context_t * nut, const nut_packet_t * fd, const uint8_t
 			put_headers(nut);
 		}
 	}
+}
+
+void nut_write_frame(nut_context_t * nut, const nut_packet_t * fd, const uint8_t * buf) {
+	stream_context_t * sc = &nut->sc[fd->stream];
+	output_buffer_t * tmp;
+	int i;
+
+	check_header_repetition(nut);
 	// distance syncpoints
 	if (nut->last_syncpoint < nut->last_headers  ||
 		bctello(nut->o) - nut->last_syncpoint + fd->len + frame_header(nut, NULL, fd) > nut->max_distance) put_syncpoint(nut);
@@ -498,6 +502,12 @@ void nut_write_frame(nut_context_t * nut, const nut_packet_t * fd, const uint8_t
 	if ((fd->flags & NUT_FLAG_KEY) && !sc->last_key) sc->last_key = fd->pts + 1;
 	if (fd->flags & NUT_FLAG_EOR) sc->eor = fd->pts + 1;
 	else sc->eor = 0;
+}
+
+void nut_write_info(nut_context_t * nut, const nut_info_packet_t * info) {
+	check_header_repetition(nut);
+	nut->last_headers = bctello(nut->o); // to force syncpoint writing after the info header
+	put_info(nut, info);
 }
 
 nut_context_t * nut_muxer_init(const nut_muxer_opts_t * mopts, const nut_stream_header_t s[], const nut_info_packet_t info[]) {
