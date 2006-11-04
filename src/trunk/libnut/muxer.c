@@ -66,6 +66,16 @@ static output_buffer_t * clear_buffer(output_buffer_t * bc) {
 	return bc;
 }
 
+static int add_timebase(nut_context_t * nut, nut_timebase_t tb) {
+	int i;
+	for (i = 0; i < nut->timebase_count; i++) if (compare_ts(nut, 1, nut->tb[i], 1, tb) == 0) break;
+	if (i == nut->timebase_count) {
+		nut->tb = nut->alloc->realloc(nut->tb, sizeof(nut_timebase_t) * ++nut->timebase_count);
+		nut->tb[i] = tb;
+	}
+	return i;
+}
+
 static void put_bytes(output_buffer_t * bc, int count, uint64_t val) {
 	ready_write_buf(bc, count);
 	for(count--; count >= 0; count--){
@@ -222,7 +232,8 @@ static void put_info(nut_context_t * nut, nut_info_packet_t * info) {
 
 	put_v(tmp, info->stream_id_plus1);
 	put_v(tmp, info->chapter_id);
-	put_v(tmp, info->chapter_start);
+	for (i = 0; i < nut->timebase_count; i++) if (compare_ts(nut, 1, info->chapter_tb, 1, nut->tb[i]) == 0) break;
+	put_v(tmp, info->chapter_start * nut->timebase_count + i);
 	put_v(tmp, info->chapter_len);
 	put_v(tmp, info->count);
 
@@ -235,8 +246,10 @@ static void put_info(nut_context_t * nut, nut_info_packet_t * info) {
 			put_s(tmp, -3);
 			put_s(tmp, field->val);
 		} else if (!strcmp(field->type, "t")) {
+			int j;
+			for (j = 0; j < nut->timebase_count; j++) if (compare_ts(nut, 1, field->tb, 1, nut->tb[j]) == 0) break;
 			put_s(tmp, -4);
-			put_v(tmp, field->val);
+			put_v(tmp, field->val * nut->timebase_count + j);
 		} else if (!strcmp(field->type, "r")) {
 			put_s(tmp, -(field->den + 4));
 			put_s(tmp, field->val);
@@ -556,7 +569,7 @@ nut_context_t * nut_muxer_init(const nut_muxer_opts_t * mopts, const nut_stream_
 	for (nut->stream_count = 0; s[nut->stream_count].type >= 0; nut->stream_count++);
 
 	nut->sc = nut->alloc->malloc(sizeof(stream_context_t) * nut->stream_count);
-	nut->tb = nut->alloc->malloc(sizeof(nut_timebase_t) * nut->stream_count);
+	nut->tb = NULL;
 	nut->timebase_count = 0;
 
 	for (i = 0; i < nut->stream_count; i++) {
@@ -578,9 +591,7 @@ nut_context_t * nut_muxer_init(const nut_muxer_opts_t * mopts, const nut_stream_
 
 		nut->sc[i].pts_cache = nut->alloc->malloc(nut->sc[i].sh.decode_delay * sizeof(int64_t));
 
-		for (j = 0; j < nut->timebase_count; j++) if (compare_ts(nut, 1, s[i].time_base, 1, nut->tb[j]) == 0) break;
-		if (j == nut->timebase_count) nut->tb[nut->timebase_count++] = s[i].time_base;
-		nut->sc[i].timebase_id = j;
+		nut->sc[i].timebase_id = add_timebase(nut, s[i].time_base);
 
 		// reorder.c
 		nut->sc[i].reorder_pts_cache = nut->alloc->malloc(nut->sc[i].sh.decode_delay * sizeof(int64_t));
@@ -604,12 +615,14 @@ nut_context_t * nut_muxer_init(const nut_muxer_opts_t * mopts, const nut_stream_
 			int j;
 			nut->info[i] = info[i];
 			nut->info[i].fields = nut->alloc->malloc(sizeof(nut_info_field_t) * info[i].count);
+			add_timebase(nut, nut->info[i].chapter_tb);
 			for (j = 0; j < info[i].count; j++) {
 				nut->info[i].fields[j] = info[i].fields[j];
 				if (info[i].fields[j].data) {
 					nut->info[i].fields[j].data = nut->alloc->malloc(info[i].fields[j].val);
 					memcpy(nut->info[i].fields[j].data, info[i].fields[j].data, info[i].fields[j].val);
 				}
+				if (!strcmp(nut->info[i].fields[j].type, "t")) add_timebase(nut, nut->info[i].fields[j].tb);
 			}
 		}
 	} else {

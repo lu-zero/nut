@@ -91,6 +91,7 @@ typedef struct {
 	char name[65];
 	int64_t val;
 	int den;
+	nut_timebase_t tb;
 	uint8_t * data; // must be NULL if carries no data
 } nut_info_field_t;
 
@@ -98,6 +99,7 @@ typedef struct {
 	int count; // count=-1 terminates the nut_info_packet_t array
 	int stream_id_plus1;
 	int chapter_id;
+	nut_timebase_t chapter_tb;
 	uint64_t chapter_start;
 	uint64_t chapter_len;
 	nut_info_field_t * fields;
