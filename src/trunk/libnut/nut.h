@@ -129,7 +129,7 @@ void nut_muxer_uninit(nut_context_t * nut);
 
 /** nut_write_frame does magic, it writes headers */
 void nut_write_frame(nut_context_t * nut, const nut_packet_t * p, const uint8_t * buf);
-void nut_write_info(nut_context_t * nut, const nut_info_packet_t info []);
+void nut_write_info(nut_context_t * nut, const nut_info_packet_t * info);
 
 /** do the same as the above function, but deal with frame reordering */
 void nut_muxer_uninit_reorder(nut_context_t * nut);
