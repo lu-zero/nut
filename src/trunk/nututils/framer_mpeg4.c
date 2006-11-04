@@ -9,7 +9,7 @@ struct framer_priv_s {
 };
 
 static int find_frame_type(int len, uint8_t * buf, int * type) {
-	//if (!len) { *type = 1; return 0; }
+	if (!len) return err_mpeg4_no_frame_type;
 	while (--len) { // not including last byte
 		if (*buf++ != 0xB6) continue;
 		*type = *buf >> 6;
