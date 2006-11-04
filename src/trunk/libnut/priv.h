@@ -217,6 +217,15 @@ static inline int64_t peek_dts(int d, int64_t * pts_cache, int64_t pts) {
 	return pts;
 }
 
+static inline int gcd(int a, int b) {
+	while (b != 0) {
+		int t = b;
+		b = a % b;
+		a = t;
+	}
+	return a;
+}
+
 #define bctello(bc) ((bc)->file_pos + ((bc)->buf_ptr - (bc)->buf))
 
 #define TO_PTS(prefix, pts) \

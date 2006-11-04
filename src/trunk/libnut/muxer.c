@@ -617,6 +617,12 @@ nut_context_t * nut_muxer_init(const nut_muxer_opts_t * mopts, const nut_stream_
 		nut->info = NULL;
 	}
 
+	for (i = 0; i < nut->timebase_count; i++) {
+		int t = gcd(nut->tb[i].nom, nut->tb[i].den);
+		nut->tb[i].nom /= t;
+		nut->tb[i].den /= t;
+	}
+
 	put_data(nut->o, strlen(ID_STRING) + 1, ID_STRING);
 
 	put_headers(nut);
