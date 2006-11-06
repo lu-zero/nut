@@ -89,6 +89,7 @@ enum nutmerge_errors {
 	err_avi_no_audio_codec,
 	err_avi_bad_packet,
 	err_mpeg4_no_frame_type,
+	err_mp3_bad_packet,
 	err_bad_oggs_magic,
 	err_ogg_no_codec,
 	err_ogg_non_interleaved,

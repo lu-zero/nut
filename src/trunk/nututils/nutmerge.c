@@ -217,6 +217,7 @@ err_out:
 		ERR_CASE(err_avi_no_audio_codec)
 		ERR_CASE(err_avi_bad_packet)
 		ERR_CASE(err_mpeg4_no_frame_type)
+		ERR_CASE(err_mp3_bad_packet)
 		ERR_CASE(err_bad_oggs_magic)
 		ERR_CASE(err_ogg_no_codec)
 		ERR_CASE(err_ogg_non_interleaved)
