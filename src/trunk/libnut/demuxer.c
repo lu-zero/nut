@@ -333,6 +333,67 @@ err_out:
 	return err;
 }
 
+static int get_info_header(nut_context_t * nut, nut_info_packet_t * info) {
+	input_buffer_t itmp, * tmp = new_mem_buffer(&itmp);
+	int i, err = 0;
+	CHECK(get_header(nut->i, tmp));
+
+	GET_V(tmp, info->stream_id_plus1);
+	GET_V(tmp, info->chapter_id);
+	GET_V(tmp, info->chapter_start);
+	info->chapter_tb = nut->tb[info->chapter_start % nut->timebase_count];
+	info->chapter_start /= nut->timebase_count;
+	GET_V(tmp, info->chapter_len);
+
+	GET_V(tmp, info->count);
+	if (!info->fields) {
+		ERROR(SIZE_MAX/sizeof(nut_info_field_t) < info->count, -ERR_OUT_OF_MEM);
+		info->fields = nut->alloc->malloc(info->count * sizeof(nut_info_field_t));
+		ERROR(!nut->tb, -ERR_OUT_OF_MEM);
+		memset(info->fields, 0, info->count * sizeof(nut_info_field_t)); // initialize pointer to NULL...
+	}
+
+	for (i = 0; i < info->count; i++) {
+		int len;
+		nut_info_field_t * field = &info->fields[i];
+
+		len = sizeof(field->name) - 1;
+		CHECK(get_vb(nut->alloc, tmp, &len, (uint8_t**)&field->name));
+		field->name[len] = 0;
+
+		GET_S(tmp, field->val);
+
+		if (field->val == -1) {
+			strcpy(field->type, "UTF-8");
+			CHECK(get_vb(nut->alloc, tmp, &field->den, &field->data));
+			field->val = field->den;
+		} else if (field->val == -2) {
+			len = sizeof(field->type) - 1;
+			CHECK(get_vb(nut->alloc, tmp, &len, (uint8_t**)&field->type));
+			field->type[len] = 0;
+			CHECK(get_vb(nut->alloc, tmp, &field->den, &field->data));
+			field->val = field->den;
+		} else if (field->val == -3) {
+			strcpy(field->type, "s");
+			GET_S(tmp, field->val);
+		} else if (field->val == -4) {
+			strcpy(field->type, "t");
+			GET_V(tmp, field->val);
+			field->tb = nut->tb[field->val % nut->timebase_count];
+			field->val /= nut->timebase_count;
+		} else if (field->val < -4) {
+			strcpy(field->type, "r");
+			field->den = -field->val - 4;
+			GET_S(tmp, field->val);
+		} else {
+			strcpy(field->type, "v");
+		}
+	}
+
+err_out:
+	return err;
+}
+
 static int add_syncpoint(nut_context_t * nut, syncpoint_t sp, uint64_t * pts, uint64_t * eor, int * out) {
 	syncpoint_list_t * sl = &nut->syncpoints;
 	int i, j;
