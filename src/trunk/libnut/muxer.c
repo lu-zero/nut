@@ -504,7 +504,6 @@ void nut_write_frame(nut_context_t * nut, const nut_packet_t * fd, const uint8_t
 }
 
 void nut_write_info(nut_context_t * nut, const nut_info_packet_t * info) {
-	check_header_repetition(nut);
 	nut->last_headers = bctello(nut->o); // to force syncpoint writing after the info header
 	put_info(nut, info);
 }
