@@ -205,9 +205,11 @@ static int get_vb(nut_alloc_t * alloc, input_buffer_t * in, int * len, uint8_t *
 	uint64_t tmp;
 	int err;
 	if ((err = get_v(in, &tmp))) return err;
+	if (!*len) {
+		*buf = alloc->malloc(tmp);
+		if (!*buf) return -ERR_OUT_OF_MEM;
+	} else if (*len < tmp) return -ERR_OUT_OF_MEM;
 	*len = tmp;
-	*buf = alloc->realloc(*buf, *len);
-	if (!*buf) return -ERR_OUT_OF_MEM;
 	if (get_data(in, *len, *buf) != *len) return buf_eof(in);
 	return 0;
 }
@@ -746,16 +748,7 @@ int nut_read_headers(nut_context_t * nut, nut_stream_header_t * s []) {
 			ERROR(SIZE_MAX/sizeof(stream_context_t) < nut->stream_count+1, -ERR_OUT_OF_MEM);
 			nut->sc = nut->alloc->malloc(sizeof(stream_context_t) * nut->stream_count);
 			ERROR(!nut->sc, -ERR_OUT_OF_MEM);
-			for (i = 0; i < nut->stream_count; i++) {
-				nut->sc[i].last_pts = 0;
-				nut->sc[i].last_dts = 0;
-				nut->sc[i].last_key = 0;
-				nut->sc[i].eor = 0;
-				nut->sc[i].sh.max_pts = 0;
-				nut->sc[i].sh.fourcc = NULL;
-				nut->sc[i].sh.codec_specific = NULL;
-				nut->sc[i].pts_cache = NULL;
-			}
+			memset(nut->sc, 0, sizeof(stream_context_t) * nut->stream_count);
 		}
 
 		for (i = 0; i < nut->stream_count; i++) {
