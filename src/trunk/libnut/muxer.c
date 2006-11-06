@@ -66,16 +66,6 @@ static output_buffer_t * clear_buffer(output_buffer_t * bc) {
 	return bc;
 }
 
-static int add_timebase(nut_context_t * nut, nut_timebase_t tb) {
-	int i;
-	for (i = 0; i < nut->timebase_count; i++) if (compare_ts(nut, 1, nut->tb[i], 1, tb) == 0) break;
-	if (i == nut->timebase_count) {
-		nut->tb = nut->alloc->realloc(nut->tb, sizeof(nut_timebase_t) * ++nut->timebase_count);
-		nut->tb[i] = tb;
-	}
-	return i;
-}
-
 static void put_bytes(output_buffer_t * bc, int count, uint64_t val) {
 	ready_write_buf(bc, count);
 	for(count--; count >= 0; count--){
@@ -454,6 +444,16 @@ static int frame_header(nut_context_t * nut, output_buffer_t * tmp, const nut_pa
 		if (coded_flags & FLAG_CHECKSUM)  put_bytes(tmp, 4, crc32(tmp->buf, bctello(tmp)));
 	}
 	return size;
+}
+
+static int add_timebase(nut_context_t * nut, nut_timebase_t tb) {
+	int i;
+	for (i = 0; i < nut->timebase_count; i++) if (compare_ts(nut, 1, nut->tb[i], 1, tb) == 0) break;
+	if (i == nut->timebase_count) {
+		nut->tb = nut->alloc->realloc(nut->tb, sizeof(nut_timebase_t) * ++nut->timebase_count);
+		nut->tb[i] = tb;
+	}
+	return i;
 }
 
 static void check_header_repetition(nut_context_t * nut) {
