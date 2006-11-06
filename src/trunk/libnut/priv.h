@@ -159,6 +159,7 @@ struct nut_context_s {
 
 	off_t last_syncpoint; // for checking corruption and putting syncpoints, also for back_ptr
 	off_t last_headers; // for header repetition and state for demuxer
+	int headers_written; // for muxer header repetition
 
 	off_t before_seek; // position before any seek mess
 	off_t seek_status;

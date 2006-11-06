@@ -270,6 +270,7 @@ static void put_info(nut_context_t * nut, const nut_info_packet_t * info) {
 static void put_headers(nut_context_t * nut) {
 	int i;
 	nut->last_headers = bctello(nut->o);
+	nut->headers_written++;
 
 	put_main_header(nut);
 	for (i = 0; i < nut->stream_count; i++) put_stream_header(nut, i);
@@ -456,12 +457,10 @@ static int frame_header(nut_context_t * nut, output_buffer_t * tmp, const nut_pa
 }
 
 static void check_header_repetition(nut_context_t * nut) {
-	if (bctello(nut->o) > (1 << 23)) {
-		int i = 23; // ### magic value for header repetition
-		if (bctello(nut->o) > (1 << 25)) {
-			for (i = 26; bctello(nut->o) > (1 << i); i++);
-			i--;
-		}
+	if (bctello(nut->o) >= (1 << 23)) {
+		int i; // ### magic value for header repetition
+		for (i = 24; bctello(nut->o) >= (1 << i); i++);
+		i--;
 		if (nut->last_headers < (1 << i)) {
 			put_headers(nut);
 		}
@@ -575,6 +574,7 @@ nut_context_t * nut_muxer_init(const nut_muxer_opts_t * mopts, const nut_stream_
 	nut->syncpoints.pts = NULL;
 	nut->syncpoints.eor = NULL;
 	nut->last_syncpoint = 0;
+	nut->headers_written = 0;
 
 	for (nut->stream_count = 0; s[nut->stream_count].type >= 0; nut->stream_count++);
 
@@ -658,7 +658,7 @@ void nut_muxer_uninit(nut_context_t * nut) {
 	int total = 0;
 	if (!nut) return;
 
-	if (nut->last_headers < (1<<23)) put_headers(nut); // force 3rd copy of main headers
+	while (nut->headers_written < 2) put_headers(nut); // force 3rd copy of main headers
 	put_headers(nut);
 	if (nut->mopts.write_index) put_index(nut);
 
