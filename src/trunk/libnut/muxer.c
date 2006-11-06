@@ -474,7 +474,7 @@ void nut_write_frame(nut_context_t * nut, const nut_packet_t * fd, const uint8_t
 
 	check_header_repetition(nut);
 	// distance syncpoints
-	if (nut->last_syncpoint < nut->last_headers  ||
+	if (nut->last_syncpoint < nut->last_headers ||
 		bctello(nut->o) - nut->last_syncpoint + fd->len + frame_header(nut, NULL, fd) > nut->max_distance) put_syncpoint(nut);
 
 	tmp = clear_buffer(nut->tmp_buffer);
