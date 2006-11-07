@@ -42,6 +42,7 @@ static output_buffer_t * new_mem_buffer(nut_alloc_t * alloc) {
 	bc->is_mem = 1;
 	bc->file_pos = 0;
 	bc->buf_ptr = bc->buf = alloc->malloc(bc->write_len);
+	bc->osc.write = NULL;
 	return bc;
 }
 
