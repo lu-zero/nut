@@ -12,7 +12,7 @@ static int stream_write(void * priv, size_t len, const uint8_t * buf) {
 }
 
 static void flush_buf(output_buffer_t * bc) {
-	assert(!bc->is_mem);
+	assert(bc->osc.write);
 	bc->file_pos += bc->osc.write(bc->osc.priv, bc->buf_ptr - bc->buf, bc->buf);
 	bc->buf_ptr = bc->buf;
 }
@@ -457,6 +457,7 @@ static int add_timebase(nut_context_t * nut, nut_timebase_t tb) {
 }
 
 static void check_header_repetition(nut_context_t * nut) {
+	if (nut->mopts.realtime_stream) return;
 	if (bctello(nut->o) >= (1 << 23)) {
 		int i; // ### magic value for header repetition
 		for (i = 24; bctello(nut->o) >= (1 << i); i++);
@@ -501,9 +502,13 @@ void nut_write_frame(nut_context_t * nut, const nut_packet_t * fd, const uint8_t
 	if ((fd->flags & NUT_FLAG_KEY) && !sc->last_key) sc->last_key = fd->pts + 1;
 	if (fd->flags & NUT_FLAG_EOR) sc->eor = fd->pts + 1;
 	else sc->eor = 0;
+
+	if (nut->mopts.realtime_stream) flush_buf(nut->o);
 }
 
 void nut_write_info(nut_context_t * nut, const nut_info_packet_t * info) {
+	if (!nut->mopts.realtime_stream) return;
+
 	nut->last_headers = bctello(nut->o); // to force syncpoint writing after the info header
 	put_info(nut, info);
 }
@@ -517,6 +522,7 @@ nut_context_t * nut_muxer_init(const nut_muxer_opts_t * mopts, const nut_stream_
 	else nut = malloc(sizeof(nut_context_t));
 
 	nut->mopts = *mopts;
+	if (nut->mopts.realtime_stream) nut->mopts.write_index = 0;
 
 	nut->alloc = &nut->mopts.alloc;
 
@@ -530,6 +536,8 @@ nut_context_t * nut_muxer_init(const nut_muxer_opts_t * mopts, const nut_stream_
 	nut->tmp_buffer = new_mem_buffer(nut->alloc); // general purpose buffer
 	nut->tmp_buffer2 = new_mem_buffer(nut->alloc); //  for packet_headers
 	nut->max_distance = mopts->max_distance;
+
+	if (nut->mopts.realtime_stream) nut->o->is_mem = 1;
 
 	if (nut->max_distance > 65536) nut->max_distance = 65536;
 
@@ -649,6 +657,8 @@ nut_context_t * nut_muxer_init(const nut_muxer_opts_t * mopts, const nut_stream_
 
 	put_headers(nut);
 
+	if (nut->mopts.realtime_stream) flush_buf(nut->o);
+
 	return nut;
 }
 
@@ -657,8 +667,10 @@ void nut_muxer_uninit(nut_context_t * nut) {
 	int total = 0;
 	if (!nut) return;
 
-	while (nut->headers_written < 2) put_headers(nut); // force 3rd copy of main headers
-	put_headers(nut);
+	if (!nut->mopts.realtime_stream) {
+		while (nut->headers_written < 2) put_headers(nut); // force 3rd copy of main headers
+		put_headers(nut);
+	}
 	if (nut->mopts.write_index) put_index(nut);
 
 	for (i = 0; i < nut->stream_count; i++) {

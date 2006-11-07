@@ -75,6 +75,7 @@ typedef struct {
 	nut_output_stream_t output;
 	nut_alloc_t alloc;
 	int write_index;
+	int realtime_stream; // implies no write_index
 	int max_distance;
 	frame_table_input_t * fti;
 } nut_muxer_opts_t;

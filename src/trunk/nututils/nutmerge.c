@@ -127,6 +127,7 @@ static int convert(FILE * out, demuxer_t * demuxer, stream_t * streams, int stre
 
 	mopts.output = (nut_output_stream_t){ .priv = out, .write = NULL };
 	mopts.write_index = 1;
+	mopts.realtime_stream = 0;
 	mopts.fti = ft_default;
 	mopts.max_distance = 32768;
 	mopts.alloc.malloc = NULL;
