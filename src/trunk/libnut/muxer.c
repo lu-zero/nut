@@ -518,6 +518,7 @@ void nut_write_info(nut_context_t * nut, const nut_info_packet_t * info) {
 
 	nut->last_headers = bctello(nut->o); // to force syncpoint writing after the info header
 	put_info(nut, info);
+	if (nut->mopts.realtime_stream) flush_buf(nut->o);
 }
 
 nut_context_t * nut_muxer_init(const nut_muxer_opts_t * mopts, const nut_stream_header_t s[], const nut_info_packet_t info[]) {
