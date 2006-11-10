@@ -313,6 +313,12 @@ static void put_syncpoint(nut_context_t * nut) {
 		if (n) { i--; break; }
 	}
 	back_ptr = (nut->last_syncpoint - s->s[i].pos) / 16;
+	if (!nut->mopts.write_index) { // clear some syncpoit cache if possible
+		s->len -= i;
+		memmove(s->s, s->s + i, s->len * sizeof(syncpoint_t));
+		memmove(s->pts, s->pts + i * nut->stream_count, s->len * nut->stream_count * sizeof(uint64_t));
+		memmove(s->eor, s->eor + i * nut->stream_count, s->len * nut->stream_count * sizeof(uint64_t));
+	}
 
 	for (i = 0; i < nut->stream_count; i++) {
 		nut->sc[i].last_pts = convert_ts(nut, pts, nut->tb[timebase], TO_TB(i));
