@@ -179,8 +179,9 @@ int nut_skip_packet(nut_context_t * nut, int * len);
 
 /** Read headers, must be called at begginning
 @brief "s" is malloced and needs to be free'd.
+@brief "info" is malloced and needs to be free'd using nut_free_info() for each packet! can be NULL though.
 */
-int nut_read_headers(nut_context_t * nut, nut_stream_header_t * s []);
+int nut_read_headers(nut_context_t * nut, nut_stream_header_t * s [], nut_info_packet_t * info []);
 
 /** Just reads the frame DATA. all it's header has already been
 read by nut_read_next_packet. buf must be allocated and big enough.

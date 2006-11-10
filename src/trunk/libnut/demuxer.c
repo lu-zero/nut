@@ -778,7 +778,7 @@ err_out:
 	return err;
 }
 
-int nut_read_headers(nut_context_t * nut, nut_stream_header_t * s []) {
+int nut_read_headers(nut_context_t * nut, nut_stream_header_t * s [], nut_info_packet_t * info []) {
 	int i, err = 0;
 	*s = NULL;
 	if (!nut->seek_status) { // we already have headers, we were called just for index
@@ -830,6 +830,21 @@ int nut_read_headers(nut_context_t * nut, nut_stream_header_t * s []) {
 					nut->sc[i].pts_cache[j] = -1;
 			}
 		}
+		if (info) {
+			uint64_t tmp;
+			CHECK(get_bytes(nut->i, 8, &tmp));
+			while (tmp == INFO_STARTCODE) {
+				nut->info_count++;
+				ERROR(SIZE_MAX/sizeof(nut_info_packet_t) < nut->info_count + 1, -ERR_OUT_OF_MEM);
+				nut->info = nut->alloc->realloc(nut->info, sizeof(nut_info_packet_t) * (nut->info_count + 1));
+				ERROR(!nut->info, -ERR_OUT_OF_MEM);
+				memset(&nut->info[nut->info_count - 1], 0, sizeof(nut_info_packet_t));
+				nut->info[nut->info_count].count = -1;
+				CHECK(get_info_header(nut, &nut->info[nut->info_count - 1]));
+				CHECK(get_bytes(nut->i, 8, &tmp));
+			}
+			nut->i->buf_ptr -= 8;
+		}
 		if (nut->dopts.read_index) {
 			uint64_t tmp;
 			CHECK(get_bytes(nut->i, 8, &tmp));
@@ -871,6 +886,7 @@ int nut_read_headers(nut_context_t * nut, nut_stream_header_t * s []) {
 	ERROR(!*s, -ERR_OUT_OF_MEM);
 	for (i = 0; i < nut->stream_count; i++) (*s)[i] = nut->sc[i].sh;
 	(*s)[i].type = -1;
+	if (info) *info = nut->info;
 err_out:
 	if (err && err != 2 && !nut->seek_status) {
 		if (nut->sc) for (i = 0; i < nut->stream_count; i++) {
@@ -1340,8 +1356,10 @@ nut_context_t * nut_demuxer_init(nut_demuxer_opts_t * dopts) {
 
 	nut->sc = NULL;
 	nut->tb = NULL;
+	nut->info = NULL;
 	nut->last_headers = 0;
 	nut->stream_count = 0;
+	nut->info_count = 0;
 	nut->dopts = *dopts;
 	nut->seek_status = 0;
 	nut->before_seek = 0;
