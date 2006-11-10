@@ -95,7 +95,7 @@ static void put_s(output_buffer_t * bc, int64_t val) {
 	else        put_v(bc,  2*val-1);
 }
 
-static void put_data(output_buffer_t * bc, int len, const uint8_t * data) {
+static void put_data(output_buffer_t * bc, int len, const void * data) {
 	if (!len) return;
 	assert(data);
 	if (bc->write_len - (bc->buf_ptr - bc->buf) > len || bc->is_mem) {
@@ -108,7 +108,7 @@ static void put_data(output_buffer_t * bc, int len, const uint8_t * data) {
 	}
 }
 
-static void put_vb(output_buffer_t * bc, int len, uint8_t * data) {
+static void put_vb(output_buffer_t * bc, int len, const void * data) {
 	put_v(bc, len);
 	put_data(bc, len, data);
 }

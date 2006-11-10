@@ -101,7 +101,7 @@ static int setup_headers(framer_priv_t * vc, nut_stream_header_t * s) {
 
 	s->type = NUT_AUDIO_CLASS;
 	s->fourcc_len = 4;
-	s->fourcc = "vrbs";
+	s->fourcc = (uint8_t*)"vrbs";
 	s->time_base.den = sample_rate / gcd(sample_rate, i);
 	s->time_base.nom = i / gcd(sample_rate, i);
 	s->fixed_fps = 0;

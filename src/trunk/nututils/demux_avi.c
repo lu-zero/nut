@@ -342,7 +342,7 @@ static int read_headers(demuxer_priv_t * avi, stream_t ** streams) {
 			};
 			int j;
 			for (j = sizeof(fourccs)/sizeof(fourccs[0]); j--; ) {
-				if (!strncmp(avi->stream[i].video->biCompression, fourccs[j], 4)) break;
+				if (!strncmp((char*)avi->stream[i].video->biCompression, fourccs[j], 4)) break;
 			}
 			if (j == -1) return err_avi_no_video_codec;
 		} else {
@@ -379,7 +379,7 @@ static int read_headers(demuxer_priv_t * avi, stream_t ** streams) {
 			avi->s[i].sh.colorspace_type = 0;
 		} else { // audio
 			avi->s[i].sh.fourcc_len = 4;
-			avi->s[i].sh.fourcc = "mp3 ";
+			avi->s[i].sh.fourcc = (uint8_t*)"mp3 ";
 			avi->s[i].codec_id = e_mp3;
 			avi->s[i].sh.decode_delay = 0;
 

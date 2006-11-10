@@ -25,7 +25,7 @@ struct demuxer_priv_s {
 };
 
 static struct { enum nutmerge_codecs id; uint8_t * magic; int magic_len; } codecs[] = {
-       { e_vorbis, "\001vorbis", 7 },
+       { e_vorbis, (uint8_t*)"\001vorbis", 7 },
        { 0, NULL, 0 }
 };
 
