@@ -383,8 +383,8 @@ static int read_headers(demuxer_priv_t * avi, stream_t ** streams) {
 			avi->s[i].codec_id = e_mp3;
 			avi->s[i].sh.decode_delay = 0;
 
-			avi->s[i].sh.samplerate_nom = 1;
-			avi->s[i].sh.samplerate_denom = avi->stream[i].audio->nSamplesPerSec;
+			avi->s[i].sh.samplerate_nom = avi->stream[i].audio->nSamplesPerSec;
+			avi->s[i].sh.samplerate_denom = 1;
 			avi->s[i].sh.channel_count = avi->stream[i].audio->nChannels;
 		}
 	}
