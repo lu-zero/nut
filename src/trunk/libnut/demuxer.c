@@ -252,8 +252,9 @@ static int get_main_header(nut_context_t * nut) {
 	if (nut->max_distance > 65536) nut->max_distance = 65536;
 
 	GET_V(tmp, nut->timebase_count);
+	nut->alloc->free(nut->tb); nut->tb = NULL;
 	ERROR(SIZE_MAX/sizeof(nut_timebase_t) < nut->timebase_count, -ERR_OUT_OF_MEM);
-	nut->tb = nut->alloc->realloc(nut->tb, nut->timebase_count * sizeof(nut_timebase_t));
+	nut->tb = nut->alloc->malloc(nut->timebase_count * sizeof(nut_timebase_t));
 	ERROR(!nut->tb, -ERR_OUT_OF_MEM);
 	for (i = 0; i < nut->timebase_count; i++) {
 		GET_V(tmp, nut->tb[i].nom);
@@ -507,6 +508,7 @@ static int get_index(nut_context_t * nut) {
 	syncpoint_list_t * sl = &nut->syncpoints;
 	uint64_t x;
 	int i;
+	void * a, * b, * c;
 
 	CHECK(get_bytes(nut->i, 8, &x));
 	ERROR(x != INDEX_STARTCODE, -ERR_GENERAL_ERROR);
@@ -523,10 +525,13 @@ static int get_index(nut_context_t * nut) {
 	ERROR(SIZE_MAX/x < sizeof(syncpoint_t) || SIZE_MAX/x < sizeof(uint64_t) * nut->stream_count, -ERR_OUT_OF_MEM);
 
 	sl->alloc_len = sl->len = x;
-	sl->s = nut->alloc->realloc(sl->s, sl->alloc_len * sizeof(syncpoint_t));
-	sl->pts = nut->alloc->realloc(sl->pts, sl->alloc_len * sizeof(uint64_t) * nut->stream_count);
-	sl->eor = nut->alloc->realloc(sl->eor, sl->alloc_len * sizeof(uint64_t) * nut->stream_count);
-	ERROR(!sl->s || !sl->pts || !sl->eor, -ERR_OUT_OF_MEM);
+	a = nut->alloc->realloc(sl->s, sl->alloc_len * sizeof(syncpoint_t));
+	b = nut->alloc->realloc(sl->pts, sl->alloc_len * nut->stream_count * sizeof(uint64_t));
+	c = nut->alloc->realloc(sl->eor, sl->alloc_len * nut->stream_count * sizeof(uint64_t));
+	ERROR(!a || !b || !c, -ERR_OUT_OF_MEM);
+	sl->s = a;
+	sl->pts = b;
+	sl->eor = c;
 
 	for (i = 0; i < sl->len; i++) {
 		GET_V(tmp, sl->s[i].pos);
