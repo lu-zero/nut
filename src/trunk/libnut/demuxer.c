@@ -454,7 +454,7 @@ static void set_global_pts(nut_context_t * nut, uint64_t pts) {
 	TO_PTS(timestamp, pts)
 
 	for (i = 0; i < nut->stream_count; i++) {
-		nut->sc[i].last_pts = convert_ts(nut, timestamp_p, nut->tb[timestamp_t], TO_TB(i));
+		nut->sc[i].last_pts = convert_ts(timestamp_p, nut->tb[timestamp_t], TO_TB(i));
 	}
 }
 
@@ -518,7 +518,7 @@ static int get_index(nut_context_t * nut) {
 	GET_V(tmp, x);
 	for (i = 0; i < nut->stream_count; i++) {
 		TO_PTS(max, x)
-		nut->sc[i].sh.max_pts = convert_ts(nut, max_p, nut->tb[max_t], TO_TB(i));
+		nut->sc[i].sh.max_pts = convert_ts(max_p, nut->tb[max_t], TO_TB(i));
 	}
 
 	GET_V(tmp, x);
@@ -669,11 +669,11 @@ static int get_packet(nut_context_t * nut, nut_packet_t * pd, int * saw_syncpoin
 	// error checking - out of order dts
 	for (i = 0; i < nut->stream_count; i++) {
 		if (nut->sc[i].last_dts == -1) continue;
-		if (compare_ts(nut, pd->pts, TO_TB(pd->stream), nut->sc[i].last_dts, TO_TB(i)) < 0)
+		if (compare_ts(pd->pts, TO_TB(pd->stream), nut->sc[i].last_dts, TO_TB(i)) < 0)
 			fprintf(stderr, "%lld %d (%f) %lld %d (%f) \n",
 				pd->pts, pd->stream, TO_DOUBLE(pd->stream, pd->pts),
 				nut->sc[i].last_dts, i, TO_DOUBLE(i, nut->sc[i].last_dts));
-		ERROR(compare_ts(nut, pd->pts, TO_TB(pd->stream), nut->sc[i].last_dts, TO_TB(i)) < 0, -ERR_OUT_OF_ORDER);
+		ERROR(compare_ts(pd->pts, TO_TB(pd->stream), nut->sc[i].last_dts, TO_TB(i)) < 0, -ERR_OUT_OF_ORDER);
 	}
 
 	if (saw_syncpoint) *saw_syncpoint = !!after_sync;
@@ -1164,7 +1164,7 @@ static int linear_search_seek(nut_context_t * nut, int backwards, seek_state_t *
 			off_t back_ptr = stopper->pos - stopper->back_ptr;
 			TO_PTS(stopper, stopper->pts)
 			// only relavent if pts is smaller than stopper, and we passed stopper's back_ptr
-			if (compare_ts(nut, pd.pts, TO_TB(pd.stream), stopper_p, nut->tb[stopper_t]) < 0 && buf_before >= back_ptr) {
+			if (compare_ts(pd.pts, TO_TB(pd.stream), stopper_p, nut->tb[stopper_t]) < 0 && buf_before >= back_ptr) {
 				if (!stopper_syncpoint) state[pd.stream].good_key = 1;
 				else if (state[pd.stream].good_key) {
 					int n = 1;
@@ -1262,7 +1262,7 @@ int nut_seek(nut_context_t * nut, double time_pos, int flags, const int * active
 			for (i = 0; i < nut->stream_count; i++) {
 				uint64_t dts = nut->sc[i].last_dts != -1 ? nut->sc[i].last_dts : nut->sc[i].last_pts;
 				if (!state[i].active) continue;
-				if (compare_ts(nut, orig_pts, nut->tb[orig_timebase], dts, TO_TB(i)) < 0) {
+				if (compare_ts(orig_pts, nut->tb[orig_timebase], dts, TO_TB(i)) < 0) {
 					orig_pts = dts;
 					orig_timebase = nut->sc[i].timebase_id;
 				}

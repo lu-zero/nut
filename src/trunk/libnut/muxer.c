@@ -223,7 +223,7 @@ static void put_info(nut_context_t * nut, const nut_info_packet_t * info) {
 
 	put_v(tmp, info->stream_id_plus1);
 	put_s(tmp, info->chapter_id);
-	for (i = 0; i < nut->timebase_count; i++) if (compare_ts(nut, 1, info->chapter_tb, 1, nut->tb[i]) == 0) break;
+	for (i = 0; i < nut->timebase_count; i++) if (compare_ts(1, info->chapter_tb, 1, nut->tb[i]) == 0) break;
 	put_v(tmp, info->chapter_start * nut->timebase_count + i);
 	put_v(tmp, info->chapter_len);
 	put_v(tmp, info->count);
@@ -238,7 +238,7 @@ static void put_info(nut_context_t * nut, const nut_info_packet_t * info) {
 			put_s(tmp, field->val);
 		} else if (!strcmp(field->type, "t")) {
 			int j;
-			for (j = 0; j < nut->timebase_count; j++) if (compare_ts(nut, 1, field->tb, 1, nut->tb[j]) == 0) break;
+			for (j = 0; j < nut->timebase_count; j++) if (compare_ts(1, field->tb, 1, nut->tb[j]) == 0) break;
 			put_s(tmp, -4);
 			put_v(tmp, field->val * nut->timebase_count + j);
 		} else if (!strcmp(field->type, "r")) {
@@ -280,7 +280,7 @@ static void put_syncpoint(nut_context_t * nut) {
 	nut->last_syncpoint = bctello(nut->o);
 
 	for (i = 0; i < nut->stream_count; i++) {
-		if (nut->sc[i].last_dts > 0 && compare_ts(nut, nut->sc[i].last_dts, TO_TB(i), pts, nut->tb[timebase]) > 0) {
+		if (nut->sc[i].last_dts > 0 && compare_ts(nut->sc[i].last_dts, TO_TB(i), pts, nut->tb[timebase]) > 0) {
 			pts = nut->sc[i].last_dts;
 			timebase = nut->sc[i].timebase_id;
 		}
@@ -307,7 +307,7 @@ static void put_syncpoint(nut_context_t * nut) {
 		for (j = 0; j < nut->stream_count; j++) {
 			if (keys[j]) continue;
 			if (!s->pts[i * nut->stream_count + j]) continue;
-			if (compare_ts(nut, s->pts[i * nut->stream_count + j] - 1, TO_TB(j), pts, nut->tb[timebase]) <= 0) keys[j] = 1;
+			if (compare_ts(s->pts[i * nut->stream_count + j] - 1, TO_TB(j), pts, nut->tb[timebase]) <= 0) keys[j] = 1;
 		}
 		for (j = 0; j < nut->stream_count; j++) n &= keys[j];
 		if (n) { i--; break; }
@@ -321,7 +321,7 @@ static void put_syncpoint(nut_context_t * nut) {
 	}
 
 	for (i = 0; i < nut->stream_count; i++) {
-		nut->sc[i].last_pts = convert_ts(nut, pts, nut->tb[timebase], TO_TB(i));
+		nut->sc[i].last_pts = convert_ts(pts, nut->tb[timebase], TO_TB(i));
 		nut->sc[i].last_key = 0;
 		if (nut->sc[i].eor) nut->sc[i].eor = -1; // so we know to ignore this stream in future syncpoints
 	}
@@ -342,7 +342,7 @@ static void put_index(nut_context_t * nut) {
 	int timebase = 0;
 
 	for (i = 0; i < nut->stream_count; i++) {
-		if (compare_ts(nut, nut->sc[i].sh.max_pts, TO_TB(i), max_pts, nut->tb[timebase]) > 0) {
+		if (compare_ts(nut->sc[i].sh.max_pts, TO_TB(i), max_pts, nut->tb[timebase]) > 0) {
 			max_pts = nut->sc[i].sh.max_pts;
 			timebase = nut->sc[i].timebase_id;
 		}
@@ -455,7 +455,7 @@ static int frame_header(nut_context_t * nut, output_buffer_t * tmp, const nut_pa
 
 static int add_timebase(nut_context_t * nut, nut_timebase_t tb) {
 	int i;
-	for (i = 0; i < nut->timebase_count; i++) if (compare_ts(nut, 1, nut->tb[i], 1, tb) == 0) break;
+	for (i = 0; i < nut->timebase_count; i++) if (compare_ts(1, nut->tb[i], 1, tb) == 0) break;
 	if (i == nut->timebase_count) {
 		nut->tb = nut->alloc->realloc(nut->tb, sizeof(nut_timebase_t) * ++nut->timebase_count);
 		nut->tb[i] = tb;
@@ -495,11 +495,11 @@ void nut_write_frame(nut_context_t * nut, const nut_packet_t * fd, const uint8_t
 
         for (i = 0; i < nut->stream_count; i++) {
 		if (nut->sc[i].last_dts == -1) continue;
-		if (compare_ts(nut, fd->pts, TO_TB(fd->stream), nut->sc[i].last_dts, TO_TB(i)) < 0)
+		if (compare_ts(fd->pts, TO_TB(fd->stream), nut->sc[i].last_dts, TO_TB(i)) < 0)
 			fprintf(stderr, "%lld %d (%f) %lld %d (%f) \n",
 				fd->pts, fd->stream, TO_DOUBLE(fd->stream, fd->pts),
 				nut->sc[i].last_dts, i, TO_DOUBLE(i, nut->sc[i].last_dts));
-		assert(compare_ts(nut, fd->pts, TO_TB(fd->stream), nut->sc[i].last_dts, TO_TB(i)) >= 0);
+		assert(compare_ts(fd->pts, TO_TB(fd->stream), nut->sc[i].last_dts, TO_TB(i)) >= 0);
 	}
 
 	sc->last_pts = fd->pts;
