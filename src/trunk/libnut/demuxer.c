@@ -612,13 +612,23 @@ static int get_packet(nut_context_t * nut, nut_packet_t * pd, int * saw_syncpoin
 	if (tmp == 'N') {
 		CHECK(get_bytes(nut->i, 7, &tmp));
 		tmp |= (uint64_t)'N' << 56;
-		if (tmp == SYNCPOINT_STARTCODE) {
-			after_sync = 1;
-			CHECK(get_syncpoint(nut));
-			CHECK(get_bytes(nut->i, 1, &tmp));
-		} else {
-			CHECK(get_header(nut->i, NULL));
-			return 3;
+		switch (tmp) {
+			case SYNCPOINT_STARTCODE:
+				after_sync = 1;
+				CHECK(get_syncpoint(nut));
+				CHECK(get_bytes(nut->i, 1, &tmp));
+				break;
+			case MAIN_STARTCODE:
+				do {
+					CHECK(get_header(nut->i, NULL));
+					CHECK(get_bytes(nut->i, 8, &tmp));
+				} while (tmp != SYNCPOINT_STARTCODE);
+				nut->i->buf_ptr -= 8;
+				return 3;
+			case INFO_STARTCODE:
+			default:
+				CHECK(get_header(nut->i, NULL));
+				return 3;
 		}
 	}
 
