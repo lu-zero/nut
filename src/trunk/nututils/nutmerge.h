@@ -6,7 +6,7 @@
 #include <stdio.h>
 //#define NDEBUG
 #include <assert.h>
-#include <nut.h>
+#include <libnut.h>
 
 #define MIN(a,b) ((a) > (b) ? (b) : (a))
 #define MAX(a,b) ((a) < (b) ? (b) : (a))

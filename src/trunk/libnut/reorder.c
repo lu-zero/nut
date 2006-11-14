@@ -4,7 +4,7 @@
 #include <inttypes.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include "nut.h"
+#include "libnut.h"
 #include "priv.h"
 
 static void shift_frames(nut_context_t * nut, stream_context_t * s, int amount) {

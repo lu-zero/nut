@@ -4,7 +4,7 @@
 #include <inttypes.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include "nut.h"
+#include "libnut.h"
 #include "priv.h"
 
 static size_t stream_read(void * priv, size_t len, uint8_t * buf) {

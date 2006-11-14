@@ -4,7 +4,7 @@
 #include <inttypes.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include "nut.h"
+#include "libnut.h"
 #include "priv.h"
 
 static int stream_write(void * priv, size_t len, const uint8_t * buf) {
