@@ -399,6 +399,7 @@ static int add_syncpoint(nut_context_t * nut, syncpoint_t sp, uint64_t * pts, ui
 	syncpoint_list_t * sl = &nut->syncpoints;
 	int i, j;
 
+	assert(nut->dopts.cache_syncpoints & 1 || !pts); // pts information is never stored with no syncpoint cache
 	for (i = sl->len; i--; ) { // more often than not, we're adding at end of list
 		if (sl->s[i].pos > sp.pos) continue;
 		if (sp.pos < sl->s[i].pos + 16) { // syncpoint already in list
@@ -421,29 +422,36 @@ static int add_syncpoint(nut_context_t * nut, syncpoint_t sp, uint64_t * pts, ui
 	}
 	i++;
 	if (sl->len + 1 > sl->alloc_len) {
-		void * a, * b, * c;
+		void * a;
 		sl->alloc_len += PREALLOC_SIZE/4;
 		if (SIZE_MAX/sl->alloc_len < sizeof(syncpoint_t) ||
 		    SIZE_MAX/sl->alloc_len < sizeof(uint64_t) * nut->stream_count)
 			return -ERR_OUT_OF_MEM;
 		a = nut->alloc->realloc(sl->s, sl->alloc_len * sizeof(syncpoint_t));
-		b = nut->alloc->realloc(sl->pts, sl->alloc_len * nut->stream_count * sizeof(uint64_t));
-		c = nut->alloc->realloc(sl->eor, sl->alloc_len * nut->stream_count * sizeof(uint64_t));
-		if (!a || !b || !c) return -ERR_OUT_OF_MEM;
+		if (!a) return -ERR_OUT_OF_MEM;
 		sl->s = a;
-		sl->pts = b;
-		sl->eor = c;
+		if (nut->dopts.cache_syncpoints & 1) {
+			a = nut->alloc->realloc(sl->pts, sl->alloc_len * nut->stream_count * sizeof(uint64_t));
+			if (!a) return -ERR_OUT_OF_MEM;
+			sl->pts = a;
+			a = nut->alloc->realloc(sl->eor, sl->alloc_len * nut->stream_count * sizeof(uint64_t));
+			if (!a) return -ERR_OUT_OF_MEM;
+			sl->eor = a;
+		}
 	}
 	memmove(sl->s + i + 1, sl->s + i, (sl->len - i) * sizeof(syncpoint_t));
-	memmove(sl->pts + (i + 1) * nut->stream_count, sl->pts + i * nut->stream_count, (sl->len - i) * nut->stream_count * sizeof(uint64_t));
-	memmove(sl->eor + (i + 1) * nut->stream_count, sl->eor + i * nut->stream_count, (sl->len - i) * nut->stream_count * sizeof(uint64_t));
-
 	sl->s[i] = sp;
 	assert(sl->s[i].pts_valid == !!pts);
-	for (j = 0; j < nut->stream_count; j++) {
-		sl->pts[i * nut->stream_count + j] = pts ? pts[j] : 0;
-		sl->eor[i * nut->stream_count + j] = eor ? eor[j] : 0;
+
+	if (nut->dopts.cache_syncpoints & 1) {
+		memmove(sl->pts + (i + 1) * nut->stream_count, sl->pts + i * nut->stream_count, (sl->len - i) * nut->stream_count * sizeof(uint64_t));
+		memmove(sl->eor + (i + 1) * nut->stream_count, sl->eor + i * nut->stream_count, (sl->len - i) * nut->stream_count * sizeof(uint64_t));
+		for (j = 0; j < nut->stream_count; j++) {
+			sl->pts[i * nut->stream_count + j] = pts ? pts[j] : 0;
+			sl->eor[i * nut->stream_count + j] = eor ? eor[j] : 0;
+		}
 	}
+
 	sl->len++;
 	if (out) *out = i;
 	return 0;
@@ -477,12 +485,12 @@ static int get_syncpoint(nut_context_t * nut) {
 
 	set_global_pts(nut, s.pts);
 
-	if (/*nut->dopts.cache_syncpoints*/1) {
+	s.seen_next = 0;
+	s.pts_valid = 0;
+	if (nut->dopts.cache_syncpoints & 1) {
 		int i;
 		uint64_t pts[nut->stream_count];
 		uint64_t eor[nut->stream_count];
-		s.seen_next = 0;
-		s.pts_valid = 0;
 		for (i = 0; i < nut->stream_count; i++) {
 			pts[i] = nut->sc[i].last_key;
 			nut->sc[i].last_key = 0;
@@ -495,9 +503,11 @@ static int get_syncpoint(nut_context_t * nut) {
 			CHECK(add_syncpoint(nut, s, pts, eor, &i));
 			nut->syncpoints.s[i - 1].seen_next = 1;
 		}
-	} /*else {
-		if (!nut->syncpoints.len) add_syncpoint(nut, s);
-	}*/
+	} else if (!nut->syncpoints.len || nut->dopts.cache_syncpoints) {
+		int i;
+		CHECK(add_syncpoint(nut, s, NULL, NULL, &i));
+		if (!after_seek) nut->syncpoints.s[i - 1].seen_next = 1;
+	}
 err_out:
 	return err;
 }
@@ -864,7 +874,7 @@ int nut_read_headers(nut_context_t * nut, nut_stream_header_t * s [], nut_info_p
 		}
 	}
 
-	if (nut->dopts.read_index && nut->i->isc.seek) {
+	if (nut->dopts.read_index) {
 		uint64_t idx_ptr;
 		if (nut->seek_status <= 1) {
 			if (nut->seek_status == 0) {
@@ -1005,14 +1015,6 @@ static int binary_search_syncpoint(nut_context_t * nut, double time_pos, off_t *
 
 	i--;
 
-	/*if (!nut->dopts.cache_syncpoints && sl->len == 4 && (i == 0 || i == 2)) {
-		if (i == 2) sl->s[1] = sl->s[2];
-		else sl->s[1].back_ptr &= ~1;
-		sl->s[2] = sl->s[3];
-		i >>= 1;
-		sl->len = 3;
-	}*/
-
 	lo = sl->s[i].pos;
 	lop = sl->s[i].pts;
 	hi = sl->s[i+1].pos;
@@ -1022,7 +1024,7 @@ static int binary_search_syncpoint(nut_context_t * nut, double time_pos, off_t *
 	while (!sl->s[i].seen_next) {
 		// start binary search between sl->s[i].pos (lo) to sl->s[i+1].pos (hi) ...
 		off_t guess;
-		int res;
+		int res, tmp;
 		double hi_pd = TO_DOUBLE_PTS(hip);
 		double lo_pd = TO_DOUBLE_PTS(lop);
 		a++;
@@ -1056,22 +1058,8 @@ static int binary_search_syncpoint(nut_context_t * nut, double time_pos, off_t *
 			lo = s.pos;
 			lop = s.pts;
 		}
-		if (1/*nut->dopts.cache_syncpoints || sl->len == 2*/) {
-			int tmp;
-			CHECK(add_syncpoint(nut, s, NULL, NULL, &tmp));
-			if (!res) i = tmp;
-		}/* else if (sl->len == 3) {
-			if (s.pts > pts) {
-				if (sl->s[1].pts > pts) sl->s[1] = s;
-				else add_syncpoint(nut, s);
-			} else {
-				if (sl->s[1].pts <= pts) sl->s[1] = s;
-				else i = add_syncpoint(nut, s);
-			}
-		} else {
-			if (s.pts > pts) sl->s[2] = s;
-			else sl->s[1] = s;
-		}*/
+		CHECK(add_syncpoint(nut, s, NULL, NULL, &tmp)); // unconditionally even without syncpoint cache
+		if (!res) i = tmp;
 	}
 
 	fprintf(stderr, "\n[ (%d,%d) .. %d .. (%d,%d) ] => %d (%d seeks) %d\n",
@@ -1273,6 +1261,7 @@ int nut_seek(nut_context_t * nut, double time_pos, int flags, const int * active
 
 		for (i = 0; i < nut->stream_count; i++) state[i].pts = (uint64_t)(time_pos / TO_TB(i).nom * TO_TB(i).den);
 		nut->seek_time_pos = time_pos;
+		nut->dopts.cache_syncpoints |= 2;
 	} else {
 		memcpy(state, nut->seek_state, sizeof state);
 		time_pos = nut->seek_time_pos;
@@ -1333,10 +1322,17 @@ int nut_seek(nut_context_t * nut, double time_pos, int flags, const int * active
 	fprintf(stderr, "DONE SEEK\n");
 err_out:
 	if (err != 2) { // unless EAGAIN
+		syncpoint_list_t * sl = &nut->syncpoints;
 		flush_buf(nut->i);
 		nut->before_seek = 0;
 		nut->alloc->free(nut->seek_state);
 		nut->seek_state = NULL;
+		nut->dopts.cache_syncpoints &= ~2;
+		if (!nut->dopts.cache_syncpoints && sl->len > 1) {
+			sl->s[1] = sl->s[sl->len - 1];
+			sl->len = 2;
+			sl->s[0].seen_next = 0;
+		}
 	} else {
 		if (!nut->seek_state) nut->seek_state = nut->alloc->malloc(sizeof state);
 		if (!nut->seek_state) return -ERR_OUT_OF_MEM;
@@ -1385,6 +1381,15 @@ nut_context_t * nut_demuxer_init(nut_demuxer_opts_t * dopts) {
 		nut->alloc->free(nut);
 		return NULL;
 	}
+
+	// use only lsb for options
+	nut->dopts.cache_syncpoints = !!nut->dopts.cache_syncpoints;
+	nut->dopts.read_index = !!nut->dopts.read_index;
+	if (!nut->i->isc.seek) {
+		nut->dopts.cache_syncpoints = 0;
+		nut->dopts.read_index = 0;
+	}
+	if (nut->dopts.read_index) nut->dopts.cache_syncpoints = 1;
 
 	return nut;
 }

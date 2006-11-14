@@ -17,8 +17,8 @@
 typedef struct {
 	void * priv;
 	size_t (*read)(void * priv, size_t len, uint8_t * buf);
-	off_t (*seek)(void * priv, long long pos, int whence);
-	int (*eof)(void * priv);
+	off_t (*seek)(void * priv, long long pos, int whence); // can be NULL, but implies no read_index and no cache_syncpoints
+	int (*eof)(void * priv); // can be NULL, implies any read error is caused by EOF
 	off_t file_pos;
 } nut_input_stream_t;
 
@@ -83,8 +83,8 @@ typedef struct {
 typedef struct {
 	nut_input_stream_t input;
 	nut_alloc_t alloc;
-	int read_index;
-	//int cache_syncpoints;
+	int read_index; // implies cache_syncpoints
+	int cache_syncpoints;
 } nut_demuxer_opts_t;
 
 typedef struct {
