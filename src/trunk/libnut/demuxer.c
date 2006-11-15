@@ -805,11 +805,11 @@ err_out:
 
 int nut_read_headers(nut_context_t * nut, nut_stream_header_t * s [], nut_info_packet_t * info []) {
 	int i, err = 0;
+	uint64_t tmp;
 	*s = NULL;
 	if (!nut->seek_status) { // we already have headers, we were called just for index
 		if (!nut->last_headers) {
 			off_t start = bctello(nut->i);
-			uint64_t tmp;
 			if (start < strlen(ID_STRING) + 1) {
 				int n = strlen(ID_STRING) + 1 - start;
 				ERROR(ready_read_buf(nut->i, n) < n, buf_eof(nut->i));
@@ -838,7 +838,6 @@ int nut_read_headers(nut_context_t * nut, nut_stream_header_t * s [], nut_info_p
 		}
 
 		for (i = 0; i < nut->stream_count; i++) {
-			uint64_t tmp;
 			int j;
 			CHECK(get_bytes(nut->i, 8, &tmp));
 			while (tmp != STREAM_STARTCODE) {
@@ -856,7 +855,6 @@ int nut_read_headers(nut_context_t * nut, nut_stream_header_t * s [], nut_info_p
 			}
 		}
 		if (info) {
-			uint64_t tmp;
 			CHECK(get_bytes(nut->i, 8, &tmp));
 			while (tmp == INFO_STARTCODE) {
 				nut->info_count++;
@@ -871,7 +869,6 @@ int nut_read_headers(nut_context_t * nut, nut_stream_header_t * s [], nut_info_p
 			nut->i->buf_ptr -= 8;
 		}
 		if (nut->dopts.read_index) {
-			uint64_t tmp;
 			CHECK(get_bytes(nut->i, 8, &tmp));
 			while (tmp >> 56 == 'N') {
 				if (tmp == INDEX_STARTCODE || tmp == SYNCPOINT_STARTCODE) break;
@@ -884,7 +881,7 @@ int nut_read_headers(nut_context_t * nut, nut_stream_header_t * s [], nut_info_p
 		}
 	}
 
-	if (nut->dopts.read_index) {
+	if (nut->dopts.read_index & 1) {
 		uint64_t idx_ptr;
 		if (nut->seek_status <= 1) {
 			if (nut->seek_status == 0) {
@@ -901,12 +898,30 @@ int nut_read_headers(nut_context_t * nut, nut_stream_header_t * s [], nut_info_p
 			nut->seek_status = 2;
 			// only EAGAIN from get_index is interesting
 			if ((err = get_index(nut)) == 2) goto err_out;
+			if (err) nut->dopts.read_index = 0;
+			else nut->dopts.read_index = 2;
 			err = 0;
 		}
-		nut->seek_status = 0;
 		if (nut->before_seek) seek_buf(nut->i, nut->before_seek, SEEK_SET);
 		nut->before_seek = 0;
 	}
+
+	CHECK(get_bytes(nut->i, 8, &tmp));
+	while (tmp >> 56 == 'N') {
+		if (tmp == SYNCPOINT_STARTCODE) break;
+		if ((err = get_header(nut->i, NULL)) == 2) goto err_out;
+		if (err) break;
+		CHECK(get_bytes(nut->i, 8, &tmp));
+	}
+	nut->i->buf_ptr -= 8;
+	if (err || tmp != SYNCPOINT_STARTCODE) {
+		nut->seek_status = 1; // enter error mode
+		nut->i->buf_ptr = nut->i->buf; // rewind as much as possible
+		err = 0;
+	} else {
+		nut->seek_status = 0;
+	}
+
 	*s = nut->alloc->malloc(sizeof(nut_stream_header_t) * (nut->stream_count + 1));
 	ERROR(!*s, -ERR_OUT_OF_MEM);
 	for (i = 0; i < nut->stream_count; i++) (*s)[i] = nut->sc[i].sh;
