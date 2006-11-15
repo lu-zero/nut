@@ -113,6 +113,8 @@ typedef struct {
 	nut_alloc_t alloc;
 	int read_index; // implies cache_syncpoints
 	int cache_syncpoints;
+	void * priv;
+	void (*new_info)(void * priv, nut_info_packet_t * info);
 } nut_demuxer_opts_t;
 
 typedef struct nut_context_s nut_context_t;

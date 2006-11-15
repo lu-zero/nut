@@ -345,6 +345,12 @@ err_out:
 	return err;
 }
 
+static void free_info_packet(nut_context_t * nut, nut_info_packet_t * info) {
+	int i;
+	for (i = 0; i < info->count; i++) nut->alloc->free(info->fields[i].data);
+	nut->alloc->free(info->fields);
+}
+
 static int get_info_header(nut_context_t * nut, nut_info_packet_t * info) {
 	input_buffer_t itmp, * tmp = new_mem_buffer(&itmp);
 	int i, err = 0;
@@ -644,6 +650,7 @@ static void clear_dts_cache(nut_context_t * nut) {
 }
 
 static int get_packet(nut_context_t * nut, nut_packet_t * pd, int * saw_syncpoint) {
+	nut_info_packet_t info = { 0 };
 	uint64_t tmp;
 	int err = 0, after_sync = 0, checksum = 0, flags, i;
 	off_t start;
@@ -659,13 +666,14 @@ static int get_packet(nut_context_t * nut, nut_packet_t * pd, int * saw_syncpoin
 				CHECK(get_bytes(nut->i, 1, &tmp));
 				break;
 			case MAIN_STARTCODE:
-				do {
-					CHECK(get_header(nut->i, NULL));
-					CHECK(get_bytes(nut->i, 8, &tmp));
-				} while (tmp != SYNCPOINT_STARTCODE);
 				nut->i->buf_ptr -= 8;
+				CHECK(skip_reserved_headers(nut, SYNCPOINT_STARTCODE));
 				return 3;
-			case INFO_STARTCODE:
+			case INFO_STARTCODE: if (nut->dopts.new_info && !nut->seek_status) {
+				CHECK(get_info_header(nut, &info));
+				nut->dopts.new_info(nut->dopts.priv, &info);
+				break;
+			} // else - fall through!
 			default:
 				CHECK(get_header(nut->i, NULL));
 				return 3;
@@ -737,6 +745,7 @@ static int get_packet(nut_context_t * nut, nut_packet_t * pd, int * saw_syncpoin
 
 	if (saw_syncpoint) *saw_syncpoint = !!after_sync;
 err_out:
+	free_info_packet(nut, &info);
 	return err;
 }
 
@@ -1401,11 +1410,7 @@ void nut_demuxer_uninit(nut_context_t * nut) {
 		nut->alloc->free(nut->sc[i].sh.codec_specific);
 		nut->alloc->free(nut->sc[i].pts_cache);
 	}
-	for (i = 0; i < nut->info_count; i++) {
-		int j;
-		for (j = 0; j < nut->info[i].count; j++) nut->alloc->free(nut->info[i].fields[j].data);
-		nut->alloc->free(nut->info[i].fields);
-	}
+	for (i = 0; i < nut->info_count; i++) free_info_packet(nut, &nut->info[i]);
 
 	nut->alloc->free(nut->syncpoints.s);
 	nut->alloc->free(nut->syncpoints.pts);
