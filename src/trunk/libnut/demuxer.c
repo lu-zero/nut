@@ -931,7 +931,7 @@ int nut_read_headers(nut_context_t * nut, nut_stream_header_t * s [], nut_info_p
 	SAFE_CALLOC(nut->alloc, *s, sizeof(nut_stream_header_t), nut->stream_count + 1);
 	for (i = 0; i < nut->stream_count; i++) (*s)[i] = nut->sc[i].sh;
 	(*s)[i].type = -1;
-	nut->tmp_buffer = (void*)s;
+	nut->tmp_buffer = (void*)*s;
 	if (info) *info = nut->info;
 err_out:
 	if (err != 2) flush_buf(nut->i); // unless EAGAIN
