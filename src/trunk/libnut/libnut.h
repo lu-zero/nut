@@ -163,8 +163,6 @@ int nut_read_headers(nut_context_t * nut, nut_stream_header_t * s [], nut_info_p
 /** Gives information on next frame, must be called before each packet. */
 int nut_read_next_packet(nut_context_t * nut, nut_packet_t * pd);
 
-int nut_skip_packet(nut_context_t * nut, int * len);
-
 /** Just reads the frame DATA. all it's header has already been
 read by nut_read_next_packet. buf must be allocated and big enough.
 len will be non-zero in the case of EAGAIN or EOF

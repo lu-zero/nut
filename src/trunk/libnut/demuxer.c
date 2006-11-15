@@ -949,20 +949,6 @@ int nut_read_frame(nut_context_t * nut, int * len, uint8_t * buf) {
 	return 0;
 }
 
-int nut_skip_packet(nut_context_t * nut, int * len) {
-	// FIXME or fseek
-	uint8_t tmp[*len];
-	return nut_read_frame(nut, len, tmp);
-}
-
-int nut_read_info(nut_context_t * nut, nut_info_packet_t * info []) {
-	return 0;
-}
-
-void nut_free_info(nut_info_packet_t info []) {
-	// FIXME ...
-}
-
 static int find_basic_syncpoints(nut_context_t * nut) {
 	int i, err = 0;
 	syncpoint_list_t * sl = &nut->syncpoints;
