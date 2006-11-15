@@ -1414,11 +1414,17 @@ void nut_demuxer_uninit(nut_context_t * nut) {
 		nut->alloc->free(nut->sc[i].sh.codec_specific);
 		nut->alloc->free(nut->sc[i].pts_cache);
 	}
+	for (i = 0; i < nut->info_count; i++) {
+		int j;
+		for (j = 0; j < nut->info[i].count; j++) nut->alloc->free(nut->info[i].fields[j].data);
+		nut->alloc->free(nut->info[i].fields);
+	}
 
 	nut->alloc->free(nut->syncpoints.s);
 	nut->alloc->free(nut->syncpoints.pts);
 	nut->alloc->free(nut->syncpoints.eor);
 	nut->alloc->free(nut->sc);
+	nut->alloc->free(nut->info);
 	nut->alloc->free(nut->tb);
 	nut->alloc->free(nut->seek_state);
 	free_buffer(nut->i);
