@@ -72,22 +72,6 @@ typedef struct {
 } nut_alloc_t;
 
 typedef struct {
-	nut_output_stream_t output;
-	nut_alloc_t alloc;
-	int write_index;
-	int realtime_stream; // implies no write_index
-	int max_distance;
-	frame_table_input_t * fti;
-} nut_muxer_opts_t;
-
-typedef struct {
-	nut_input_stream_t input;
-	nut_alloc_t alloc;
-	int read_index; // implies cache_syncpoints
-	int cache_syncpoints;
-} nut_demuxer_opts_t;
-
-typedef struct {
 	char type[7];
 	char name[65];
 	int64_t val; // used in all types, is the length of data if there is data
@@ -114,6 +98,22 @@ typedef struct {
 	// not manditory, for reorderer muxer
 	int64_t next_pts;
 } nut_packet_t;
+
+typedef struct {
+	nut_output_stream_t output;
+	nut_alloc_t alloc;
+	int write_index;
+	int realtime_stream; // implies no write_index
+	int max_distance;
+	frame_table_input_t * fti;
+} nut_muxer_opts_t;
+
+typedef struct {
+	nut_input_stream_t input;
+	nut_alloc_t alloc;
+	int read_index; // implies cache_syncpoints
+	int cache_syncpoints;
+} nut_demuxer_opts_t;
 
 typedef struct nut_context_s nut_context_t;
 
