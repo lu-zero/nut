@@ -673,7 +673,6 @@ static int get_packet(nut_context_t * nut, nut_packet_t * pd, int * saw_syncpoin
 	}
 
 	start = bctello(nut->i) - 1;
-	pd->type = e_frame;
 
 	flags = nut->ft[tmp].flags;
 	ERROR(flags & FLAG_INVALID, -ERR_NOT_FRAME_NOT_N);
@@ -923,6 +922,7 @@ int nut_read_headers(nut_context_t * nut, nut_stream_header_t * s [], nut_info_p
 	SAFE_CALLOC(nut->alloc, *s, sizeof(nut_stream_header_t), nut->stream_count + 1);
 	for (i = 0; i < nut->stream_count; i++) (*s)[i] = nut->sc[i].sh;
 	(*s)[i].type = -1;
+	nut->tmp_buffer = (void*)s;
 	if (info) *info = nut->info;
 err_out:
 	if (err != 2) flush_buf(nut->i); // unless EAGAIN
@@ -1370,6 +1370,7 @@ nut_context_t * nut_demuxer_init(nut_demuxer_opts_t * dopts) {
 	nut->sc = NULL;
 	nut->tb = NULL;
 	nut->info = NULL;
+	nut->tmp_buffer = NULL; // the caller's allocated stream list
 	nut->last_headers = 0;
 	nut->stream_count = 0;
 	nut->info_count = 0;
@@ -1424,6 +1425,7 @@ void nut_demuxer_uninit(nut_context_t * nut) {
 	nut->alloc->free(nut->syncpoints.pts);
 	nut->alloc->free(nut->syncpoints.eor);
 	nut->alloc->free(nut->sc);
+	nut->alloc->free(nut->tmp_buffer); // the caller's allocated stream list
 	nut->alloc->free(nut->info);
 	nut->alloc->free(nut->tb);
 	nut->alloc->free(nut->seek_state);

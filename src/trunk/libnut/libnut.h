@@ -107,18 +107,14 @@ typedef struct {
 } nut_info_packet_t;
 
 typedef struct {
-	enum { e_headers, e_unknown, e_frame, e_info } type; // unused for muxer
-	// always used
 	int len;
-	// only used if type is e_frame
 	int stream;
 	uint64_t pts;
 	int flags; // 1 - keyframe, 2 - EOR
-	// not manditory, for reorderer
+	// not manditory, for reorderer muxer
 	int64_t next_pts;
 } nut_packet_t;
 
-struct nut_context_s;
 typedef struct nut_context_s nut_context_t;
 
 // Muxer
