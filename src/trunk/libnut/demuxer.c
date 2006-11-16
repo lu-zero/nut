@@ -1426,6 +1426,9 @@ void nut_demuxer_uninit(nut_context_t * nut) {
 
 const char * nut_error(int error) {
 	switch((enum nut_errors)error) {
+		case NUT_ERR_NO_ERROR: return "No error.";
+		case NUT_ERR_EOF: return "Unexpected EOF.";
+		case NUT_ERR_EAGAIN: return "Not enough data given and no EOF.";
 		case NUT_ERR_GENERAL_ERROR: return "General Error.";
 		case NUT_ERR_BAD_VERSION: return "Bad NUT Version.";
 		case NUT_ERR_NOT_FRAME_NOT_N: return "Invalid Framecode.";
