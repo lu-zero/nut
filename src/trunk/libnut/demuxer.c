@@ -668,7 +668,7 @@ static int get_packet(nut_context_t * nut, nut_packet_t * pd, int * saw_syncpoin
 			case MAIN_STARTCODE:
 				nut->i->buf_ptr -= 8;
 				CHECK(skip_reserved_headers(nut, SYNCPOINT_STARTCODE));
-				return 3;
+				return -1;
 			case INFO_STARTCODE: if (nut->dopts.new_info && !nut->seek_status) {
 				CHECK(get_info_header(nut, &info));
 				nut->dopts.new_info(nut->dopts.priv, &info);
@@ -676,7 +676,7 @@ static int get_packet(nut_context_t * nut, nut_packet_t * pd, int * saw_syncpoin
 			} // else - fall through!
 			default:
 				CHECK(get_header(nut->i, NULL));
-				return 3;
+				return -1;
 		}
 	}
 
@@ -858,7 +858,7 @@ int nut_read_next_packet(nut_context_t * nut, nut_packet_t * pd) {
 		nut->seek_status = 0;
 	}
 
-	while ((err = get_packet(nut, pd, NULL)) == 3);
+	while ((err = get_packet(nut, pd, NULL)) == -1);
 	if (err < 0) { // some error occured!
 		fprintf(stderr, "NUT: %s\n", nut_error(-err));
 		// rewind as much as possible
@@ -1119,7 +1119,7 @@ static int linear_search_seek(nut_context_t * nut, int backwards, seek_state_t *
 
 		buf_before = bctello(nut->i);
 		err = get_packet(nut, &pd, &saw_syncpoint); // FIXME we're counting on syncpoint cache!! for the good_key later, and stopper_syncpoint
-		if (err == 3) continue;
+		if (err == -1) continue;
 		CHECK(err);
 
 		if (saw_syncpoint) {
@@ -1204,7 +1204,7 @@ static int linear_search_seek(nut_context_t * nut, int backwards, seek_state_t *
 
 	while (bctello(nut->i) < min_pos) {
 		nut_packet_t pd;
-		while ((err = get_packet(nut, &pd, NULL)) == 3);
+		while ((err = get_packet(nut, &pd, NULL)) == -1);
 		CHECK(err);
 		push_frame(nut, &pd);
 		CHECK(skip_buffer(nut->i, pd.len));
