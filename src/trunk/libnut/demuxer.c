@@ -411,7 +411,7 @@ static int skip_reserved_headers(nut_context_t * nut, uint64_t stop_startcode) {
 	int err;
 	uint64_t tmp;
 	CHECK(get_bytes(nut->i, 8, &tmp));
-	while (tmp >> 56 != 'N') {
+	while (tmp >> 56 == 'N') {
 		if (tmp == stop_startcode || tmp == SYNCPOINT_STARTCODE) break;
 		CHECK(get_header(nut->i, NULL));
 		CHECK(get_bytes(nut->i, 8, &tmp));
