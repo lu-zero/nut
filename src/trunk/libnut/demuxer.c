@@ -66,9 +66,9 @@ static void seek_buf(input_buffer_t * bc, long long pos, int whence) {
 }
 
 static int buf_eof(input_buffer_t * bc) {
-	if (bc->is_mem) return -ERR_BAD_EOF;
-	if (!bc->isc.eof || bc->isc.eof(bc->isc.priv)) return 1;
-	return 2;
+	if (bc->is_mem) return NUT_ERR_BAD_EOF;
+	if (!bc->isc.eof || bc->isc.eof(bc->isc.priv)) return NUT_ERR_EOF;
+	return NUT_ERR_EAGAIN;
 }
 
 static int skip_buffer(input_buffer_t * bc, int len) {
@@ -135,7 +135,7 @@ static int get_v(input_buffer_t * bc, uint64_t * val) {
 		len = ready_read_buf(bc, 16);
 		for (i = 0; i < len; i++) if (*bc->buf_ptr++ != 0x80) break;
 
-		if (i == len) { if (len >= 16 && !bc->is_mem) return -ERR_VLC_TOO_LONG; }
+		if (i == len) { if (len >= 16 && !bc->is_mem) return NUT_ERR_VLC_TOO_LONG; }
 		else { bc->buf_ptr--; break; }
 	} while (len >= 16);
 
@@ -145,7 +145,7 @@ static int get_v(input_buffer_t * bc, uint64_t * val) {
 		*val = (*val << 7) | (tmp & 0x7F);
 		if (!(tmp & 0x80)) return 0;
 	}
-	if (len >= 16) return -ERR_VLC_TOO_LONG;
+	if (len >= 16) return NUT_ERR_VLC_TOO_LONG;
 	else return buf_eof(bc);
 }
 
@@ -186,14 +186,14 @@ static int get_s_trace(input_buffer_t * bc, int64_t * val, char * var, char * fi
 #define GET_V(bc, v) do { uint64_t _tmp; CHECK(get_v_((bc), &_tmp, #v)); (v) = _tmp; } while(0)
 #define GET_S(bc, v) do {  int64_t _tmp; CHECK(get_s_((bc), &_tmp, #v)); (v) = _tmp; } while(0)
 #define SAFE_CALLOC(alloc, var, a, b) do { \
-	ERROR(SIZE_MAX/(a) < (b), -ERR_OUT_OF_MEM); \
-	ERROR(!((var) = (alloc)->malloc((a) * (b))), -ERR_OUT_OF_MEM); \
+	ERROR(SIZE_MAX/(a) < (b), NUT_ERR_OUT_OF_MEM); \
+	ERROR(!((var) = (alloc)->malloc((a) * (b))), NUT_ERR_OUT_OF_MEM); \
 	memset((var), 0, (a) * (b)); \
 } while(0)
 #define SAFE_REALLOC(alloc, var, a, b) do { \
 	void * _tmp; \
-	ERROR(SIZE_MAX/(a) < (b), -ERR_OUT_OF_MEM); \
-	ERROR(!((_tmp) = (alloc)->realloc((var), (a) * (b))), -ERR_OUT_OF_MEM); \
+	ERROR(SIZE_MAX/(a) < (b), NUT_ERR_OUT_OF_MEM); \
+	ERROR(!((_tmp) = (alloc)->realloc((var), (a) * (b))), NUT_ERR_OUT_OF_MEM); \
 	(var) = _tmp; \
 } while(0)
 
@@ -218,8 +218,8 @@ static int get_vb(nut_alloc_t * alloc, input_buffer_t * in, int * len, uint8_t *
 	if ((err = get_v(in, &tmp))) return err;
 	if (!*len) {
 		*buf = alloc->malloc(tmp);
-		if (!*buf) return -ERR_OUT_OF_MEM;
-	} else if (*len < tmp) return -ERR_OUT_OF_MEM;
+		if (!*buf) return NUT_ERR_OUT_OF_MEM;
+	} else if (*len < tmp) return NUT_ERR_OUT_OF_MEM;
 	*len = tmp;
 	if (get_data(in, *len, *buf) != *len) return buf_eof(in);
 	return 0;
@@ -233,11 +233,11 @@ static int get_header(input_buffer_t * in, input_buffer_t * out) {
 	GET_V(in, forward_ptr);
 	if (forward_ptr > 4096) {
 		CHECK(skip_buffer(in, 4)); // header_checksum
-		ERROR(crc32(get_buf(in, start), bctello(in) - start), -ERR_BAD_CHECKSUM);
+		ERROR(crc32(get_buf(in, start), bctello(in) - start), NUT_ERR_BAD_CHECKSUM);
 	}
 
 	CHECK(skip_buffer(in, forward_ptr));
-	ERROR(crc32(in->buf_ptr - forward_ptr, forward_ptr), -ERR_BAD_CHECKSUM);
+	ERROR(crc32(in->buf_ptr - forward_ptr, forward_ptr), NUT_ERR_BAD_CHECKSUM);
 
 	if (out) {
 		assert(out->is_mem);
@@ -257,16 +257,16 @@ static int get_main_header(nut_context_t * nut) {
 	CHECK(get_header(nut->i, tmp));
 
 	GET_V(tmp, i);
-	ERROR(i != NUT_VERSION, -ERR_BAD_VERSION);
+	ERROR(i != NUT_VERSION, NUT_ERR_BAD_VERSION);
 	GET_V(tmp, nut->stream_count);
 	GET_V(tmp, nut->max_distance);
 	if (nut->max_distance > 65536) nut->max_distance = 65536;
 
 	GET_V(tmp, nut->timebase_count);
 	nut->alloc->free(nut->tb); nut->tb = NULL;
-	ERROR(SIZE_MAX/sizeof(nut_timebase_t) < nut->timebase_count, -ERR_OUT_OF_MEM);
+	ERROR(SIZE_MAX/sizeof(nut_timebase_t) < nut->timebase_count, NUT_ERR_OUT_OF_MEM);
 	nut->tb = nut->alloc->malloc(nut->timebase_count * sizeof(nut_timebase_t));
-	ERROR(!nut->tb, -ERR_OUT_OF_MEM);
+	ERROR(!nut->tb, NUT_ERR_OUT_OF_MEM);
 	for (i = 0; i < nut->timebase_count; i++) {
 		GET_V(tmp, nut->tb[i].nom);
 		GET_V(tmp, nut->tb[i].den);
@@ -314,7 +314,7 @@ static int get_stream_header(nut_context_t * nut, int id) {
 	CHECK(get_header(nut->i, tmp));
 
 	GET_V(tmp, i);
-	ERROR(i != id, -ERR_BAD_STREAM_ORDER);
+	ERROR(i != id, NUT_ERR_BAD_STREAM_ORDER);
 
 	GET_V(tmp, sc->sh.type);
 	CHECK(get_vb(nut->alloc, tmp, &sc->sh.fourcc_len, &sc->sh.fourcc));
@@ -435,7 +435,7 @@ static int get_headers(nut_context_t * nut, int read_info) {
 		int j;
 		CHECK(skip_reserved_headers(nut, STREAM_STARTCODE));
 		CHECK(get_bytes(nut->i, 8, &tmp));
-		ERROR(tmp != STREAM_STARTCODE, -ERR_NOSTREAM_STARTCODE);
+		ERROR(tmp != STREAM_STARTCODE, NUT_ERR_NOSTREAM_STARTCODE);
 		CHECK(get_stream_header(nut, i));
 		SAFE_CALLOC(nut->alloc, nut->sc[i].pts_cache, sizeof(int64_t), nut->sc[i].sh.decode_delay);
 		for (j = 0; j < nut->sc[i].sh.decode_delay; j++) nut->sc[i].pts_cache[j] = -1;
@@ -453,7 +453,7 @@ static int get_headers(nut_context_t * nut, int read_info) {
 		nut->i->buf_ptr -= 8;
 	}
 err_out:
-	assert(err != 2); // EAGAIN is illegal here!!
+	assert(err != NUT_ERR_EAGAIN); // EAGAIN is illegal here!!
 	return err;
 }
 
@@ -573,7 +573,7 @@ static int get_index(nut_context_t * nut) {
 	int i;
 
 	CHECK(get_bytes(nut->i, 8, &x));
-	ERROR(x != INDEX_STARTCODE, -ERR_GENERAL_ERROR);
+	ERROR(x != INDEX_STARTCODE, NUT_ERR_GENERAL_ERROR);
 
 	CHECK(get_header(nut->i, tmp));
 
@@ -683,7 +683,7 @@ static int get_packet(nut_context_t * nut, nut_packet_t * pd, int * saw_syncpoin
 	start = bctello(nut->i) - 1;
 
 	flags = nut->ft[tmp].flags;
-	ERROR(flags & FLAG_INVALID, -ERR_NOT_FRAME_NOT_N);
+	ERROR(flags & FLAG_INVALID, NUT_ERR_NOT_FRAME_NOT_N);
 
 	if (flags & FLAG_CODED) {
 		int coded_flags;
@@ -695,7 +695,7 @@ static int get_packet(nut_context_t * nut, nut_packet_t * pd, int * saw_syncpoin
 	if (flags & FLAG_STREAM_ID) GET_V(nut->i, pd->stream);
 	else pd->stream = nut->ft[tmp].stream;
 
-	ERROR(pd->stream >= nut->stream_count, -ERR_NOT_FRAME_NOT_N);
+	ERROR(pd->stream >= nut->stream_count, NUT_ERR_NOT_FRAME_NOT_N);
 
 	if (flags & FLAG_CODED_PTS) {
 		uint64_t coded_pts;
@@ -724,15 +724,15 @@ static int get_packet(nut_context_t * nut, nut_packet_t * pd, int * saw_syncpoin
 
 	if (flags & FLAG_CHECKSUM) {
 		CHECK(skip_buffer(nut->i, 4)); // header_checksum
-		ERROR(crc32(nut->i->buf_ptr - (bctello(nut->i) - start), bctello(nut->i) - start), -ERR_BAD_CHECKSUM);
+		ERROR(crc32(nut->i->buf_ptr - (bctello(nut->i) - start), bctello(nut->i) - start), NUT_ERR_BAD_CHECKSUM);
 		checksum = 1;
 	}
 
 	// error checking - max distance
-	ERROR(!after_sync && bctello(nut->i) + pd->len - nut->last_syncpoint > nut->max_distance, -ERR_MAX_SYNCPOINT_DISTANCE);
-	ERROR(!checksum && pd->len > 2*nut->max_distance, -ERR_MAX_DISTANCE);
+	ERROR(!after_sync && bctello(nut->i) + pd->len - nut->last_syncpoint > nut->max_distance, NUT_ERR_MAX_SYNCPOINT_DISTANCE);
+	ERROR(!checksum && pd->len > 2*nut->max_distance, NUT_ERR_MAX_DISTANCE);
 	// error checking - max pts distance
-	ERROR(!checksum && ABS((int64_t)pd->pts - (int64_t)nut->sc[pd->stream].last_pts) > nut->sc[pd->stream].max_pts_distance, -ERR_MAX_PTS_DISTANCE);
+	ERROR(!checksum && ABS((int64_t)pd->pts - (int64_t)nut->sc[pd->stream].last_pts) > nut->sc[pd->stream].max_pts_distance, NUT_ERR_MAX_PTS_DISTANCE);
 	// error checking - out of order dts
 	for (i = 0; i < nut->stream_count; i++) {
 		if (nut->sc[i].last_dts == -1) continue;
@@ -740,7 +740,7 @@ static int get_packet(nut_context_t * nut, nut_packet_t * pd, int * saw_syncpoin
 			fprintf(stderr, "%lld %d (%f) %lld %d (%f) \n",
 				pd->pts, pd->stream, TO_DOUBLE(pd->stream, pd->pts),
 				nut->sc[i].last_dts, i, TO_DOUBLE(i, nut->sc[i].last_dts));
-		ERROR(compare_ts(pd->pts, TO_TB(pd->stream), nut->sc[i].last_dts, TO_TB(i)) < 0, -ERR_OUT_OF_ORDER);
+		ERROR(compare_ts(pd->pts, TO_TB(pd->stream), nut->sc[i].last_dts, TO_TB(i)) < 0, NUT_ERR_OUT_OF_ORDER);
 	}
 
 	if (saw_syncpoint) *saw_syncpoint = !!after_sync;
@@ -775,7 +775,7 @@ static int find_main_headers(nut_context_t * nut) {
 		tmp = (tmp << 8) | *(nut->i->buf_ptr++);
 		if (tmp == MAIN_STARTCODE) break;
 	}
-	ERROR(tmp != MAIN_STARTCODE, -ERR_NO_HEADERS);
+	ERROR(tmp != MAIN_STARTCODE, NUT_ERR_NO_HEADERS);
 	nut->i->buf_ptr -= 8;
 	nut->last_headers = bctello(nut->i);
 	flush_buf(nut->i);
@@ -805,7 +805,7 @@ retry:
 			input_buffer_t itmp, * tmp = new_mem_buffer(&itmp);
 			res->pos = bctello(nut->i) - 8;
 
-			if ((err = get_header(nut->i, tmp)) == 2) goto err_out;
+			if ((err = get_header(nut->i, tmp)) == NUT_ERR_EAGAIN) goto err_out;
 			if (err) { err = 0; continue; }
 
 			GET_V(tmp, res->pts);
@@ -846,7 +846,7 @@ err_out:
 
 int nut_read_next_packet(nut_context_t * nut, nut_packet_t * pd) {
 	int err = 0;
-	ERROR(!nut->last_headers, -ERR_NO_HEADERS); // paranoia, old API
+	ERROR(!nut->last_headers, NUT_ERR_NO_HEADERS); // paranoia, old API
 
 	if (nut->seek_status) { // in error mode!
 		syncpoint_t s;
@@ -871,7 +871,7 @@ int nut_read_next_packet(nut_context_t * nut, nut_packet_t * pd) {
 
 	if (!err) push_frame(nut, pd);
 err_out:
-	if (err != 2) flush_buf(nut->i); // unless EAGAIN
+	if (err != NUT_ERR_EAGAIN) flush_buf(nut->i); // unless EAGAIN
 	else nut->i->buf_ptr = nut->i->buf; // rewind
 	return err;
 }
@@ -914,7 +914,7 @@ int nut_read_headers(nut_context_t * nut, nut_stream_header_t * s [], nut_info_p
 			if (nut->seek_status == 1) seek_buf(nut->i, idx_ptr, SEEK_SET);
 			nut->seek_status = 2;
 			// only EAGAIN from get_index is interesting
-			if ((err = get_index(nut)) == 2) goto err_out;
+			if ((err = get_index(nut)) == NUT_ERR_EAGAIN) goto err_out;
 			if (err) nut->dopts.read_index = 0;
 			else nut->dopts.read_index = 2;
 			err = 0;
@@ -934,7 +934,7 @@ int nut_read_headers(nut_context_t * nut, nut_stream_header_t * s [], nut_info_p
 	nut->tmp_buffer = (void*)*s;
 	if (info) *info = nut->info;
 err_out:
-	if (err != 2) flush_buf(nut->i); // unless EAGAIN
+	if (err != NUT_ERR_EAGAIN) flush_buf(nut->i); // unless EAGAIN
 	else nut->i->buf_ptr = nut->i->buf; // rewind
 	return err;
 }
@@ -1000,7 +1000,7 @@ static int binary_search_syncpoint(nut_context_t * nut, double time_pos, off_t *
 
 	CHECK(find_basic_syncpoints(nut));
 	// sl->len MUST be >=2, which is the first and last syncpoints in the file
-	ERROR(sl->len < 2, -ERR_NOT_SEEKABLE);
+	ERROR(sl->len < 2, NUT_ERR_NOT_SEEKABLE);
 
 	for (i = 0; i < sl->len; i++) {
 		TO_PTS(tmp, sl->s[i].pts)
@@ -1190,7 +1190,7 @@ static int linear_search_seek(nut_context_t * nut, int backwards, seek_state_t *
 	}
 
 	// after ALL this, we ended up in a worse position than where we were...
-	ERROR(!backwards && min_pos < nut->before_seek, -ERR_NOT_SEEKABLE);
+	ERROR(!backwards && min_pos < nut->before_seek, NUT_ERR_NOT_SEEKABLE);
 
 	// FIXME we're counting on syncpoint cache dopts.cache_syncpoints
 	for (i = 1; i < sl->len; i++) if (sl->s[i].pos > min_pos) break;
@@ -1211,9 +1211,9 @@ static int linear_search_seek(nut_context_t * nut, int backwards, seek_state_t *
 	}
 
 err_out:
-	if (err != 2) { // unless EAGAIN
+	if (err != NUT_ERR_EAGAIN) { // unless EAGAIN
 		if (err) {
-			if (err == -ERR_NOT_SEEKABLE) { // a failed seek - then go back to before everything started
+			if (err == NUT_ERR_NOT_SEEKABLE) { // a failed seek - then go back to before everything started
 				for (i = 0; i < nut->stream_count; i++) nut->sc[i].last_pts = state[i].old_last_pts;
 				seek_buf(nut->i, nut->before_seek, SEEK_SET);
 			} else { // some NUT error, let's just go back to last good syncpoint
@@ -1238,7 +1238,7 @@ int nut_seek(nut_context_t * nut, double time_pos, int flags, const int * active
 	int backwards = flags & 1 ? time_pos < 0 : 1;
 	syncpoint_t stopper = { 0, 0, 0, 0, 0 };
 
-	if (!nut->i->isc.seek) return -ERR_NOT_SEEKABLE;
+	if (!nut->i->isc.seek) return NUT_ERR_NOT_SEEKABLE;
 
 	if (!nut->before_seek) nut->before_seek = bctello(nut->i);
 
@@ -1328,7 +1328,7 @@ int nut_seek(nut_context_t * nut, double time_pos, int flags, const int * active
 	}
 	fprintf(stderr, "DONE SEEK\n");
 err_out:
-	if (err != 2) { // unless EAGAIN
+	if (err != NUT_ERR_EAGAIN) { // unless EAGAIN
 		syncpoint_list_t * sl = &nut->syncpoints;
 		flush_buf(nut->i);
 		nut->before_seek = 0;
@@ -1342,7 +1342,7 @@ err_out:
 		}
 	} else {
 		if (!nut->seek_state) nut->seek_state = nut->alloc->malloc(sizeof state);
-		if (!nut->seek_state) return -ERR_OUT_OF_MEM;
+		if (!nut->seek_state) return NUT_ERR_OUT_OF_MEM;
 		memcpy(nut->seek_state, state, sizeof state);
 	}
 	return err;
@@ -1425,22 +1425,22 @@ void nut_demuxer_uninit(nut_context_t * nut) {
 }
 
 const char * nut_error(int error) {
-	switch((enum errors)error) {
-		case ERR_GENERAL_ERROR: return "General Error.";
-		case ERR_BAD_VERSION: return "Bad NUT Version.";
-		case ERR_NOT_FRAME_NOT_N: return "Invalid Framecode.";
-		case ERR_BAD_CHECKSUM: return "Bad Checksum.";
-		case ERR_MAX_SYNCPOINT_DISTANCE: return "max_distance syncpoint";
-		case ERR_MAX_DISTANCE: return "max_distance";
-		case ERR_NO_HEADERS: return "No headers found!";
-		case ERR_NOT_SEEKABLE: return "Cannot seek to that position.";
-		case ERR_OUT_OF_ORDER: return "out of order dts";
-		case ERR_MAX_PTS_DISTANCE: return "Pts difference higher than max_pts_distance.";
-		case ERR_BAD_STREAM_ORDER: return "Stream headers are stored in wrong order.";
-		case ERR_NOSTREAM_STARTCODE: return "Expected stream startcode not found.";
-		case ERR_BAD_EOF: return "Invalid forward_ptr!";
-		case ERR_VLC_TOO_LONG: return "VLC too long";
-		case ERR_OUT_OF_MEM: return "Out of memory";
+	switch((enum nut_errors)error) {
+		case NUT_ERR_GENERAL_ERROR: return "General Error.";
+		case NUT_ERR_BAD_VERSION: return "Bad NUT Version.";
+		case NUT_ERR_NOT_FRAME_NOT_N: return "Invalid Framecode.";
+		case NUT_ERR_BAD_CHECKSUM: return "Bad Checksum.";
+		case NUT_ERR_MAX_SYNCPOINT_DISTANCE: return "max_distance syncpoint";
+		case NUT_ERR_MAX_DISTANCE: return "max_distance";
+		case NUT_ERR_NO_HEADERS: return "No headers found!";
+		case NUT_ERR_NOT_SEEKABLE: return "Cannot seek to that position.";
+		case NUT_ERR_OUT_OF_ORDER: return "out of order dts";
+		case NUT_ERR_MAX_PTS_DISTANCE: return "Pts difference higher than max_pts_distance.";
+		case NUT_ERR_BAD_STREAM_ORDER: return "Stream headers are stored in wrong order.";
+		case NUT_ERR_NOSTREAM_STARTCODE: return "Expected stream startcode not found.";
+		case NUT_ERR_BAD_EOF: return "Invalid forward_ptr!";
+		case NUT_ERR_VLC_TOO_LONG: return "VLC too long";
+		case NUT_ERR_OUT_OF_MEM: return "Out of memory";
 	}
 	return NULL;
 }

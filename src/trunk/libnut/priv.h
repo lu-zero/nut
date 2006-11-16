@@ -36,24 +36,6 @@
 #define MAX(a,b) ((a) > (b) ? (a) : (b))
 #define ABS(a) ((a) > 0 ? (a) : -(a))
 
-enum errors {
-	ERR_GENERAL_ERROR = 1,
-	ERR_BAD_VERSION,
-	ERR_NOT_FRAME_NOT_N,
-	ERR_BAD_CHECKSUM,
-	ERR_MAX_SYNCPOINT_DISTANCE,
-	ERR_MAX_DISTANCE,
-	ERR_NO_HEADERS,
-	ERR_NOT_SEEKABLE,
-	ERR_OUT_OF_ORDER,
-	ERR_MAX_PTS_DISTANCE,
-	ERR_VLC_TOO_LONG,
-	ERR_BAD_STREAM_ORDER,
-	ERR_NOSTREAM_STARTCODE,
-	ERR_BAD_EOF,
-	ERR_OUT_OF_MEM,
-};
-
 typedef struct {
 	nut_input_stream_t isc;
 	int is_mem;

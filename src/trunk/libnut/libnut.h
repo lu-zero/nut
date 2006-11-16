@@ -119,6 +119,27 @@ typedef struct {
 
 typedef struct nut_context_s nut_context_t;
 
+enum nut_errors {
+	NUT_ERR_NO_ERROR = 0,
+	NUT_ERR_EOF = 1,
+	NUT_ERR_EAGAIN = 2,
+	NUT_ERR_GENERAL_ERROR,
+	NUT_ERR_BAD_VERSION,
+	NUT_ERR_NOT_FRAME_NOT_N,
+	NUT_ERR_BAD_CHECKSUM,
+	NUT_ERR_MAX_SYNCPOINT_DISTANCE,
+	NUT_ERR_MAX_DISTANCE,
+	NUT_ERR_NO_HEADERS,
+	NUT_ERR_NOT_SEEKABLE,
+	NUT_ERR_OUT_OF_ORDER,
+	NUT_ERR_MAX_PTS_DISTANCE,
+	NUT_ERR_VLC_TOO_LONG,
+	NUT_ERR_BAD_STREAM_ORDER,
+	NUT_ERR_NOSTREAM_STARTCODE,
+	NUT_ERR_BAD_EOF,
+	NUT_ERR_OUT_OF_MEM,
+};
+
 // Muxer
 
 /** allocs nut context, writes headers to file */
@@ -147,7 +168,7 @@ All of the following functions return:
 0 success
 1 unexpected or expected EOF.
 2 EAGAIN.
-negative number: error, detailed error in nut_error(-1 * ret);
+other: error, detailed error in nut_error(ret);
 
 All errors except EAGAIN or ERR_NOT_SEEKABLE from nut_seek are fatal.
 The only legal operation after a fatal error is nut_demuxer_uninit().
