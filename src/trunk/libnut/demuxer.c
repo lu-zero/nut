@@ -674,7 +674,7 @@ static int get_packet(nut_context_t * nut, nut_packet_t * pd, int * saw_syncpoin
 			case INFO_STARTCODE: if (nut->dopts.new_info && !nut->seek_status) {
 				CHECK(get_info_header(nut, &info));
 				nut->dopts.new_info(nut->dopts.priv, &info);
-				break;
+				return -1;
 			} // else - fall through!
 			default:
 				CHECK(get_header(nut->i, NULL));
@@ -860,7 +860,7 @@ int nut_read_next_packet(nut_context_t * nut, nut_packet_t * pd) {
 		nut->seek_status = 0;
 	}
 
-	while ((err = get_packet(nut, pd, NULL)) == -1);
+	while ((err = get_packet(nut, pd, NULL)) == -1) flush_buf(nut->i);
 	if (err > NUT_ERR_EAGAIN) { // some error occured!
 		fprintf(stderr, "NUT: %s\n", nut_error(err));
 		// rewind as much as possible
