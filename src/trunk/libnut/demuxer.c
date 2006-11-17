@@ -133,20 +133,14 @@ static int get_v(input_buffer_t * bc, uint64_t * val) {
 
 	do {
 		len = ready_read_buf(bc, 16);
-		for (i = 0; i < len; i++) if (*bc->buf_ptr++ != 0x80) break;
-
-		if (i == len) { if (len >= 16 && !bc->is_mem) return NUT_ERR_VLC_TOO_LONG; }
-		else { bc->buf_ptr--; break; }
+		for (i = 0; i < len; i++) {
+			uint8_t tmp= *(bc->buf_ptr++);
+			*val = (*val << 7) | (tmp & 0x7F);
+			if (!(tmp & 0x80)) return 0;
+		}
+		if (len >= 16 && !bc->is_mem) return NUT_ERR_VLC_TOO_LONG;
 	} while (len >= 16);
-
-	len = ready_read_buf(bc, 16);
-	for (i = 0; i < len; i++) {
-		uint8_t tmp= *(bc->buf_ptr++);
-		*val = (*val << 7) | (tmp & 0x7F);
-		if (!(tmp & 0x80)) return 0;
-	}
-	if (len >= 16) return NUT_ERR_VLC_TOO_LONG;
-	else return buf_eof(bc);
+	return buf_eof(bc);
 }
 
 static int get_s(input_buffer_t * bc, int64_t * val) {
