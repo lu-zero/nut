@@ -523,6 +523,7 @@ void nut_write_info(nut_context_t * nut, const nut_info_packet_t * info) {
 
 nut_context_t * nut_muxer_init(const nut_muxer_opts_t * mopts, const nut_stream_header_t s[], const nut_info_packet_t info[]) {
 	nut_context_t * nut;
+	nut_frame_table_input_t * fti = mopts->fti, mfti[256];
 	int i, n;
 	// TODO check that all input is valid
 
@@ -549,24 +550,31 @@ nut_context_t * nut_muxer_init(const nut_muxer_opts_t * mopts, const nut_stream_
 
 	if (nut->max_distance > 65536) nut->max_distance = 65536;
 
+	if (!fti) {
+		nut_framecode_generate(s, mfti);
+		fti = mfti;
+	}
+	fprintf(stderr, "/""/ { %4s, %3s, %6s, %3s, %4s, %5s },\n", "flag", "pts", "stream", "mul", "size", "count");
 	for (n=i=0; i < 256; n++) {
 		int j;
-		assert(mopts->fti[n].flag != -1);
+		assert(fti[n].flag != -1);
 
-		for(j = 0; j < mopts->fti[n].count && i < 256; j++, i++) {
+		fprintf(stderr, "   { %4d, %3d, %6d, %3d, %4d, %5d },\n", fti[n].flag, fti[n].pts, fti[n].stream, fti[n].mul, fti[n].size, fti[n].count);
+		for(j = 0; j < fti[n].count && i < 256; j++, i++) {
 			if (i == 'N') {
 				nut->ft[i].flags = FLAG_INVALID;
 				j--;
 				continue;
 			}
-			nut->ft[i].flags     = mopts->fti[n].flag;
-			nut->ft[i].pts_delta = mopts->fti[n].pts;
-			nut->ft[i].mul       = mopts->fti[n].mul;
-			nut->ft[i].stream    = mopts->fti[n].stream;
-			nut->ft[i].lsb       = mopts->fti[n].size + j;
+			nut->ft[i].flags     = fti[n].flag;
+			nut->ft[i].pts_delta = fti[n].pts;
+			nut->ft[i].mul       = fti[n].mul;
+			nut->ft[i].stream    = fti[n].stream;
+			nut->ft[i].lsb       = fti[n].size + j;
 		}
 	}
-	assert(mopts->fti[n].flag == -1);
+	fprintf(stderr, "   { %4d, %3d, %6d, %3d, %4d, %5d },\n", fti[n].flag, fti[n].pts, fti[n].stream, fti[n].mul, fti[n].size, fti[n].count);
+	assert(fti[n].flag == -1);
 
 	nut->sync_overhead = 0;
 

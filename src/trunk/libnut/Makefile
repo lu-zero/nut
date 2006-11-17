@@ -1,5 +1,7 @@
 include ../config.mak
 
+OBJS = muxer.o demuxer.o reorder.o framecode.o
+
 all: libnut.a
 
 install:
@@ -12,12 +14,12 @@ uninstall:
 	rm -f $(prefix)/lib/libnut.a
 	rm -f $(prefix)/include/libnut.h
 
-libnut.a: muxer.o demuxer.o reorder.o
+libnut.a: ${OBJS}
 	rm -f $@
 	${AR} rc $@ $^
 	$(RANLIB) $@
 
-libnut.so: muxer.o demuxer.o reorder.o
+libnut.so: ${OBJS}
 	${CC} ${CFLAGS} -shared $^ -o $@
 
 .c.o: priv.h nut.h

@@ -155,6 +155,9 @@ void nut_write_info(nut_context_t * nut, const nut_info_packet_t * info);
 void nut_write_frame_reorder(nut_context_t * nut, const nut_packet_t * p, const uint8_t * buf);
 void nut_muxer_uninit_reorder(nut_context_t * nut);
 
+/** generate framecode table input for the muxer. the fallback for the muxer if the muxer option is NULL */
+void nut_framecode_generate(const nut_stream_header_t s[], nut_frame_table_input_t fti[256]);
+
 // Demuxer
 
 /** Just inits stuff, can never fail, except memory error... */

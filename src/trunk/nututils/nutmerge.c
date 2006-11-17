@@ -29,34 +29,6 @@ framer_t * nframers[] = {
 	NULL
 };
 
-nut_frame_table_input_t ft_default[] = {
-	// There must be atleast this safety net:
-	//{ 4128,    0,      0,   1,    0,     1 },
-	//{ flag,  pts, stream, mul, size, count }
-	  { 8192,    0,      0,   1,    0,     1 }, // invalid 0x00
-	  {   56,    0,      0,   1,    0,     1 }, // safety net non key frame
-	  {   57,    0,      0,   1,    0,     1 }, // safety net key frame
-	  { 4128,    0,      0,   1,    0,     1 }, // one more safety net
-	  {   27,    0,      0,   1,    0,     1 }, // EOR frame
-	  {    1,    1,      1, 337,  336,     1 }, // used 82427 times
-	  {    1,    1,      1, 385,  384,     1 }, // used 56044 times
-	  {    0,    2,      0,   7,    6,     1 }, // used 20993 times
-	  {    0,    1,      0,   7,    6,     1 }, // used 10398 times
-	  {    1,    1,      1, 481,  480,     1 }, // used 3527 times
-	  {    1,    1,      1, 289,  288,     1 }, // used 2042 times
-	  {    1,    1,      1, 577,  576,     1 }, // used 1480 times
-	  {    1,    1,      1, 673,  672,     1 }, // used 862 times
-	  {    1,    1,      1, 769,  768,     1 }, // used 433 times
-	  {    1,    1,      1, 961,  960,     1 }, // used 191 times
-	  {   32,    2,      0, 101,    0,   101 }, // "1.2.0" => 14187
-	  {   32,   -1,      0,  40,    0,    40 }, // "1.-1.0" => 5707
-	  {   32,    1,      0,  81,    0,    81 }, // "1.1.0" => 11159
-	  {   33,    1,      0,  11,    0,    11 }, // "1.1.1" => 1409
-	  {  105,    0,      0,   6,    0,     6 }, // checksum for video
-	  { 8192,    0,      0,   1,    0,     1 }, // invalid 0xFF
-	  {   -1,    0,      0,   0,    0,     0 }, // end
-};
-
 void push_packet(stream_t * stream, packet_t * p) {
 	if (stream->npackets == stream->packets_alloc) {
 		stream->packets_alloc += 20;
@@ -128,7 +100,7 @@ static int convert(FILE * out, demuxer_t * demuxer, stream_t * streams, int stre
 	mopts.output = (nut_output_stream_t){ .priv = out, .write = NULL };
 	mopts.write_index = 1;
 	mopts.realtime_stream = 0;
-	mopts.fti = ft_default;
+	mopts.fti = NULL;
 	mopts.max_distance = 32768;
 	mopts.alloc.malloc = NULL;
 	nut = nut_muxer_init(&mopts, nut_stream, NULL);
