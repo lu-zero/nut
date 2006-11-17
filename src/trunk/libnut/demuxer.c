@@ -792,8 +792,6 @@ static int find_syncpoint(nut_context_t * nut, int backwards, syncpoint_t * res,
 	uint64_t tmp;
 	off_t ptr = 0;
 	assert(!backwards || !stop); // can't have both
-
-	if (backwards) seek_buf(nut->i, -nut->max_distance, SEEK_CUR);
 retry:
 	read = nut->max_distance;
 	if (stop) read = MIN(read, stop - bctello(nut->i));
@@ -978,7 +976,7 @@ static int find_basic_syncpoints(nut_context_t * nut) {
 	// find last syncpoint if it's not already found
 	if (!sl->s[sl->len-1].seen_next) {
 		// searching bakwards from EOF
-		if (!nut->seek_status) seek_buf(nut->i, 0, SEEK_END);
+		if (!nut->seek_status) seek_buf(nut->i, -nut->max_distance, SEEK_END);
 		nut->seek_status = 1;
 		CHECK(find_syncpoint(nut, 1, &s, 0));
 		CHECK(add_syncpoint(nut, s, NULL, NULL, &i));
@@ -1080,6 +1078,7 @@ static int binary_search_syncpoint(nut_context_t * nut, double time_pos, off_t *
 	*end = sl->s[i+1].pos;
 	*stopper = sl->s[i+1];
 err_out:
+	if (err == NUT_ERR_EAGAIN) nut->i->buf_ptr = nut->i->buf;
 	return err;
 }
 
