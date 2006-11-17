@@ -411,8 +411,8 @@ static int skip_reserved_headers(nut_context_t * nut, uint64_t stop_startcode) {
 	int err;
 	uint64_t tmp;
 	CHECK(get_bytes(nut->i, 8, &tmp));
-	while (tmp >> 56 == 'N') {
-		if (tmp == stop_startcode || tmp == SYNCPOINT_STARTCODE) break;
+	while (tmp != SYNCPOINT_STARTCODE && tmp != stop_startcode) {
+		ERROR(tmp >> 56 != 'N', NUT_ERR_NOT_FRAME_NOT_N);
 		CHECK(get_header(nut->i, NULL));
 		CHECK(get_bytes(nut->i, 8, &tmp));
 	}
@@ -441,12 +441,14 @@ static int get_headers(nut_context_t * nut, int read_info) {
 		for (j = 0; j < nut->sc[i].sh.decode_delay; j++) nut->sc[i].pts_cache[j] = -1;
 	}
 	if (read_info) {
+		CHECK(skip_reserved_headers(nut, INFO_STARTCODE));
 		CHECK(get_bytes(nut->i, 8, &tmp));
 		while (tmp == INFO_STARTCODE) {
 			nut->info_count++;
 			SAFE_REALLOC(nut->alloc, nut->info, sizeof(nut_info_packet_t), nut->info_count + 1);
 			memset(&nut->info[nut->info_count - 1], 0, sizeof(nut_info_packet_t));
 			CHECK(get_info_header(nut, &nut->info[nut->info_count - 1]));
+			CHECK(skip_reserved_headers(nut, INFO_STARTCODE));
 			CHECK(get_bytes(nut->i, 8, &tmp));
 		}
 		nut->info[nut->info_count].count = -1;
@@ -883,6 +885,7 @@ int nut_read_headers(nut_context_t * nut, nut_stream_header_t * s [], nut_info_p
 		if (!nut->last_headers) CHECK(find_main_headers(nut));
 
 		// load all headers into memory so they can be cleanly decoded without EAGAIN issues
+		// FIXME deal with errors and such
 		CHECK(skip_reserved_headers(nut, SYNCPOINT_STARTCODE));
 
 		// rewind to where the headers were found
@@ -923,10 +926,9 @@ int nut_read_headers(nut_context_t * nut, nut_stream_header_t * s [], nut_info_p
 		nut->before_seek = 0;
 	}
 
-	CHECK(skip_reserved_headers(nut, SYNCPOINT_STARTCODE));
-	CHECK(get_bytes(nut->i, 8, &tmp));
-	nut->i->buf_ptr -= 8;
-	nut->seek_status = (tmp != SYNCPOINT_STARTCODE); // enter error mode if we're not at a syncpoint
+	if ((err = skip_reserved_headers(nut, SYNCPOINT_STARTCODE)) == NUT_ERR_EAGAIN) goto err_out;
+	nut->seek_status = !!err; // enter error mode if we're not at a syncpoint
+	err = 0;
 
 	SAFE_CALLOC(nut->alloc, *s, sizeof(nut_stream_header_t), nut->stream_count + 1);
 	for (i = 0; i < nut->stream_count; i++) (*s)[i] = nut->sc[i].sh;
