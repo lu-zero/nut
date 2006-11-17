@@ -56,14 +56,13 @@ typedef struct {
 } nut_stream_header_t;
 
 typedef struct {
-	int tmp_flag;      // -1 => end
-	int tmp_fields;
-	int tmp_pts;       // tmp_fields = 1
-	int tmp_mul;       // tmp_fields = 2
-	int tmp_stream;    // tmp_fields = 3
-	int tmp_size;      // tmp_fields = 4
-	int count;         // tmp_fields = 6 (5 is reserved)
-} frame_table_input_t;
+	int flag; // -1 => end
+	int pts;
+	int stream;
+	int mul;
+	int size;
+	int count;
+} nut_frame_table_input_t;
 
 typedef struct {
 	void * (*malloc)(size_t size);
@@ -105,7 +104,7 @@ typedef struct {
 	int write_index;
 	int realtime_stream; // implies no write_index
 	int max_distance;
-	frame_table_input_t * fti;
+	nut_frame_table_input_t * fti;
 } nut_muxer_opts_t;
 
 typedef struct {

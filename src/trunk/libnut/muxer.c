@@ -523,7 +523,7 @@ void nut_write_info(nut_context_t * nut, const nut_info_packet_t * info) {
 
 nut_context_t * nut_muxer_init(const nut_muxer_opts_t * mopts, const nut_stream_header_t s[], const nut_info_packet_t info[]) {
 	nut_context_t * nut;
-	int i;
+	int i, n;
 	// TODO check that all input is valid
 
 	if (mopts->alloc.malloc) nut = mopts->alloc.malloc(sizeof(nut_context_t));
@@ -549,37 +549,24 @@ nut_context_t * nut_muxer_init(const nut_muxer_opts_t * mopts, const nut_stream_
 
 	if (nut->max_distance > 65536) nut->max_distance = 65536;
 
-	{
-	int j, n;
-	int flag, fields, timestamp = 0, mul = 1, stream = 0, size, count;
+	for (n=i=0; i < 256; n++) {
+		int j;
+		assert(mopts->fti[n].flag != -1);
 
-	for(n=i=0; i < 256; n++) {
-		assert(mopts->fti[n].tmp_flag != -1);
-		flag   = mopts->fti[n].tmp_flag;
-		fields = mopts->fti[n].tmp_fields;
-		if (fields > 0) timestamp = mopts->fti[n].tmp_pts;
-		if (fields > 1) mul       = mopts->fti[n].tmp_mul;
-		if (fields > 2) stream    = mopts->fti[n].tmp_stream;
-		if (fields > 3) size      = mopts->fti[n].tmp_size;
-		else size = 0;
-		if (fields > 5) count     = mopts->fti[n].count;
-		else count = mul - size;
-
-		for(j = 0; j < count && i < 256; j++, i++) {
+		for(j = 0; j < mopts->fti[n].count && i < 256; j++, i++) {
 			if (i == 'N') {
 				nut->ft[i].flags = FLAG_INVALID;
 				j--;
 				continue;
 			}
-			nut->ft[i].flags = flag;
-			nut->ft[i].stream = stream;
-			nut->ft[i].mul = mul;
-			nut->ft[i].lsb = size + j;
-			nut->ft[i].pts_delta = timestamp;
+			nut->ft[i].flags     = mopts->fti[n].flag;
+			nut->ft[i].pts_delta = mopts->fti[n].pts;
+			nut->ft[i].mul       = mopts->fti[n].mul;
+			nut->ft[i].stream    = mopts->fti[n].stream;
+			nut->ft[i].lsb       = mopts->fti[n].size + j;
 		}
 	}
-	assert(mopts->fti[n].tmp_flag == -1);
-	}
+	assert(mopts->fti[n].flag == -1);
 
 	nut->sync_overhead = 0;
 
