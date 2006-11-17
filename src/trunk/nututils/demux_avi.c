@@ -368,7 +368,7 @@ static int read_headers(demuxer_priv_t * avi, stream_t ** streams) {
 		avi->s[i].sh.codec_specific = avi->stream[i].extra;
 		if (avi->stream[i].type == 0) { // video
 			avi->s[i].sh.fourcc_len = 4;
-			avi->s[i].sh.fourcc = avi->stream[i].video->biCompression;
+			avi->s[i].sh.fourcc = (uint8_t*)"mp4v";
 			avi->s[i].codec_id = e_mpeg4;
 			avi->s[i].sh.decode_delay = 1;
 
