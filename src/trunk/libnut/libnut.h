@@ -122,6 +122,7 @@ enum nut_errors {
 	NUT_ERR_NO_ERROR = 0,
 	NUT_ERR_EOF = 1,
 	NUT_ERR_EAGAIN = 2,
+	NUT_ERR_OUT_OF_MEM = 3, // these first 3 errors are "fatal" errors, the rest are simple stream corruption
 	NUT_ERR_GENERAL_ERROR,
 	NUT_ERR_BAD_VERSION,
 	NUT_ERR_NOT_FRAME_NOT_N,
@@ -136,7 +137,6 @@ enum nut_errors {
 	NUT_ERR_BAD_STREAM_ORDER,
 	NUT_ERR_NOSTREAM_STARTCODE,
 	NUT_ERR_BAD_EOF,
-	NUT_ERR_OUT_OF_MEM,
 };
 
 // Muxer

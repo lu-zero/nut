@@ -854,7 +854,7 @@ int nut_read_next_packet(nut_context_t * nut, nut_packet_t * pd) {
 	}
 
 	while ((err = get_packet(nut, pd, NULL)) == -1) flush_buf(nut->i);
-	if (err > NUT_ERR_EAGAIN) { // some error occured!
+	if (err > NUT_ERR_OUT_OF_MEM) { // some error occured!
 		fprintf(stderr, "NUT: %s\n", nut_error(err));
 		// rewind as much as possible
 		if (nut->i->isc.seek) seek_buf(nut->i, nut->last_syncpoint + 8, SEEK_SET);
