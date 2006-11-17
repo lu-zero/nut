@@ -441,6 +441,7 @@ static int get_headers(nut_context_t * nut, int read_info) {
 		for (j = 0; j < nut->sc[i].sh.decode_delay; j++) nut->sc[i].pts_cache[j] = -1;
 	}
 	if (read_info) {
+		// FIXME this skip_reserved_headers() will skip INDEX_STARTCODE
 		CHECK(skip_reserved_headers(nut, INFO_STARTCODE));
 		CHECK(get_bytes(nut->i, 8, &tmp));
 		while (tmp == INFO_STARTCODE) {
