@@ -28,10 +28,11 @@ static int ready_read_buf(input_buffer_t * bc, int amount) {
 	int pos = (bc->buf_ptr - bc->buf);
 	if (bc->read_len - pos < amount && !bc->is_mem) {
 		amount += 10; // ### + PREALLOC_SIZE ?
+		if (!bc->alloc) return 0; // there was a previous memory error
 		if (bc->write_len - pos < amount) {
 			int new_len = amount + pos + PREALLOC_SIZE;
 			uint8_t * buf = bc->alloc->realloc(bc->buf, new_len);
-			if (!buf) return 0;
+			if (!buf) { bc->alloc = NULL; return 0; }
 			bc->write_len = new_len;
 			bc->buf = buf;
 			bc->buf_ptr = bc->buf + pos;
@@ -67,6 +68,7 @@ static void seek_buf(input_buffer_t * bc, long long pos, int whence) {
 
 static int buf_eof(input_buffer_t * bc) {
 	if (bc->is_mem) return NUT_ERR_BAD_EOF;
+	if (!bc->alloc) return NUT_ERR_OUT_OF_MEM;
 	if (!bc->isc.eof || bc->isc.eof(bc->isc.priv)) return NUT_ERR_EOF;
 	return NUT_ERR_EAGAIN;
 }
