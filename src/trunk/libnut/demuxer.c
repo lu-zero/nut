@@ -861,7 +861,7 @@ static int smart_find_syncpoint(nut_context_t * nut, syncpoint_t * sp, int backw
 	else sp->seen_next = 1;
 
 	if (sp->seen_next) { // failure
-		int j, begin = fss->begin ? fss->begin - 1 : i;
+		int begin = fss->begin ? fss->begin - 1 : i;
 		fss->begin = begin + 1;
 		while (i < backwards*2 || sl->s[i-backwards*2].seen_next) {
 			int o = backwards ? -1 : +1;
