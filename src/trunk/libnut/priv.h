@@ -149,6 +149,10 @@ struct nut_context_s {
 	double seek_time_pos;
 
 	syncpoint_list_t syncpoints;
+	struct find_syncpoint_state_s {
+		int i, begin, seeked;
+		off_t pos;
+	} find_syncpoint_state;
 
 	// debug
 	int sync_overhead;

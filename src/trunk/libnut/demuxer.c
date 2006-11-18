@@ -47,7 +47,7 @@ static void seek_buf(input_buffer_t * bc, long long pos, int whence) {
 	if (whence != SEEK_END) {
 		// don't do anything when already in seeked position. but still flush_buf
 		off_t req = pos + (whence == SEEK_CUR ? bctello(bc) : 0);
-		if (req >= bc->file_pos && req < bc->file_pos + bc->read_len) {
+		if (req >= bc->file_pos && req <= bc->file_pos + bc->read_len) {
 			bc->buf_ptr = bc->buf + (req - bc->file_pos);
 			flush_buf(bc);
 			return;
@@ -837,11 +837,66 @@ err_out:
 	return err;
 }
 
-static int smart_find_syncpoint(nut_context_t * nut, syncpoint_t * res) {
-	int err = 0;
-	if (!(nut->dopts.cache_syncpoints & 1)) return find_syncpoint(nut, 0, res, 0);
+static int smart_find_syncpoint(nut_context_t * nut, syncpoint_t * sp) {
+	struct find_syncpoint_state_s * fss = &nut->find_syncpoint_state;
+	syncpoint_list_t * sl = &nut->syncpoints;
+	int i = fss->i, err = 0;
+	off_t pos = i ? fss->pos : bctello(nut->i);
 
-	return find_syncpoint(nut, 0, res, 0);
+	if (!(nut->dopts.cache_syncpoints & 1) || !sl->len) return find_syncpoint(nut, 0, sp, 0);
+
+	if (!i) {
+		for (i = 0; i < sl->len; i++) if (sl->s[i].pos+15 > pos) break;
+		if (i && !sl->s[i-1].seen_next) return find_syncpoint(nut, 0, sp, 0);
+
+		seek_buf(nut->i, sl->s[i].pos, SEEK_SET);
+	}
+	fss->i = i + 1;
+	fss->pos = pos;
+
+	if (!fss->begin) CHECK(find_syncpoint(nut, 0, sp, sl->s[i].pos + 15 + 8));
+	else sp->seen_next = 1;
+
+	if (sp->seen_next) { // failure
+		int j, begin = fss->begin ? fss->begin - 1 : i;
+		fss->begin = begin + 1;
+		while (sl->s[i].seen_next) {
+			if (!fss->seeked) seek_buf(nut->i, sl->s[i+1].pos, SEEK_SET);
+			fss->seeked = 1;
+			CHECK(find_syncpoint(nut, 0, sp, sl->s[i+1].pos + 15 + 8));
+			fss->seeked = 0;
+			fss->i = ++i + 1;
+			if (!sp->seen_next) break;
+		}
+		if (sp->seen_next) { // still nothing! let's linear search the whole area
+			if (!fss->seeked) seek_buf(nut->i, begin > 0 ? sl->s[begin-1].pos+15 : 0, SEEK_SET);
+			fss->seeked = 1;
+			CHECK(find_syncpoint(nut, 0, sp, 0));
+			fss->seeked = 0;
+		}
+		CHECK(add_syncpoint(nut, *sp, NULL, NULL, &i));
+		assert(i >= begin);
+
+		sl->s[i].pts_valid = 0;
+		sl->s[i].seen_next = 0;
+		for (j = 0; j < nut->stream_count; j++) {
+			sl->pts[i * nut->stream_count + j] = 0;
+			sl->eor[i * nut->stream_count + j] = 0;
+		}
+
+		memmove(sl->s + begin, sl->s + i, (sl->len - i) * sizeof(syncpoint_t));
+		memmove(sl->pts + begin * nut->stream_count, sl->pts + i * nut->stream_count, (sl->len - i) * nut->stream_count * sizeof(uint64_t));
+		memmove(sl->eor + begin * nut->stream_count, sl->eor + i * nut->stream_count, (sl->len - i) * nut->stream_count * sizeof(uint64_t));
+
+		sl->len -= i-begin;
+
+		if (sp->pos < pos) { // wow, how silly!
+			fss->pos = fss->i = fss->begin = fss->seeked = 0;
+			seek_buf(nut->i, pos, SEEK_SET);
+			return smart_find_syncpoint(nut, sp);
+		}
+	}
+	fss->pos = fss->i = fss->begin = fss->seeked = 0;
 
 err_out:
 	return err;
@@ -1380,6 +1435,7 @@ nut_context_t * nut_demuxer_init(nut_demuxer_opts_t * dopts) {
 	nut->seek_status = 0;
 	nut->before_seek = 0;
 	nut->last_syncpoint = 0;
+	nut->find_syncpoint_state = (struct find_syncpoint_state_s){0,0,0,0};
 
 	nut->alloc = &nut->dopts.alloc;
 
