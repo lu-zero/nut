@@ -839,7 +839,7 @@ err_out:
 
 static int smart_find_syncpoint(nut_context_t * nut, syncpoint_t * res) {
 	int err = 0;
-	if (!nut->dopts.cache_syncpoints & 1) return find_syncpoint(nut, 0, res, 0);
+	if (!(nut->dopts.cache_syncpoints & 1)) return find_syncpoint(nut, 0, res, 0);
 
 	return find_syncpoint(nut, 0, res, 0);
 
