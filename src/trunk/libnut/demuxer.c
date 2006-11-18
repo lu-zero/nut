@@ -750,7 +750,7 @@ static int find_main_headers(nut_context_t * nut) {
 	}
 
 	// failure
-	if (len == -1 && (nut->before_seek += read_data) < 512*1024) {
+	if (len == -1 && (nut->before_seek += read_data) < 512*1024 && read_data > 0) {
 		nut->i->buf_ptr -= 7; // rewind 7 bytes, try again
 		flush_buf(nut->i);
 		return find_main_headers(nut);
@@ -889,8 +889,9 @@ static int get_headers(nut_context_t * nut, int read_info) {
 			memset(&nut->info[nut->info_count - 1], 0, sizeof(nut_info_packet_t));
 			CHECK(get_info_header(nut, &nut->info[nut->info_count - 1]));
 			nut->info[nut->info_count].count = -1;
-		} else if (tmp == INDEX_STARTCODE && nut->dopts.read_index) {
+		} else if (tmp == INDEX_STARTCODE && nut->dopts.read_index&1) {
 			CHECK(get_index(nut)); // usually you don't care about get_index() errors, but nothing except a memory error can happen here
+			nut->dopts.read_index = 2;
 		} else {
 			CHECK(get_header(nut->i, NULL));
 		}
