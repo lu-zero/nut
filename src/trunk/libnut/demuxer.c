@@ -27,7 +27,7 @@ static void flush_buf(input_buffer_t *bc) {
 static int ready_read_buf(input_buffer_t * bc, int amount) {
 	int pos = (bc->buf_ptr - bc->buf);
 	if (bc->read_len - pos < amount && !bc->is_mem) {
-		amount += 10; // ### + PREALLOC_SIZE ?
+		amount += 10;
 		if (!bc->alloc) return 0; // there was a previous memory error
 		if (bc->write_len - pos < amount) {
 			int new_len = amount + pos + PREALLOC_SIZE;
@@ -332,12 +332,12 @@ static int get_stream_header(nut_context_t * nut) {
 			GET_V(tmp, sc->sh.height);
 			GET_V(tmp, sc->sh.sample_width);
 			GET_V(tmp, sc->sh.sample_height);
-			GET_V(tmp, sc->sh.colorspace_type); // TODO understand this
+			GET_V(tmp, sc->sh.colorspace_type);
 			break;
 		case NUT_AUDIO_CLASS:
 			GET_V(tmp, sc->sh.samplerate_nom);
 			GET_V(tmp, sc->sh.samplerate_denom);
-			GET_V(tmp, sc->sh.channel_count); // ### is channel count staying in spec
+			GET_V(tmp, sc->sh.channel_count);
 			break;
 	}
 
@@ -1204,7 +1204,7 @@ static int linear_search_seek(nut_context_t * nut, int backwards, off_t start, o
 		nut_packet_t pd;
 
 		buf_before = bctello(nut->i);
-		err = get_packet(nut, &pd, &saw_syncpoint); // FIXME we're counting on syncpoint cache!! for the good_key later, and stopper_syncpoint
+		err = get_packet(nut, &pd, &saw_syncpoint); // we're counting on syncpoint cache!! for the good_key later, and stopper_syncpoint
 		if (err == -1) continue;
 		CHECK(err);
 
@@ -1278,7 +1278,6 @@ static int linear_search_seek(nut_context_t * nut, int backwards, off_t start, o
 	// after ALL this, we ended up in a worse position than where we were...
 	ERROR(!backwards && min_pos < nut->before_seek, NUT_ERR_NOT_SEEKABLE);
 
-	// FIXME we're counting on syncpoint cache dopts.cache_syncpoints
 	for (i = 1; i < sl->len; i++) if (sl->s[i].pos > min_pos) break;
 	i--;
 	if (!(nut->seek_status & 1)) seek_buf(nut->i, sl->s[i].pos, SEEK_SET);
