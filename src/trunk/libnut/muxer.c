@@ -189,7 +189,7 @@ static void put_stream_header(nut_context_t * nut, int id) {
 	output_buffer_t * tmp = clear_buffer(nut->tmp_buffer);
 	stream_context_t * sc = &nut->sc[id];
 
-	put_v(tmp, id); // ### is stream_id staying in spec
+	put_v(tmp, id);
 	put_v(tmp, sc->sh.type);
 	put_vb(tmp, sc->sh.fourcc_len, sc->sh.fourcc);
 	put_v(tmp, sc->timebase_id);
@@ -205,12 +205,12 @@ static void put_stream_header(nut_context_t * nut, int id) {
 			put_v(tmp, sc->sh.height);
 			put_v(tmp, sc->sh.sample_width);
 			put_v(tmp, sc->sh.sample_height);
-			put_v(tmp, sc->sh.colorspace_type); // TODO understand this
+			put_v(tmp, sc->sh.colorspace_type);
 			break;
 		case NUT_AUDIO_CLASS:
 			put_v(tmp, sc->sh.samplerate_nom);
 			put_v(tmp, sc->sh.samplerate_denom);
-			put_v(tmp, sc->sh.channel_count); // ### is channel count staying in spec
+			put_v(tmp, sc->sh.channel_count);
 			break;
 	}
 
