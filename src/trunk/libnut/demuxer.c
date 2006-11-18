@@ -984,10 +984,16 @@ int nut_read_frame(nut_context_t * nut, int * len, uint8_t * buf) {
 	return 0;
 }
 
-static int find_basic_syncpoints(nut_context_t * nut) {
+static int binary_search_syncpoint(nut_context_t * nut, double time_pos, off_t * start, off_t * end, syncpoint_t * stopper) {
 	int i, err = 0;
-	syncpoint_list_t * sl = &nut->syncpoints;
 	syncpoint_t s;
+	off_t hi, lo;
+	uint64_t hip, lop;
+	uint64_t timebases[nut->timebase_count];
+	syncpoint_list_t * sl = &nut->syncpoints;
+	int a = 0;
+
+	for (i = 0; i < nut->timebase_count; i++) timebases[i] = (uint64_t)(time_pos / nut->tb[i].nom * nut->tb[i].den);
 
 	assert(sl->len); // it is impossible for the first syncpoint to not have been read
 
@@ -1002,22 +1008,6 @@ static int find_basic_syncpoints(nut_context_t * nut) {
 		sl->s[i].seen_next = 1;
 		nut->seek_status = 0;
 	}
-err_out:
-	return err;
-}
-
-static int binary_search_syncpoint(nut_context_t * nut, double time_pos, off_t * start, off_t * end, syncpoint_t * stopper) {
-	int i, err = 0;
-	syncpoint_t s;
-	off_t hi, lo;
-	uint64_t hip, lop;
-	uint64_t timebases[nut->timebase_count];
-	syncpoint_list_t * sl = &nut->syncpoints;
-	int a = 0;
-
-	for (i = 0; i < nut->timebase_count; i++) timebases[i] = (uint64_t)(time_pos / nut->tb[i].nom * nut->tb[i].den);
-
-	CHECK(find_basic_syncpoints(nut));
 	// sl->len MUST be >=2, which is the first and last syncpoints in the file
 	ERROR(sl->len < 2, NUT_ERR_NOT_SEEKABLE);
 
