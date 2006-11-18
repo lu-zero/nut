@@ -738,7 +738,7 @@ static int find_main_headers(nut_context_t * nut) {
 
 			// EOF is a legal error here - when reading the last headers in file
 			if ((err = get_bytes(nut->i, 8, &tmp)) == NUT_ERR_EOF) { err = 0; tmp = SYNCPOINT_STARTCODE; }
-			ERROR(err, err); // if get_bytes returns EAGAIN or a memory error, check for that
+			CHECK(err); // if get_bytes returns EAGAIN or a memory error, check for that
 		} while (tmp != SYNCPOINT_STARTCODE);
 		if (tmp == SYNCPOINT_STARTCODE) { // success!
 			nut->last_syncpoint = nut->before_seek = nut->seek_status = 0;
@@ -907,7 +907,7 @@ static int get_headers(nut_context_t * nut, int read_info) {
 		}
 		// EOF is a legal error here - when reading the last headers in file
 		if ((err = get_bytes(nut->i, 8, &tmp)) == NUT_ERR_EOF) { tmp = err = 0; break; }
-		ERROR(err, err); // it's just barely possible for get_bytes to return a memory error, check for that
+		CHECK(err); // it's just barely possible for get_bytes to return a memory error, check for that
 	}
 	if (tmp == SYNCPOINT_STARTCODE) nut->i->buf_ptr -= 8;
 
