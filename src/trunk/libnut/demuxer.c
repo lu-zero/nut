@@ -420,6 +420,8 @@ static int add_syncpoint(nut_context_t * nut, syncpoint_t sp, uint64_t * pts, ui
 			sl->s[i].pos = sp.pos;
 			assert(!sl->s[i].pts || sl->s[i].pts == sp.pts);
 			sl->s[i].pts = sp.pts;
+			assert(!sl->s[i].back_ptr || sl->s[i].back_ptr == sp.back_ptr);
+			sl->s[i].back_ptr = sp.back_ptr;
 			if (pts) {
 				for (j = 0; j < nut->stream_count; j++) {
 					assert(!sl->s[i].pts_valid || sl->pts[i * nut->stream_count + j] == pts[j]);
@@ -886,11 +888,6 @@ static int smart_find_syncpoint(nut_context_t * nut, syncpoint_t * sp, int backw
 			int tmp = begin;
 			begin = i + 1;
 			i = tmp + 1;
-		}
-		sl->s[i].pts_valid = 0;
-		for (j = 0; j < nut->stream_count; j++) {
-			sl->pts[i * nut->stream_count + j] = 0;
-			sl->eor[i * nut->stream_count + j] = 0;
 		}
 
 		memmove(sl->s + begin, sl->s + i, (sl->len - i) * sizeof(syncpoint_t));
