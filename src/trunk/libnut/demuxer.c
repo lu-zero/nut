@@ -231,14 +231,15 @@ static int get_header(input_buffer_t * in, input_buffer_t * out) {
 		CHECK(skip_buffer(in, 4)); // header_checksum
 		ERROR(crc32(get_buf(in, start), bctello(in) - start), NUT_ERR_BAD_CHECKSUM);
 	}
+	start = bctello(in);
 
 	CHECK(skip_buffer(in, forward_ptr));
-	ERROR(crc32(in->buf_ptr - forward_ptr, forward_ptr), NUT_ERR_BAD_CHECKSUM);
+	ERROR(crc32(get_buf(in, start), forward_ptr), NUT_ERR_BAD_CHECKSUM);
 
 	if (out) {
 		assert(out->is_mem);
 		assert(out->buf == out->buf_ptr);
-		out->buf_ptr = out->buf = in->buf_ptr - forward_ptr;
+		out->buf_ptr = out->buf = get_buf(in, start);
 		out->write_len = out->read_len = forward_ptr - 4; // not including checksum
 	}
 err_out:
@@ -676,7 +677,7 @@ static int get_packet(nut_context_t * nut, nut_packet_t * pd, int * saw_syncpoin
 
 	if (flags & FLAG_CHECKSUM) {
 		CHECK(skip_buffer(nut->i, 4)); // header_checksum
-		ERROR(crc32(nut->i->buf_ptr - (bctello(nut->i) - start), bctello(nut->i) - start), NUT_ERR_BAD_CHECKSUM);
+		ERROR(crc32(get_buf(nut->i, start), bctello(nut->i) - start), NUT_ERR_BAD_CHECKSUM);
 		checksum = 1;
 	}
 
@@ -828,7 +829,7 @@ int nut_read_next_packet(nut_context_t * nut, nut_packet_t * pd) {
 	if (nut->seek_status) { // in error mode!
 		syncpoint_t s;
 		CHECK(find_syncpoint(nut, 0, &s, 0));
-		nut->i->buf_ptr -= bctello(nut->i) - s.pos; // go back to begginning of syncpoint
+		nut->i->buf_ptr = get_buf(nut->i, s.pos); // go back to begginning of syncpoint
 		flush_buf(nut->i);
 		clear_dts_cache(nut);
 		nut->last_syncpoint = 0;
@@ -1152,7 +1153,7 @@ static int linear_search_seek(nut_context_t * nut, int backwards, off_t start, o
 					if (pd.flags & NUT_FLAG_EOR) nut->sc[pd.stream].state.good_key = 0;
 				}
 				if (!end && pd.pts >= nut->sc[pd.stream].state.pts) { // forward seek end
-					nut->i->buf_ptr -= bctello(nut->i) - buf_before;
+					nut->i->buf_ptr = get_buf(nut->i, buf_before);
 					break;
 				}
 			}
