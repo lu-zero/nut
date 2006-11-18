@@ -991,14 +991,12 @@ int nut_read_frame(nut_context_t * nut, int * len, uint8_t * buf) {
 	return 0;
 }
 
-#define INTERPOLATE_WEIGHT (19./20)
 static off_t seek_interpolate(int max_distance, double time_pos, off_t lo, off_t hi, double lo_pd, double hi_pd) {
+	double weight = 19./20.;
 	off_t guess;
 	if (hi - lo < max_distance) guess = lo + 16;
 	else { // linear interpolation
-		double a = (double)(hi - lo) / (hi_pd - lo_pd);
-		guess = lo + a * (time_pos - lo_pd);
-		guess = guess * INTERPOLATE_WEIGHT + (lo+hi)/2. * (1 - INTERPOLATE_WEIGHT);
+		guess = (lo + (double)(hi-lo)/(hi_pd-lo_pd) * (time_pos-lo_pd))*weight + (lo+hi)/2.*(1.-weight);
 		if (hi - guess < max_distance) guess = hi - max_distance; //(lo + hi)/2;
 	}
 	if (guess < lo + 16) guess = lo + 16;
