@@ -843,13 +843,14 @@ static int smart_find_syncpoint(nut_context_t * nut, syncpoint_t * sp, int backw
 	int i = fss->i, err = 0;
 	off_t pos = fss->i ? fss->pos : bctello(nut->i);
 
-	if (!(nut->dopts.cache_syncpoints & 1) || !sl->len) return find_syncpoint(nut, 0, sp, 0);
+	ERROR(!(nut->dopts.cache_syncpoints & 1) || !sl->len, -1);
 
 	if (!i) {
 		for (i = 0; i < sl->len; i++) if (sl->s[i].pos+15 > pos) break;
-		if (i == sl->len || (i && !sl->s[i-1].seen_next)) return find_syncpoint(nut, 0, sp, 0);
+		ERROR(i == sl->len || (i && !sl->s[i-1].seen_next), -1);
 
-		seek_buf(nut->i, sl->s[i].pos, SEEK_SET);
+		if (pos < sl->s[i].pos) // trust the caller if it gave more percise syncpoint location
+			seek_buf(nut->i, sl->s[i].pos, SEEK_SET);
 	} else i--;
 	fss->i = i + 1;
 	fss->pos = pos;
@@ -887,7 +888,6 @@ static int smart_find_syncpoint(nut_context_t * nut, syncpoint_t * sp, int backw
 			i = tmp + 1;
 		}
 		sl->s[i].pts_valid = 0;
-		sl->s[i].seen_next = 0;
 		for (j = 0; j < nut->stream_count; j++) {
 			sl->pts[i * nut->stream_count + j] = 0;
 			sl->eor[i * nut->stream_count + j] = 0;
@@ -908,6 +908,17 @@ static int smart_find_syncpoint(nut_context_t * nut, syncpoint_t * sp, int backw
 	fss->pos = fss->i = fss->begin = fss->seeked = 0;
 
 err_out:
+	if (err == -1) {
+		if (backwards && !fss->seeked) {
+			CHECK(find_syncpoint(nut, 0, sp, pos + 15 + 8));
+			if (!sp->seen_next) return 0;
+			seek_buf(nut->i, -nut->max_distance, SEEK_CUR);
+		}
+		fss->seeked = 1;
+		CHECK(find_syncpoint(nut, backwards, sp, 0));
+		fss->seeked = 0;
+		err = 0;
+	}
 	return err;
 }
 
@@ -1145,7 +1156,7 @@ static int binary_search_syncpoint(nut_context_t * nut, double time_pos, off_t *
 		}
 
 		CHECK(add_syncpoint(nut, s, NULL, NULL, timebases[s.pts%nut->timebase_count] < s.pts/nut->timebase_count ? NULL : &i));
-		fake_hi = HI.pos;
+		if (HI.pos < fake_hi) fake_hi = HI.pos;
 	}
 
 	fprintf(stderr, "\n[ (%d,%d) .. %d .. (%d,%d) ] => %d (%d seeks) %d\n",
