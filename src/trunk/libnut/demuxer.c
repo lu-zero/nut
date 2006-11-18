@@ -553,7 +553,7 @@ static int get_syncpoint(nut_context_t * nut) {
 			CHECK(add_syncpoint(nut, s, pts, eor, &i));
 			nut->syncpoints.s[i - 1].seen_next = 1;
 		}
-	} else if (!nut->syncpoints.len || nut->dopts.cache_syncpoints) {
+	} else if (nut->dopts.cache_syncpoints) { // we're seeking, we need syncpoint cache
 		int i;
 		CHECK(add_syncpoint(nut, s, NULL, NULL, &i));
 		if (!after_seek) nut->syncpoints.s[i - 1].seen_next = 1;
@@ -758,24 +758,54 @@ static void push_frame(nut_context_t * nut, nut_packet_t * pd) {
 static int find_main_headers(nut_context_t * nut) {
 	int err = 0;
 	uint64_t tmp;
-	off_t start = bctello(nut->i);
-	if (start < strlen(ID_STRING) + 1) {
-		int n = strlen(ID_STRING) + 1 - start;
-		ERROR(ready_read_buf(nut->i, n) < n, buf_eof(nut->i));
-		if (memcmp(get_buf(nut->i, start), ID_STRING + start, n)) nut->i->buf_ptr = nut->i->buf; // rewind
-		else fprintf(stderr, "NUT file_id checks out\n");
-	}
+	int read_data = 512*1024;
+
+	// don't waste cpu by running this check every damn time for EAGAIN
+	// Except for the first time, to not waste memory
+	if (!nut->seek_status && ready_read_buf(nut->i, read_data) < read_data && buf_eof(nut->i) == NUT_ERR_EAGAIN)
+		return NUT_ERR_EAGAIN;
 
 	CHECK(get_bytes(nut->i, 7, &tmp));
-	ERROR(ready_read_buf(nut->i, 4096) < 4096, buf_eof(nut->i));
-	while (bctello(nut->i) < 4096) {
+	read_data -= 7;
+	while (read_data--) {
+		ERROR(ready_read_buf(nut->i, 30) < 1, buf_eof(nut->i));
 		tmp = (tmp << 8) | *(nut->i->buf_ptr++);
 		if (tmp == MAIN_STARTCODE) break;
+		// give up if we reach a syncpoint, unless we're searching the file end
+		if (tmp == SYNCPOINT_STARTCODE && nut->seek_status != 18) break;
 	}
-	ERROR(tmp != MAIN_STARTCODE, NUT_ERR_NO_HEADERS);
-	nut->i->buf_ptr -= 8;
-	nut->last_headers = bctello(nut->i);
-	flush_buf(nut->i);
+	if (tmp == MAIN_STARTCODE) {
+		off_t pos = bctello(nut->i) - 8;
+		// load all headers into memory so they can be cleanly decoded without EAGAIN issues
+		// also check validity of the headers we just found
+		do {
+			if ((err = get_header(nut->i, NULL)) == NUT_ERR_EAGAIN) goto err_out;
+			if (err) { tmp = err = 0; break; } // bad
+
+			if ((err = get_bytes(nut->i, 8, &tmp)) == NUT_ERR_EAGAIN) goto err_out;
+			assert(!err || err == NUT_ERR_EOF); // the only possibilities
+			// EOF is a legal error here - when reading the last headers in file
+			if (err == NUT_ERR_EOF) { err = 0; tmp = SYNCPOINT_STARTCODE; }
+		} while (tmp != SYNCPOINT_STARTCODE);
+		if (tmp == SYNCPOINT_STARTCODE) { // success!
+			nut->last_headers = pos;
+			nut->i->buf_ptr = get_buf(nut->i, nut->last_headers);
+			flush_buf(nut->i);
+			return 0;
+		}
+	}
+
+	// failure
+	if (!nut->i->isc.seek) return NUT_ERR_NO_HEADERS;
+	if (!nut->seek_status) {
+		nut->seek_status = 18; // start search at 512kb
+		// but first, let's check EOF
+		seek_buf(nut->i, -512*1024, SEEK_END);
+		return find_main_headers(nut);
+	}
+	seek_buf(nut->i, 1 << ++nut->seek_status, SEEK_SET);
+	// evantually we'll hit EOF and give up
+	return find_main_headers(nut);
 err_out:
 	return err;
 }
@@ -841,8 +871,6 @@ err_out:
 
 int nut_read_next_packet(nut_context_t * nut, nut_packet_t * pd) {
 	int err = 0;
-	ERROR(!nut->last_headers, NUT_ERR_NO_HEADERS); // paranoia, old API
-
 	if (nut->seek_status) { // in error mode!
 		syncpoint_t s;
 		CHECK(find_syncpoint(nut, 0, &s, 0));
@@ -874,15 +902,10 @@ err_out:
 int nut_read_headers(nut_context_t * nut, nut_stream_header_t * s [], nut_info_packet_t * info []) {
 	int i, err = 0;
 	uint64_t tmp;
+	syncpoint_t sp;
 	if (!nut->sc) { // we already have headers, we were called just for index
 		if (!nut->last_headers) CHECK(find_main_headers(nut));
 
-		// load all headers into memory so they can be cleanly decoded without EAGAIN issues
-		// FIXME deal with errors and such
-		CHECK(skip_reserved_headers(nut, SYNCPOINT_STARTCODE));
-
-		// rewind to where the headers were found
-		nut->i->buf_ptr = get_buf(nut->i, nut->last_headers);
 		CHECK(get_headers(nut, !!info));
 
 		if (nut->dopts.read_index) { // check for index right after main headers
@@ -919,9 +942,17 @@ int nut_read_headers(nut_context_t * nut, nut_stream_header_t * s [], nut_info_p
 		nut->before_seek = 0;
 	}
 
-	if ((err = skip_reserved_headers(nut, SYNCPOINT_STARTCODE)) == NUT_ERR_EAGAIN) goto err_out;
-	nut->seek_status = !!err; // enter error mode if we're not at a syncpoint
-	err = 0;
+	// last step - find the first syncpoint in file
+	if (nut->last_headers > 1024 && !nut->seek_status) {
+		// the headers weren't found in begginning of file
+		assert(nut->i->isc.seek);
+		seek_buf(nut->i, 0, SEEK_SET);
+		nut->seek_status = 1;
+	}
+	CHECK(find_syncpoint(nut, 0, &sp, 0));
+	CHECK(add_syncpoint(nut, sp, NULL, NULL, NULL));
+	nut->i->buf_ptr = get_buf(nut->i, sp.pos); // rewind to the syncpoint, this is where playback starts...
+	nut->seek_status = 0;
 
 	SAFE_CALLOC(nut->alloc, *s, sizeof(nut_stream_header_t), nut->stream_count + 1);
 	for (i = 0; i < nut->stream_count; i++) (*s)[i] = nut->sc[i].sh;
@@ -958,14 +989,7 @@ static int find_basic_syncpoints(nut_context_t * nut) {
 	syncpoint_list_t * sl = &nut->syncpoints;
 	syncpoint_t s;
 
-	if (!sl->len) { // not even a single syncpoint, find first one.
-		// the first syncpoint put in the cache is always always the BEGIN syncpoint
-		if (!nut->seek_status) seek_buf(nut->i, 0, SEEK_SET);
-		nut->seek_status = 1;
-		CHECK(find_syncpoint(nut, 0, &s, 0));
-		CHECK(add_syncpoint(nut, s, NULL, NULL, NULL));
-		nut->seek_status = 0;
-	}
+	assert(sl->len); // it is impossible for the first syncpoint to not have been read
 
 	// find last syncpoint if it's not already found
 	if (!sl->s[sl->len-1].seen_next) {
@@ -1008,8 +1032,7 @@ static int binary_search_syncpoint(nut_context_t * nut, double time_pos, off_t *
 		goto err_out;
 	}
 	if (i == 0) { // there isn't any syncpoint smaller than requested
-		if (sl->s[0].pts) seek_buf(nut->i, sl->s[0].pos, SEEK_SET);
-		else seek_buf(nut->i, nut->last_headers, SEEK_SET); // seeking to "begginning of file", the headers
+		seek_buf(nut->i, sl->s[0].pos, SEEK_SET); // seek to first syncpoint
 		clear_dts_cache(nut);
 		nut->last_syncpoint = 0;
 		goto err_out;
