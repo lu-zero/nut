@@ -837,11 +837,21 @@ err_out:
 	return err;
 }
 
+static int smart_find_syncpoint(nut_context_t * nut, syncpoint_t * res) {
+	int err = 0;
+	if (!nut->dopts.cache_syncpoints & 1) return find_syncpoint(nut, 0, res, 0);
+
+	return find_syncpoint(nut, 0, res, 0);
+
+err_out:
+	return err;
+}
+
 int nut_read_next_packet(nut_context_t * nut, nut_packet_t * pd) {
 	int err = 0;
 	if (nut->seek_status) { // in error mode!
 		syncpoint_t s;
-		CHECK(find_syncpoint(nut, 0, &s, 0));
+		CHECK(smart_find_syncpoint(nut, &s));
 		nut->i->buf_ptr = get_buf(nut->i, s.pos); // go back to begginning of syncpoint
 		flush_buf(nut->i);
 		clear_dts_cache(nut);
@@ -956,7 +966,7 @@ int nut_read_headers(nut_context_t * nut, nut_stream_header_t * s [], nut_info_p
 		seek_buf(nut->i, 0, SEEK_SET);
 		nut->seek_status = 1;
 	}
-	CHECK(find_syncpoint(nut, 0, &sp, 0));
+	CHECK(smart_find_syncpoint(nut, &sp));
 	CHECK(add_syncpoint(nut, sp, NULL, NULL, NULL));
 	nut->i->buf_ptr = get_buf(nut->i, sp.pos); // rewind to the syncpoint, this is where playback starts...
 	nut->seek_status = 0;
@@ -1098,7 +1108,7 @@ static int linear_search_seek(nut_context_t * nut, int backwards, off_t start, o
 		nut->seek_status = 1;
 		// find closest syncpoint by linear search, SHOULD be one pointed by back_ptr...
 		buf_before = bctello(nut->i);
-		CHECK(find_syncpoint(nut, 0, &s, 0));
+		CHECK(smart_find_syncpoint(nut, &s));
 		clear_dts_cache(nut);
 		nut->last_syncpoint = 0; // last_key is invalid
 		seek_buf(nut->i, s.pos, SEEK_SET); // go back to syncpoint. This will not need a seek.
