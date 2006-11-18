@@ -759,8 +759,10 @@ static int find_main_headers(nut_context_t * nut) {
 	if (!nut->seek_status) {
 		nut->seek_status = 18; // start search at 512kb
 		// but first, let's check EOF
-		seek_buf(nut->i, -512*1024, SEEK_END);
-		return find_main_headers(nut);
+		if (!nut->last_syncpoint) { // unless we've checked it already
+			seek_buf(nut->i, -512*1024, SEEK_END);
+			return find_main_headers(nut);
+		}
 	}
 	seek_buf(nut->i, 1 << ++nut->seek_status, SEEK_SET);
 	// evantually we'll hit EOF and give up
