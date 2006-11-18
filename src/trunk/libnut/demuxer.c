@@ -977,17 +977,28 @@ int nut_read_frame(nut_context_t * nut, int * len, uint8_t * buf) {
 	return 0;
 }
 
+#define INTERPOLATE_WEIGHT (19./20)
+static off_t seek_interpolate(int max_distance, double time_pos, off_t lo, off_t hi, double lo_pd, double hi_pd) {
+	off_t guess;
+	if (hi - lo < max_distance) guess = lo + 16;
+	else { // linear interpolation
+		double a = (double)(hi - lo) / (hi_pd - lo_pd);
+		guess = lo + a * (time_pos - lo_pd);
+		guess = guess * INTERPOLATE_WEIGHT + (lo+hi)/2. * (1 - INTERPOLATE_WEIGHT);
+		if (hi - guess < max_distance) guess = hi - max_distance; //(lo + hi)/2;
+	}
+	if (guess < lo + 16) guess = lo + 16;
+	return guess;
+}
+
 static int binary_search_syncpoint(nut_context_t * nut, double time_pos, off_t * start, off_t * end, syncpoint_t * stopper) {
 	int i, err = 0;
 	syncpoint_t s;
-	off_t hi, lo;
-	uint64_t hip, lop;
+	off_t fake_hi;
 	uint64_t timebases[nut->timebase_count];
 	syncpoint_list_t * sl = &nut->syncpoints;
 	int a = 0;
-
 	for (i = 0; i < nut->timebase_count; i++) timebases[i] = (uint64_t)(time_pos / nut->tb[i].nom * nut->tb[i].den);
-
 	assert(sl->len); // it is impossible for the first syncpoint to not have been read
 
 	// find last syncpoint if it's not already found
@@ -1023,60 +1034,40 @@ static int binary_search_syncpoint(nut_context_t * nut, double time_pos, off_t *
 
 	i--;
 
-	lo = sl->s[i].pos;
-	lop = sl->s[i].pts;
-	hi = sl->s[i+1].pos;
-	hip = sl->s[i+1].pts;
-	if (nut->seek_status) hi = nut->seek_status;
+#define LO (sl->s[i])
+#define HI (sl->s[i+1])
+	fake_hi = nut->seek_status ? nut->seek_status : HI.pos;
 
-	while (!sl->s[i].seen_next) {
-		// start binary search between sl->s[i].pos (lo) to sl->s[i+1].pos (hi) ...
-		off_t guess;
-		int res, tmp;
-		double hi_pd = TO_DOUBLE_PTS(hip);
-		double lo_pd = TO_DOUBLE_PTS(lop);
+	while (!LO.seen_next) {
+		// start binary search between LO (sl->s[i].pos) to HI (sl->s[i+1].pos) ...
+		off_t guess = seek_interpolate(nut->max_distance*2, time_pos, LO.pos, fake_hi, TO_DOUBLE_PTS(LO.pts), TO_DOUBLE_PTS(HI.pts));
+
+		fprintf(stderr, "\n%d [ (%d,%.3f) .. (%d,%.3f) .. (%d,%.3f) ] ", i, (int)LO.pos, TO_DOUBLE_PTS(LO.pts), (int)guess, time_pos,
+		                                                                   (int)fake_hi, TO_DOUBLE_PTS(HI.pts));
 		a++;
-		if (hi - lo < nut->max_distance*2) guess = lo + 16;
-		else { // linear interpolation
-#define INTERPOLATE_WEIGHT (19./20)
-			double a = (double)(hi - lo) / (hi_pd - lo_pd);
-			guess = lo + a * (time_pos - lo_pd);
-			guess = guess * INTERPOLATE_WEIGHT + (lo+hi)/2 * (1 - INTERPOLATE_WEIGHT);
-			if (hi - guess < nut->max_distance*2) guess = hi - nut->max_distance*2; //(lo + hi)/2;
-		}
-		if (guess < lo + 8) guess = lo + 16;
-		fprintf(stderr, "\n%d [ (%d,%.3f) .. (%d,%.3f) .. (%d,%.3f) ] ", i, (int)lo, lo_pd, (int)guess, time_pos, (int)hi, hi_pd);
+
 		if (!nut->seek_status) seek_buf(nut->i, guess, SEEK_SET);
-		nut->seek_status = hi; // so we know where to continue off...
-		CHECK(find_syncpoint(nut, 0, &s, hi));
+		nut->seek_status = fake_hi; // so we know where to continue off...
+		CHECK(find_syncpoint(nut, 0, &s, fake_hi));
 		nut->seek_status = 0;
 
-		if (s.seen_next == 1 || s.pos >= hi) { // we got back to 'hi'
-			// either we scanned everything from lo to hi, or we keep trying
-			if (guess <= lo + 16) sl->s[i].seen_next = 1; // we are done!
-			else hi = guess;
+		if (s.seen_next == 1 || s.pos >= fake_hi) { // we got back to 'HI'
+			// either we scanned everything from LO to HI, or we keep trying
+			if (guess <= LO.pos + 16) LO.seen_next = 1; // we are done!
+			else fake_hi = guess;
 			continue;
 		}
 
-		res = (s.pts / nut->timebase_count > timebases[s.pts % nut->timebase_count]);
-		if (res) {
-			hi = s.pos;
-			hip = s.pts;
-		} else {
-			lo = s.pos;
-			lop = s.pts;
-		}
-		CHECK(add_syncpoint(nut, s, NULL, NULL, &tmp)); // unconditionally even without syncpoint cache
-		if (!res) i = tmp;
+		CHECK(add_syncpoint(nut, s, NULL, NULL, timebases[s.pts%nut->timebase_count] < s.pts/nut->timebase_count ? NULL : &i));
+		fake_hi = HI.pos;
 	}
 
 	fprintf(stderr, "\n[ (%d,%d) .. %d .. (%d,%d) ] => %d (%d seeks) %d\n",
-		(int)lo, (int)lop, (int)timebases[0], (int)hi, (int)hip, (int)(lo - sl->s[i].back_ptr), a, sl->s[i].back_ptr);
-	// at this point, s[i].pts < P < s[i+1].pts, and s[i].flag is set
-	// meaning, there are no more syncpoints between s[i] to s[i+1]
-	*start = sl->s[i].pos - sl->s[i].back_ptr;
-	*end = sl->s[i+1].pos;
-	*stopper = sl->s[i+1];
+	        (int)LO.pos, (int)LO.pts, (int)timebases[0], (int)fake_hi, (int)HI.pts, (int)(LO.pos - LO.back_ptr), a, LO.back_ptr);
+	// at this point, s[i].pts < P < s[i+1].pts, and s[i].seen_next is set
+	*start = LO.pos - LO.back_ptr;
+	*end = HI.pos;
+	*stopper = HI;
 err_out:
 	if (err == NUT_ERR_EAGAIN) nut->i->buf_ptr = nut->i->buf;
 	return err;
