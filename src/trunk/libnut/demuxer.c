@@ -726,7 +726,7 @@ static int find_main_headers(nut_context_t * nut) {
 		tmp = (tmp << 8) | *(nut->i->buf_ptr++);
 		if (tmp == MAIN_STARTCODE) break;
 		// give up if we reach a syncpoint, unless we're searching the file end
-		if (tmp == SYNCPOINT_STARTCODE && nut->seek_status != 18) break;
+		if (tmp == SYNCPOINT_STARTCODE && nut->seek_status != 18 && !nut->last_syncpoint) break;
 	}
 	if (tmp == MAIN_STARTCODE) {
 		off_t pos = bctello(nut->i) - 8;
@@ -741,7 +741,7 @@ static int find_main_headers(nut_context_t * nut) {
 			ERROR(err, err); // if get_bytes returns EAGAIN or a memory error, check for that
 		} while (tmp != SYNCPOINT_STARTCODE);
 		if (tmp == SYNCPOINT_STARTCODE) { // success!
-			nut->before_seek = nut->seek_status = 0;
+			nut->last_syncpoint = nut->before_seek = nut->seek_status = 0;
 			nut->last_headers = pos;
 			nut->i->buf_ptr = get_buf(nut->i, nut->last_headers);
 			flush_buf(nut->i);
@@ -766,6 +766,13 @@ static int find_main_headers(nut_context_t * nut) {
 	// evantually we'll hit EOF and give up
 	return find_main_headers(nut);
 err_out:
+	if (err == NUT_ERR_EOF && !nut->last_syncpoint && nut->seek_status) {
+		// last resort: after checking whole file, try again, this time don't stop at syncpoints.
+		nut->last_syncpoint = 1;
+		nut->before_seek = nut->seek_status = 0;
+		seek_buf(nut->i, 0, SEEK_SET);
+		return find_main_headers(nut);
+	}
 	return err;
 }
 
