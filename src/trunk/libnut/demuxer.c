@@ -302,15 +302,17 @@ err_out:
 	return err;
 }
 
-static int get_stream_header(nut_context_t * nut, int id) {
+static int get_stream_header(nut_context_t * nut) {
 	input_buffer_t itmp, * tmp = new_mem_buffer(&itmp);
-	stream_context_t * sc = &nut->sc[id];
+	stream_context_t * sc;
 	int i, err = 0;
 
 	CHECK(get_header(nut->i, tmp));
 
 	GET_V(tmp, i);
-	ERROR(i != id, NUT_ERR_BAD_STREAM_ORDER);
+	ERROR(i > nut->stream_count, NUT_ERR_BAD_STREAM_ORDER);
+	sc = &nut->sc[i];
+	if (sc->sh.type != -1) return 0; // we've already taken care of this stream
 
 	GET_V(tmp, sc->sh.type);
 	CHECK(get_vb(nut->alloc, tmp, &sc->sh.fourcc_len, &sc->sh.fourcc));
@@ -337,6 +339,9 @@ static int get_stream_header(nut_context_t * nut, int id) {
 			GET_V(tmp, sc->sh.channel_count); // ### is channel count staying in spec
 			break;
 	}
+
+	SAFE_CALLOC(nut->alloc, sc->pts_cache, sizeof(int64_t), sc->sh.decode_delay);
+	for (i = 0; i < sc->sh.decode_delay; i++) sc->pts_cache[i] = -1;
 err_out:
 	return err;
 }
@@ -400,59 +405,6 @@ static int get_info_header(nut_context_t * nut, nut_info_packet_t * info) {
 	}
 
 err_out:
-	return err;
-}
-
-static int skip_reserved_headers(nut_context_t * nut, uint64_t stop_startcode) {
-	int err;
-	uint64_t tmp;
-	CHECK(get_bytes(nut->i, 8, &tmp));
-	while (tmp != SYNCPOINT_STARTCODE && tmp != stop_startcode) {
-		ERROR(tmp >> 56 != 'N', NUT_ERR_NOT_FRAME_NOT_N);
-		CHECK(get_header(nut->i, NULL));
-		CHECK(get_bytes(nut->i, 8, &tmp));
-	}
-	nut->i->buf_ptr -= 8;
-err_out:
-	return err;
-}
-
-static int get_headers(nut_context_t * nut, int read_info) {
-	int i, err;
-	uint64_t tmp;
-
-	CHECK(get_bytes(nut->i, 8, &tmp));
-	assert(tmp == MAIN_STARTCODE); // sanity, get_headers should only be called in this situation
-	CHECK(get_main_header(nut));
-
-	SAFE_CALLOC(nut->alloc, nut->sc, sizeof(stream_context_t), nut->stream_count);
-
-	for (i = 0; i < nut->stream_count; i++) {
-		int j;
-		CHECK(skip_reserved_headers(nut, STREAM_STARTCODE));
-		CHECK(get_bytes(nut->i, 8, &tmp));
-		ERROR(tmp != STREAM_STARTCODE, NUT_ERR_NOSTREAM_STARTCODE);
-		CHECK(get_stream_header(nut, i));
-		SAFE_CALLOC(nut->alloc, nut->sc[i].pts_cache, sizeof(int64_t), nut->sc[i].sh.decode_delay);
-		for (j = 0; j < nut->sc[i].sh.decode_delay; j++) nut->sc[i].pts_cache[j] = -1;
-	}
-	if (read_info) {
-		// FIXME this skip_reserved_headers() will skip INDEX_STARTCODE
-		CHECK(skip_reserved_headers(nut, INFO_STARTCODE));
-		CHECK(get_bytes(nut->i, 8, &tmp));
-		while (tmp == INFO_STARTCODE) {
-			nut->info_count++;
-			SAFE_REALLOC(nut->alloc, nut->info, sizeof(nut_info_packet_t), nut->info_count + 1);
-			memset(&nut->info[nut->info_count - 1], 0, sizeof(nut_info_packet_t));
-			CHECK(get_info_header(nut, &nut->info[nut->info_count - 1]));
-			CHECK(skip_reserved_headers(nut, INFO_STARTCODE));
-			CHECK(get_bytes(nut->i, 8, &tmp));
-		}
-		nut->info[nut->info_count].count = -1;
-		nut->i->buf_ptr -= 8;
-	}
-err_out:
-	assert(err != NUT_ERR_EAGAIN); // EAGAIN is illegal here!!
 	return err;
 }
 
@@ -566,24 +518,20 @@ err_out:
 
 static int get_index(nut_context_t * nut) {
 	input_buffer_t itmp, * tmp = new_mem_buffer(&itmp);
-	int err = 0;
+	int i, err = 0;
+	uint64_t max_pts;
 	syncpoint_list_t * sl = &nut->syncpoints;
-	uint64_t x;
-	int i;
-
-	CHECK(get_bytes(nut->i, 8, &x));
-	ERROR(x != INDEX_STARTCODE, NUT_ERR_GENERAL_ERROR);
 
 	CHECK(get_header(nut->i, tmp));
 
-	GET_V(tmp, x);
+	GET_V(tmp, max_pts);
 	for (i = 0; i < nut->stream_count; i++) {
-		TO_PTS(max, x)
+		TO_PTS(max, max_pts)
 		nut->sc[i].sh.max_pts = convert_ts(max_p, nut->tb[max_t], TO_TB(i));
 	}
 
-	GET_V(tmp, x);
-	sl->alloc_len = sl->len = x;
+	GET_V(tmp, sl->len);
+	sl->alloc_len = sl->len;
 	SAFE_REALLOC(nut->alloc, sl->s, sizeof(syncpoint_t), sl->alloc_len);
 	SAFE_REALLOC(nut->alloc, sl->pts, nut->stream_count * sizeof(uint64_t), sl->alloc_len);
 	SAFE_REALLOC(nut->alloc, sl->eor, nut->stream_count * sizeof(uint64_t), sl->alloc_len);
@@ -602,6 +550,7 @@ static int get_index(nut_context_t * nut) {
 		uint64_t last_pts = 0; // all of pts[] array is off by one. using 0 for last pts is equivalent to -1 in spec.
 		for (j = 0; j < sl->len; ) {
 			int type, n, flag;
+			uint64_t x;
 			GET_V(tmp, x);
 			type = x & 1;
 			x >>= 1;
@@ -665,8 +614,12 @@ static int get_packet(nut_context_t * nut, nut_packet_t * pd, int * saw_syncpoin
 				CHECK(get_bytes(nut->i, 1, &tmp));
 				break;
 			case MAIN_STARTCODE:
+				while (tmp != SYNCPOINT_STARTCODE) {
+					ERROR(tmp >> 56 != 'N', NUT_ERR_NOT_FRAME_NOT_N);
+					CHECK(get_header(nut->i, NULL));
+					CHECK(get_bytes(nut->i, 8, &tmp));
+				}
 				nut->i->buf_ptr -= 8;
-				CHECK(skip_reserved_headers(nut, SYNCPOINT_STARTCODE));
 				return -1;
 			case INFO_STARTCODE: if (nut->dopts.new_info && !nut->seek_status) {
 				CHECK(get_info_header(nut, &info));
@@ -784,10 +737,9 @@ static int find_main_headers(nut_context_t * nut) {
 			if ((err = get_header(nut->i, NULL)) == NUT_ERR_EAGAIN) goto err_out;
 			if (err) { tmp = err = 0; break; } // bad
 
-			if ((err = get_bytes(nut->i, 8, &tmp)) == NUT_ERR_EAGAIN) goto err_out;
-			assert(!err || err == NUT_ERR_EOF); // the only possibilities
 			// EOF is a legal error here - when reading the last headers in file
-			if (err == NUT_ERR_EOF) { err = 0; tmp = SYNCPOINT_STARTCODE; }
+			if ((err = get_bytes(nut->i, 8, &tmp)) == NUT_ERR_EOF) { err = 0; tmp = SYNCPOINT_STARTCODE; }
+			ERROR(err, err); // if get_bytes returns EAGAIN or a memory error, check for that
 		} while (tmp != SYNCPOINT_STARTCODE);
 		if (tmp == SYNCPOINT_STARTCODE) { // success!
 			nut->last_headers = pos;
@@ -901,25 +853,58 @@ err_out:
 	return err;
 }
 
-int nut_read_headers(nut_context_t * nut, nut_stream_header_t * s [], nut_info_packet_t * info []) {
+static int get_headers(nut_context_t * nut, int read_info) {
 	int i, err = 0;
 	uint64_t tmp;
-	syncpoint_t sp;
-	if (!nut->sc) { // we already have headers, we were called just for index
-		if (!nut->last_headers) CHECK(find_main_headers(nut));
 
-		CHECK(get_headers(nut, !!info));
+	CHECK(get_bytes(nut->i, 8, &tmp));
+	assert(tmp == MAIN_STARTCODE); // sanity, get_headers should only be called in this situation
+	CHECK(get_main_header(nut));
 
-		if (nut->dopts.read_index) { // check for index right after main headers
-			CHECK(skip_reserved_headers(nut, INDEX_STARTCODE));
-			CHECK(get_bytes(nut->i, 8, &tmp));
-			nut->i->buf_ptr -= 8;
-			if (tmp == INDEX_STARTCODE) nut->seek_status = 2; // signals to not seek to find index
-			flush_buf(nut->i);
+	SAFE_CALLOC(nut->alloc, nut->sc, sizeof(stream_context_t), nut->stream_count);
+	for (i = 0; i < nut->stream_count; i++) nut->sc[i].sh.type = -1;
+
+	CHECK(get_bytes(nut->i, 8, &tmp));
+
+	while (tmp != SYNCPOINT_STARTCODE) {
+		ERROR(tmp >> 56 != 'N', NUT_ERR_NOT_FRAME_NOT_N);
+		if (tmp == STREAM_STARTCODE) {
+			CHECK(get_stream_header(nut));
+		} else if (tmp == INFO_STARTCODE && read_info) {
+			SAFE_REALLOC(nut->alloc, nut->info, sizeof(nut_info_packet_t), ++nut->info_count + 1);
+			memset(&nut->info[nut->info_count - 1], 0, sizeof(nut_info_packet_t));
+			CHECK(get_info_header(nut, &nut->info[nut->info_count - 1]));
+			nut->info[nut->info_count].count = -1;
+		} else if (tmp == INDEX_STARTCODE && nut->dopts.read_index) {
+			CHECK(get_index(nut)); // usually you don't care about get_index() errors, but nothing except a memory error can happen here
+		} else {
+			CHECK(get_header(nut->i, NULL));
 		}
+		// EOF is a legal error here - when reading the last headers in file
+		if ((err = get_bytes(nut->i, 8, &tmp)) == NUT_ERR_EOF) { tmp = err = 0; break; }
+		ERROR(err, err); // it's just barely possible for get_bytes to return a memory error, check for that
 	}
+	if (tmp == SYNCPOINT_STARTCODE) nut->i->buf_ptr -= 8;
 
-	if (nut->dopts.read_index & 1) { // we already have index, we were called just for the final syncpoint search
+	for (i = 0; i < nut->stream_count; i++) ERROR(nut->sc[i].sh.type == -1, NUT_ERR_NOSTREAM_STARTCODE);
+
+err_out:
+	assert(err != NUT_ERR_EAGAIN); // EAGAIN is illegal here!!
+	return err;
+}
+
+int nut_read_headers(nut_context_t * nut, nut_stream_header_t * s [], nut_info_packet_t * info []) {
+	int i, err = 0;
+	syncpoint_t sp;
+
+	// step 1 - find headers and load to memory
+	if (!nut->last_headers) CHECK(find_main_headers(nut));
+
+	// step 2 - parse headers
+	if (!nut->sc) CHECK(get_headers(nut, !!info));
+
+	// step 3 - search for index if necessary
+	if (nut->dopts.read_index & 1) {
 		uint64_t idx_ptr;
 		if (nut->seek_status <= 1) {
 			if (nut->seek_status == 0) {
@@ -934,17 +919,22 @@ int nut_read_headers(nut_context_t * nut, nut_stream_header_t * s [], nut_info_p
 		if (nut->dopts.read_index) {
 			if (nut->seek_status == 1) seek_buf(nut->i, idx_ptr, SEEK_SET);
 			nut->seek_status = 2;
-			// only EAGAIN from get_index is interesting
-			if ((err = get_index(nut)) == NUT_ERR_EAGAIN) goto err_out;
+			CHECK(get_bytes(nut->i, 8, &idx_ptr));
+			if (idx_ptr != INDEX_STARTCODE) err = 1;
+			else {
+				// only EAGAIN from get_index is interesting
+				if ((err = get_index(nut)) == NUT_ERR_EAGAIN) goto err_out;
+			}
 			if (err) nut->dopts.read_index = 0;
 			else nut->dopts.read_index = 2;
 			err = 0;
 		}
-		if (nut->before_seek) seek_buf(nut->i, nut->before_seek, SEEK_SET);
+		if (nut->before_seek && nut->last_headers <= 1024) seek_buf(nut->i, nut->before_seek, SEEK_SET);
 		nut->before_seek = 0;
+		nut->seek_status = 0;
 	}
 
-	// last step - find the first syncpoint in file
+	// step 4 - find the first syncpoint in file
 	if (nut->last_headers > 1024 && !nut->seek_status) {
 		// the headers weren't found in begginning of file
 		assert(nut->i->isc.seek);
