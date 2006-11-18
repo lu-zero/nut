@@ -714,17 +714,15 @@ static void push_frame(nut_context_t * nut, nut_packet_t * pd) {
 static int find_main_headers(nut_context_t * nut) {
 	int err = 0;
 	uint64_t tmp;
-	int read_data = 512*1024;
+	int len = PREALLOC_SIZE;
+	int read_data = ready_read_buf(nut->i, len);
 
 	// don't waste cpu by running this check every damn time for EAGAIN
-	// Except for the first time, to not waste memory
-	if (!nut->seek_status && ready_read_buf(nut->i, read_data) < read_data && buf_eof(nut->i) == NUT_ERR_EAGAIN)
-		return NUT_ERR_EAGAIN;
+	if (read_data < len && buf_eof(nut->i) != NUT_ERR_EOF) return buf_eof(nut->i);
 
-	CHECK(get_bytes(nut->i, 7, &tmp));
-	read_data -= 7;
-	while (read_data--) {
-		ERROR(ready_read_buf(nut->i, 30) < 1, buf_eof(nut->i));
+	CHECK(get_bytes(nut->i, 7, &tmp)); // true EOF will fail here
+	len = (read_data -= 7);
+	while (len--) {
 		tmp = (tmp << 8) | *(nut->i->buf_ptr++);
 		if (tmp == MAIN_STARTCODE) break;
 		// give up if we reach a syncpoint, unless we're searching the file end
@@ -743,6 +741,7 @@ static int find_main_headers(nut_context_t * nut) {
 			ERROR(err, err); // if get_bytes returns EAGAIN or a memory error, check for that
 		} while (tmp != SYNCPOINT_STARTCODE);
 		if (tmp == SYNCPOINT_STARTCODE) { // success!
+			nut->before_seek = nut->seek_status = 0;
 			nut->last_headers = pos;
 			nut->i->buf_ptr = get_buf(nut->i, nut->last_headers);
 			flush_buf(nut->i);
@@ -751,6 +750,11 @@ static int find_main_headers(nut_context_t * nut) {
 	}
 
 	// failure
+	if (len == -1 && (nut->before_seek += read_data) < 512*1024) {
+		nut->i->buf_ptr -= 7; // rewind 7 bytes, try again
+		flush_buf(nut->i);
+		return find_main_headers(nut);
+	} else nut->before_seek = 0;
 	if (!nut->i->isc.seek) return NUT_ERR_NO_HEADERS;
 	if (!nut->seek_status) {
 		nut->seek_status = 18; // start search at 512kb
