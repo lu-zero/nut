@@ -1240,8 +1240,8 @@ err_out:
 		}
 		nut->seek_status = 0;
 	} else if (buf_before) {
-		nut->i->buf_ptr -= bctello(nut->i) - buf_before; // rewind
-		if (nut->i->buf_ptr < nut->i->buf) nut->i->buf_ptr = nut->i->buf; // special case, possible with find_syncpoint
+		if (buf_before >= nut->i->file_pos) nut->i->buf_ptr = get_buf(nut->i, buf_before); // rewind
+		else nut->i->buf_ptr = nut->i->buf; // special case, possible with smart_/find_syncpoint
 	}
 	return err;
 }
