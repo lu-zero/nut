@@ -837,20 +837,20 @@ err_out:
 	return err;
 }
 
-static int smart_find_syncpoint(nut_context_t * nut, syncpoint_t * sp) {
+static int smart_find_syncpoint(nut_context_t * nut, syncpoint_t * sp, int backwards) {
 	struct find_syncpoint_state_s * fss = &nut->find_syncpoint_state;
 	syncpoint_list_t * sl = &nut->syncpoints;
 	int i = fss->i, err = 0;
-	off_t pos = i ? fss->pos : bctello(nut->i);
+	off_t pos = fss->i ? fss->pos : bctello(nut->i);
 
 	if (!(nut->dopts.cache_syncpoints & 1) || !sl->len) return find_syncpoint(nut, 0, sp, 0);
 
 	if (!i) {
 		for (i = 0; i < sl->len; i++) if (sl->s[i].pos+15 > pos) break;
-		if (i && !sl->s[i-1].seen_next) return find_syncpoint(nut, 0, sp, 0);
+		if (i == sl->len || (i && !sl->s[i-1].seen_next)) return find_syncpoint(nut, 0, sp, 0);
 
 		seek_buf(nut->i, sl->s[i].pos, SEEK_SET);
-	}
+	} else i--;
 	fss->i = i + 1;
 	fss->pos = pos;
 
@@ -860,23 +860,32 @@ static int smart_find_syncpoint(nut_context_t * nut, syncpoint_t * sp) {
 	if (sp->seen_next) { // failure
 		int j, begin = fss->begin ? fss->begin - 1 : i;
 		fss->begin = begin + 1;
-		while (sl->s[i].seen_next) {
-			if (!fss->seeked) seek_buf(nut->i, sl->s[i+1].pos, SEEK_SET);
+		while (i < backwards*2 || sl->s[i-backwards*2].seen_next) {
+			int o = backwards ? -1 : +1;
+			if (!fss->seeked) seek_buf(nut->i, sl->s[i+o].pos, SEEK_SET);
 			fss->seeked = 1;
-			CHECK(find_syncpoint(nut, 0, sp, sl->s[i+1].pos + 15 + 8));
+			CHECK(find_syncpoint(nut, 0, sp, sl->s[i+o].pos + 15 + 8));
 			fss->seeked = 0;
-			fss->i = ++i + 1;
-			if (!sp->seen_next) break;
+			fss->i = (i+=o) + 1;
+			if (!sp->seen_next || !i) break;
 		}
 		if (sp->seen_next) { // still nothing! let's linear search the whole area
-			if (!fss->seeked) seek_buf(nut->i, begin > 0 ? sl->s[begin-1].pos+15 : 0, SEEK_SET);
+			if (!fss->seeked) {
+				if (backwards) seek_buf(nut->i, sl->s[begin].pos - nut->max_distance, SEEK_SET);
+				else seek_buf(nut->i, begin > 0 ? sl->s[begin-1].pos+15 : 0, SEEK_SET);
+			}
 			fss->seeked = 1;
-			CHECK(find_syncpoint(nut, 0, sp, 0));
+			CHECK(find_syncpoint(nut, backwards, sp, 0));
 			fss->seeked = 0;
 		}
 		CHECK(add_syncpoint(nut, *sp, NULL, NULL, &i));
-		assert(i >= begin);
+		assert((i >= begin && !backwards) || (i <= begin && backwards));
 
+		if (backwards) { // swap vars
+			int tmp = begin;
+			begin = i + 1;
+			i = tmp + 1;
+		}
 		sl->s[i].pts_valid = 0;
 		sl->s[i].seen_next = 0;
 		for (j = 0; j < nut->stream_count; j++) {
@@ -890,10 +899,10 @@ static int smart_find_syncpoint(nut_context_t * nut, syncpoint_t * sp) {
 
 		sl->len -= i-begin;
 
-		if (sp->pos < pos) { // wow, how silly!
+		if (sp->pos < pos && !backwards) { // wow, how silly!
 			fss->pos = fss->i = fss->begin = fss->seeked = 0;
 			seek_buf(nut->i, pos, SEEK_SET);
-			return smart_find_syncpoint(nut, sp);
+			return smart_find_syncpoint(nut, sp, backwards);
 		}
 	}
 	fss->pos = fss->i = fss->begin = fss->seeked = 0;
@@ -906,7 +915,7 @@ int nut_read_next_packet(nut_context_t * nut, nut_packet_t * pd) {
 	int err = 0;
 	if (nut->seek_status) { // in error mode!
 		syncpoint_t s;
-		CHECK(smart_find_syncpoint(nut, &s));
+		CHECK(smart_find_syncpoint(nut, &s, 0));
 		nut->i->buf_ptr = get_buf(nut->i, s.pos); // go back to begginning of syncpoint
 		flush_buf(nut->i);
 		clear_dts_cache(nut);
@@ -918,8 +927,8 @@ int nut_read_next_packet(nut_context_t * nut, nut_packet_t * pd) {
 	if (err > NUT_ERR_OUT_OF_MEM) { // some error occured!
 		fprintf(stderr, "NUT: %s\n", nut_error(err));
 		// rewind as much as possible
-		if (nut->i->isc.seek) seek_buf(nut->i, nut->last_syncpoint + 8, SEEK_SET);
-		else nut->i->buf_ptr = nut->i->buf;
+		if (nut->i->isc.seek) seek_buf(nut->i, nut->last_syncpoint + 16, SEEK_SET);
+		else nut->i->buf_ptr = nut->i->buf + MIN(16, nut->i->read_len);
 
 		nut->seek_status = 1; // enter error mode
 		return nut_read_next_packet(nut, pd);
@@ -1021,7 +1030,7 @@ int nut_read_headers(nut_context_t * nut, nut_stream_header_t * s [], nut_info_p
 		seek_buf(nut->i, 0, SEEK_SET);
 		nut->seek_status = 1;
 	}
-	CHECK(smart_find_syncpoint(nut, &sp));
+	CHECK(smart_find_syncpoint(nut, &sp, 0));
 	CHECK(add_syncpoint(nut, sp, NULL, NULL, NULL));
 	nut->i->buf_ptr = get_buf(nut->i, sp.pos); // rewind to the syncpoint, this is where playback starts...
 	nut->seek_status = 0;
@@ -1162,8 +1171,7 @@ static int linear_search_seek(nut_context_t * nut, int backwards, off_t start, o
 		if (!nut->seek_status) seek_buf(nut->i, start, SEEK_SET);
 		nut->seek_status = 1;
 		// find closest syncpoint by linear search, SHOULD be one pointed by back_ptr...
-		buf_before = bctello(nut->i);
-		CHECK(smart_find_syncpoint(nut, &s));
+		CHECK(smart_find_syncpoint(nut, &s, !!end));
 		clear_dts_cache(nut);
 		nut->last_syncpoint = 0; // last_key is invalid
 		seek_buf(nut->i, s.pos, SEEK_SET); // go back to syncpoint. This will not need a seek.
@@ -1294,10 +1302,8 @@ err_out:
 			clear_dts_cache(nut);
 		}
 		nut->seek_status = 0;
-	} else if (buf_before) {
-		if (buf_before >= nut->i->file_pos) nut->i->buf_ptr = get_buf(nut->i, buf_before); // rewind
-		else nut->i->buf_ptr = nut->i->buf; // special case, possible with smart_/find_syncpoint
-	}
+	} else if (buf_before) nut->i->buf_ptr = get_buf(nut->i, buf_before); // rewind smart
+	else nut->i->buf_ptr = nut->i->buf; // just rewind
 	return err;
 }
 
