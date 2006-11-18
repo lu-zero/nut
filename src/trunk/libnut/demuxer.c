@@ -1273,7 +1273,7 @@ int nut_seek(nut_context_t * nut, double time_pos, int flags, const int * active
 		time_pos = nut->seek_time_pos;
 	}
 
-	if (nut->syncpoints.len) {
+	if (nut->syncpoints.s[nut->syncpoints.len-1].seen_next) {
 		syncpoint_list_t * sl = &nut->syncpoints;
 		int i;
 		int sync[nut->stream_count];
@@ -1304,7 +1304,7 @@ int nut_seek(nut_context_t * nut, double time_pos, int flags, const int * active
 		}
 		if (good_sync == -2) good_sync = backup; // all active streams are eor, just pick a random point, sort of.
 
-		if (sl->s[sl->len-1].seen_next && last_sync && good_sync >= 0) {
+		if (last_sync && good_sync >= 0) {
 			for (i = good_sync; i <= last_sync; i++) if (!sl->s[i].pts_valid) break;
 			if (i != last_sync+1 && good_sync <= last_sync) good_sync = -1;
 		} else good_sync = -1;
