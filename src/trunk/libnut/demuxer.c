@@ -863,15 +863,17 @@ static int smart_find_syncpoint(nut_context_t * nut, syncpoint_t * sp, int backw
 
 	if (sp->seen_next) { // failure
 		int begin = fss->begin ? fss->begin - 1 : i;
+		int o = backwards ? -1 : 1;
 		fss->begin = begin + 1;
-		while (i < backwards*2 || sl->s[i-backwards*2].seen_next) {
-			int o = backwards ? -1 : +1;
+		while (sp->seen_next) {
+			if ((unsigned)(i+o) >= sl->len) break; // bounds check
+			if (i > o && !sl->s[i+o-1].seen_next) break; // no seen_next, nothing to check
+			if (stop && sl->s[i+o].pos > stop) break; // passed stop condition
 			if (!fss->seeked) seek_buf(nut->i, sl->s[i+o].pos, SEEK_SET);
 			fss->seeked = 1;
 			CHECK(find_syncpoint(nut, sp, 0, sl->s[i+o].pos + 15 + 8));
 			fss->seeked = 0;
 			fss->i = (i+=o) + 1;
-			if (!sp->seen_next || !i || (stop && sl->s[i+o].pos > stop)) break;
 		}
 		if (sp->seen_next) { // still nothing! let's linear search the whole area
 			if (!fss->seeked) {
