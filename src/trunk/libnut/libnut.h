@@ -191,7 +191,11 @@ int nut_read_next_packet(nut_context_t * nut, nut_packet_t * pd);
 /** Just reads the frame DATA. all it's header has already been
 read by nut_read_next_packet. buf must be allocated and big enough.
 len will be non-zero in the case of EAGAIN or EOF
-len is the amount of bytes that are LEFT, not the ones read. */
+len is the amount of bytes that are LEFT, not the ones read.
+example:
+len = pd.len;
+while((err = nut_read_frame(nut, &len, buf+pd.len-len)) == NUT_ERR_EAGAIN);
+*/
 int nut_read_frame(nut_context_t * nut, int * len, uint8_t * buf);
 
 /** "Can't find start code" "invalid frame code" "bad checksum" "bleh" */
