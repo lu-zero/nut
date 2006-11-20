@@ -853,7 +853,7 @@ static int smart_find_syncpoint(nut_context_t * nut, syncpoint_t * sp, int backw
 		ERROR(i == sl->len || (i && !sl->s[i-1].seen_next), -1);
 
 		// trust the caller if it gave more percise syncpoint location
-		if (pos < sl->s[i].pos) seek_buf(nut->i, sl->s[i].pos, SEEK_SET);
+		if (ABS(pos - sl->s[i].pos) > 15) seek_buf(nut->i, sl->s[i].pos, SEEK_SET);
 	}
 	fss->i = i + 1;
 	fss->pos = pos;
