@@ -1035,7 +1035,7 @@ int nut_read_headers(nut_context_t * nut, nut_stream_header_t * s [], nut_info_p
 	}
 
 	// step 4 - find the first syncpoint in file
-	if (nut->last_headers > 1024 && !nut->seek_status) {
+	if (nut->last_headers > 1024 && !nut->seek_status && nut->i->isc.seek) {
 		// the headers weren't found in begginning of file
 		assert(nut->i->isc.seek);
 		seek_buf(nut->i, 0, SEEK_SET);
