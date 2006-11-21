@@ -53,7 +53,7 @@ typedef struct {
 	int fixed_fps;            ///< Flag if stream is fixed fps or not
 	int decode_delay;         ///< Decode delay of codec in this stream
 	int codec_specific_len;   ///< Length of codec specific data
-	uint8_t * codec_specific; ///< Codec specific data. May be NULL is #codec_specific_len is zero.
+	uint8_t * codec_specific; ///< Codec specific data. May be NULL if #codec_specific_len is zero.
 	uint64_t max_pts;         ///< Only used in demuxer. If non-zero, then it is the highest value in stream
 
 	/// \name Video
