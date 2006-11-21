@@ -75,12 +75,12 @@ typedef struct {
 
 /// Single info field struct
 typedef struct {
-	char type[7];      ///< NULL-terminated string. "v"=integer value, "s"=signed integer value, "r"=fraction rational, "t"=timestamp
+	char type[7];      ///< NULL-terminated string
 	char name[65];     ///< NULL-terminated string. Name of info field
-	int64_t val;       ///< used in types "v", "s", "r", "t", and is the length of #data in bytes in other types.
-	int den;           ///< used in type=="r", #val is the numerator.
-	nut_timebase_t tb; ///< used in type=="t". This is the timebase, and #val is the timestamp in this timebase.
-	uint8_t * data;    ///< Value of binary data. \b Must be NULL if carries no data. \note This data is not NULL terminated!
+	int64_t val;       ///< Meaning of value defined by #type
+	int den;           ///< Used if #type is "r". #val is the numerator
+	nut_timebase_t tb; ///< Used if #type is "t"
+	uint8_t * data;    ///< Used if #type is non-numeric
 } nut_info_field_t;
 
 /// Single info packet struct
@@ -266,6 +266,59 @@ int nut_seek(nut_context_t * nut, double time_pos, int flags, const int * active
 
 /*! \struct nut_timebase_t
  * The example shown is if fps is 23.976 (24000/1001). Timebase is the opposite of fps.
+ */
+
+/*! \struct nut_info_field_t
+ * \par Example:
+ * \code
+ * char * text = "The Foobar Adventure";
+ * nut_info_field_t title = {
+ * 	.type = "UTF-8",
+ * 	.name = "Title",
+ * 	.val = strlen(text),
+ * 	.data = text,
+ * };
+ *
+ * nut_info_field_t rational = {
+ * 	.type = "r",
+ * 	.name = "X-Value close to Pi",
+ * 	.val = 355,
+ * 	.den = 113,
+ * };
+ * \endcode
+ */
+
+/*! \var char nut_info_field_t::type[7]
+ * Type of field value
+ * - "v" - Integer value
+ * - "s" - Signed integer value
+ * - "r" - Fraction rational
+ * - "t" - Timestamp
+ * - "UTF-8" - UTF-8 coded string
+ * - Other - Binary data
+ */
+
+/*! \var int64_t nut_info_field_t::val
+ * - "v" - Integer value
+ * - "s" - Integer value
+ * - "r" - Numerator of fraction
+ * - "t" - Integer timestamp in timebase #tb
+ * - Other: Length of #data in bytes
+ *
+ * In the case of UTF-8 string, length of #data \b must \b not contain the
+ * terminating NUL (U+0000).
+ */
+
+/*! \var nut_timebase_t nut_info_field_t::tb
+ * In the case of muxer, values of #tb \b must be identical to the
+ * timebase of one of the streams.
+ */
+
+/*! \var uint8_t * nut_info_field_t::data
+ * Even in the case of UTF-8 string, this data is \b not NULL terminated.
+ *
+ * For muxer, this value \b must be NULL if info field carries no binary
+ * data.
  */
 
 /*!
