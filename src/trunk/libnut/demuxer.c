@@ -626,7 +626,7 @@ static int get_packet(nut_context_t * nut, nut_packet_t * pd, int * saw_syncpoin
 				return -1;
 			case INFO_STARTCODE: if (nut->dopts.new_info && !nut->seek_status) {
 				CHECK(get_info_header(nut, &info));
-				nut->dopts.new_info(nut->dopts.priv, &info);
+				nut->dopts.new_info(nut->dopts.info_priv, &info);
 				return -1;
 			} // else - fall through!
 			default:
