@@ -85,9 +85,9 @@ typedef struct {
 
 /// Single info packet struct
 typedef struct {
-	int count;                 ///< -1 terminates the nut_info_packet_t array
+	int count;                 ///< Indicates how many info fields are provided in #fields
 	int stream_id_plus1;       ///< Zero indicates non-stream-specific info packet
-	int chapter_id;            ///< Zero indicates info packet applies to complete file. Positive values are real, non-overlapping chapters. Negative values may overlap
+	int chapter_id;            ///< Indicates which subsection of file this info packet applies to
 	nut_timebase_t chapter_tb; ///< Timebase of #chapter_start and #chapter_len
 	uint64_t chapter_start;    ///< Start of chapter or complete file
 	uint64_t chapter_len;      ///< Length of chapter or complete file
@@ -319,6 +319,29 @@ int nut_seek(nut_context_t * nut, double time_pos, int flags, const int * active
  *
  * For muxer, this value \b must be NULL if info field carries no binary
  * data.
+ */
+
+/*! \var int nut_info_packet_t::count
+ * For arrays of #nut_info_packet_t, the packet with a #count of \a -1
+ * terminates the array.
+ */
+
+/*! \var nut_info_packet_t::chapter_id
+ * Value of 0 indicates info packet applies to complete file.
+ *
+ * Positive values are real chapters. Real chapters must not overlap. The
+ * #chapter_id of a real chapter must not be higher than the total amount
+ * of real chapters in the file.
+ *
+ * Negative values indicate a subsection of file and may overlap.
+ *
+ * If #chapter_id is 0, #chapter_start and #chapter_len provide length of
+ * entire file.
+ */
+
+/*! \var nut_info_packet_t::chapter_tb
+ * In muxing, values #chapter_tb \b must be identical to the timebase of
+ * one of the streams
  */
 
 /*!
