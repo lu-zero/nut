@@ -246,10 +246,14 @@ int nut_seek(nut_context_t * nut, double time_pos, int flags, const int * active
  *
  * libnut source code can be downloaded from svn://svn.mplayerhq.hu/nut
  *
- * Copyright of this library is MIT/X license. For more details, see the
- * file COPYING in the repository.
+ * Copyright of this library is MIT/X license. For more details, see
+ * \ref License.
  *
  * For more information on the format, please visit http://www.nut.hu
+ */
+
+/*! \page License
+ * \verbinclude COPYING
  */
 
 /*! \struct nut_alloc_t
