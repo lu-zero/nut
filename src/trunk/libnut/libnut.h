@@ -574,7 +574,7 @@ int nut_seek(nut_context_t * nut, double time_pos, int flags, const int * active
  *                       May be NULL - indicates all streams are active.
  *
  * Flag bitfield options:
- * - 1 RELATIVE: If set, time_pos is relative to current position,
+ * - 1 RELATIVE: If set, \a time_pos is relative to current position,
  *               otherwise it is absoloute.
  * - 2 FORWARD:  If set, the seek should find the nearest keyframe
  *               after the target position. If unset, the nearest
