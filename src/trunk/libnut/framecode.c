@@ -82,8 +82,10 @@ void nut_framecode_generate(const nut_stream_header_t s[], nut_frame_table_input
 	}
 
 	for (i = 0; i < stream_count; i++) if (consume[i]) tot_con++;
+
+	if (tot_con) tot_con = (254 - (n+m))/tot_con; // 256 - 'N' - 0xFF invalids
 	if (tot_con) for (i = 0; i < stream_count; i++) {
-		int al = (254 - (n+m))/tot_con; // 256 - 'N' - 0xFF invalids
+		int al = tot_con;
 		switch (consume[i]) {
 		case e_consume_none:
 			break;
