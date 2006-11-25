@@ -28,23 +28,20 @@ enum nut_frame_flags_t {
 
 typedef struct nut_context_s nut_context_t;
 
-/// \ingroup demuxer muxer
-/// @{
-
-/// Memory allocation function pointers
+/// Memory allocation function pointers \ingroup demuxer muxer
 typedef struct {
 	void * (*malloc)(size_t size);             ///< Memory allocation malloc function pointer
 	void * (*realloc)(void *ptr, size_t size); ///< Memory allocation realloc function pointer
 	void (*free)(void *ptr);                   ///< Memory allocation free function pointer
 } nut_alloc_t;
 
-/// Timebase struct
+/// Timebase struct \ingroup demuxer muxer
 typedef struct {
 	int nom; ///< Example: 1001
 	int den; ///< Example: 24000
 } nut_timebase_t;
 
-/// Stream header struct
+/// Stream header struct \ingroup demuxer muxer
 typedef struct {
 	int type;                 ///< Possible values are enum ::nut_stream_class_t. Value of -1 terminates a stream header array
 	int fourcc_len;           ///< Length of fourcc
@@ -63,17 +60,18 @@ typedef struct {
 	int sample_width;         ///< Ratio to stretch the video. May only be zero if #sample_height is zero
 	int sample_height;        ///< Ratio to stretch the video. May only be zero if #sample_width is zero
 	int colorspace_type;
-	/// @}
 
+	/// @}
 	/// \name audio
 	/// Only used is type is #NUT_AUDIO_CLASS @{
 	int samplerate_nom;       ///< Sample rate of audio. Example: 44100
 	int samplerate_denom;     ///< Sample rate denominator of audio. Example: 1
 	int channel_count;        ///< Amount of audio channels
+
 	/// @}
 } nut_stream_header_t;
 
-/// Single info field struct
+/// Single info field struct \ingroup demuxer muxer
 typedef struct {
 	char type[7];      ///< NULL-terminated string
 	char name[65];     ///< NULL-terminated string. Name of info field
@@ -83,7 +81,7 @@ typedef struct {
 	uint8_t * data;    ///< Used if #type is non-numeric
 } nut_info_field_t;
 
-/// Single info packet struct
+/// Single info packet struct \ingroup demuxer muxer
 typedef struct {
 	int count;                 ///< Indicates how many info fields are provided in #fields
 	int stream_id_plus1;       ///< Zero indicates non-stream-specific info packet
@@ -94,7 +92,7 @@ typedef struct {
 	nut_info_field_t * fields; ///< Info fields, has #count elements
 } nut_info_packet_t;
 
-/// Single frame packet struct
+/// Single frame packet struct \ingroup demuxer muxer
 typedef struct {
 	int len;          ///< Length of frame in bytes. \b Must be zero if #NUT_FLAG_EOR is set.
 	int stream;       ///< Stream index of frame
@@ -102,7 +100,6 @@ typedef struct {
 	int flags;        ///< Frame flags from #nut_frame_flags_t
 	int64_t next_pts; ///< Only used in muxer. Only necessary if nut_write_frame_reorder() is used.
 } nut_packet_t;
-/// @}
 
 
 
@@ -303,7 +300,7 @@ int nut_seek(nut_context_t * nut, double time_pos, int flags, const int * active
  * - "s" - Integer value
  * - "r" - Numerator of fraction
  * - "t" - Integer timestamp in timebase #tb
- * - Other: Length of #data in bytes
+ * - Other - Length of #data in bytes
  *
  * In the case of UTF-8 string, length of #data \b must \b not contain the
  * terminating NUL (U+0000).
