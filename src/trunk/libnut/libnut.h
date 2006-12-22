@@ -61,14 +61,11 @@ typedef struct {
 	int sample_height;        ///< Ratio to stretch the video. May only be zero if #sample_width is zero
 	int colorspace_type;
 
-	/// @}
 	/// \name audio
 	/// Only used is type is #NUT_AUDIO_CLASS @{
 	int samplerate_nom;       ///< Sample rate of audio. Example: 44100
 	int samplerate_denom;     ///< Sample rate denominator of audio. Example: 1
 	int channel_count;        ///< Amount of audio channels
-
-	/// @}
 } nut_stream_header_t;
 
 /// Single info field struct \ingroup demuxer muxer
