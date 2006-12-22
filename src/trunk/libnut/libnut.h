@@ -54,7 +54,7 @@ typedef struct {
 	uint64_t max_pts;         ///< Only used in demuxer. If non-zero, then it is the highest value in stream
 
 	/// \name Video
-	/// Only used is type is #NUT_VIDEO_CLASS @{
+	/// Only used if type is #NUT_VIDEO_CLASS @{
 	int width;                ///< Width of video in pixels
 	int height;               ///< Height of video in pixels
 	int sample_width;         ///< Ratio to stretch the video. May only be zero if #sample_height is zero
@@ -62,7 +62,7 @@ typedef struct {
 	int colorspace_type;
 
 	/// \name audio
-	/// Only used is type is #NUT_AUDIO_CLASS @{
+	/// Only used if type is #NUT_AUDIO_CLASS @{
 	int samplerate_nom;       ///< Sample rate of audio. Example: 44100
 	int samplerate_denom;     ///< Sample rate denominator of audio. Example: 1
 	int channel_count;        ///< Amount of audio channels
