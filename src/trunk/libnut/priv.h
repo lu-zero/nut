@@ -75,12 +75,21 @@ typedef struct {
 	unsigned int pts_valid:1;
 } syncpoint_t;
 
+typedef struct syncpoint_linked_s syncpoint_linked_t;
+struct syncpoint_linked_s {
+	syncpoint_linked_t * prev;
+	syncpoint_t s;
+	uint64_t pts_eor[1];
+};
+
 typedef struct {
 	int len;
 	int alloc_len;
 	syncpoint_t * s;
 	uint64_t * pts; // each elem is stream_count items, +1 to real pts, 0 means there is no key
 	uint64_t * eor; // same as pts, is the pts of last eor in syncpoint region _IF_ eor is set by syncpoint.
+	int cached_pos;
+	syncpoint_linked_t * linked; // entires are entered in reverse order for speed, points to END of list
 } syncpoint_list_t;
 
 typedef struct {

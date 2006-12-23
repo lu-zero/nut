@@ -409,6 +409,30 @@ err_out:
 	return err;
 }
 
+static void add_existing_syncpoint(nut_context_t * nut, syncpoint_t sp, uint64_t * pts, uint64_t * eor, int i) {
+	syncpoint_list_t * sl = &nut->syncpoints;
+	int j;
+	int pts_cache = nut->dopts.cache_syncpoints & 1;
+
+	assert(sl->s[i].pos <= sp.pos && sp.pos < sl->s[i].pos + 16); // code sanity
+
+	assert(!sl->s[i].pts || sl->s[i].pts == sp.pts);
+	assert(!sl->s[i].back_ptr || sl->s[i].back_ptr == sp.back_ptr);
+	sl->s[i].pos = sp.pos;
+	sl->s[i].pts = sp.pts;
+	sl->s[i].back_ptr = sp.back_ptr;
+	if (pts_cache && sp.pts_valid) {
+		for (j = 0; j < nut->stream_count; j++) {
+			assert(!sl->s[i].pts_valid || sl->pts[i * nut->stream_count + j] == pts[j]);
+			assert(!sl->s[i].pts_valid || sl->eor[i * nut->stream_count + j] == eor[j]);
+			sl->pts[i * nut->stream_count + j] = pts[j];
+			sl->eor[i * nut->stream_count + j] = eor[j];
+		}
+		sl->s[i].pts_valid = 1;
+	}
+	if (sp.pts_valid && i) sl->s[i-1].seen_next = 1;
+}
+
 static int add_syncpoint(nut_context_t * nut, syncpoint_t sp, uint64_t * pts, uint64_t * eor, int * out) {
 	syncpoint_list_t * sl = &nut->syncpoints;
 	int i, j, err = 0;
@@ -419,21 +443,7 @@ static int add_syncpoint(nut_context_t * nut, syncpoint_t sp, uint64_t * pts, ui
 	for (i = sl->len; i--; ) { // more often than not, we're adding at end of list
 		if (sl->s[i].pos > sp.pos) continue;
 		if (sp.pos < sl->s[i].pos + 16) { // syncpoint already in list
-			assert(!sl->s[i].pts || sl->s[i].pts == sp.pts);
-			assert(!sl->s[i].back_ptr || sl->s[i].back_ptr == sp.back_ptr);
-			sl->s[i].pos = sp.pos;
-			sl->s[i].pts = sp.pts;
-			sl->s[i].back_ptr = sp.back_ptr;
-			if (pts_cache && sp.pts_valid) {
-				for (j = 0; j < nut->stream_count; j++) {
-					assert(!sl->s[i].pts_valid || sl->pts[i * nut->stream_count + j] == pts[j]);
-					assert(!sl->s[i].pts_valid || sl->eor[i * nut->stream_count + j] == eor[j]);
-					sl->pts[i * nut->stream_count + j] = pts[j];
-					sl->eor[i * nut->stream_count + j] = eor[j];
-				}
-				sl->s[i].pts_valid = 1;
-			}
-			if (sp.pts_valid && i) sl->s[i-1].seen_next = 1;
+			add_existing_syncpoint(nut, sp, pts, eor, i);
 			if (out) *out = i;
 			return 0;
 		}
@@ -469,6 +479,62 @@ static int add_syncpoint(nut_context_t * nut, syncpoint_t sp, uint64_t * pts, ui
 err_out:
 	return err;
 }
+
+static int queue_add_syncpoint(nut_context_t * nut, syncpoint_t sp, uint64_t * pts, uint64_t * eor) {
+	syncpoint_list_t * sl = &nut->syncpoints;
+	syncpoint_linked_t * s;
+	size_t malloc_size;
+	int pts_cache = nut->dopts.cache_syncpoints & 1;
+	int err = 0;
+	int i = sl->cached_pos;
+
+	if (i >= sl->len) i = sl->len - 1;
+
+	while (sl->s[i].pos > sp.pos && i) i--;
+	while (sl->s[i+1].pos <= sp.pos && i < sl->len-1) i++;
+	// Result: sl->s[i].pos <= sp.pos < sl->s[i+1].pos
+	sl->cached_pos = i;
+
+	if (sl->s[i].pos <= sp.pos && sp.pos < sl->s[i].pos + 16) { // syncpoint already in list
+		add_existing_syncpoint(nut, sp, pts, eor, i);
+		return 0;
+	}
+
+	malloc_size = sizeof(syncpoint_linked_t) - sizeof(uint64_t);
+	if (pts_cache && sp.pts_valid) {
+		assert(pts && eor); // code sanity check
+		malloc_size += (nut->stream_count*2) * sizeof(uint64_t);
+	}
+
+	SAFE_CALLOC(nut->alloc, s, 1, malloc_size);
+
+	s->s = sp;
+	if (pts_cache && sp.pts_valid) {
+		for (i = 0; i < nut->stream_count; i++) {
+			s->pts_eor[i] = pts[i];
+			s->pts_eor[i+nut->stream_count] = eor[i];
+		}
+	}
+
+	s->prev = sl->linked;
+	sl->linked = s;
+err_out:
+	return err;
+}
+
+static int flush_syncpoint_queue(nut_context_t * nut) {
+	syncpoint_list_t * sl = &nut->syncpoints;
+	int err = 0;
+	while (sl->linked) {
+		syncpoint_linked_t * s = sl->linked;
+		CHECK(add_syncpoint(nut, s->s, s->pts_eor, s->pts_eor + nut->stream_count, NULL));
+		sl->linked = s->prev;
+		nut->alloc->free(s);
+	}
+err_out:
+	return err;
+}
+
 
 static void set_global_pts(nut_context_t * nut, uint64_t pts) {
 	int i;
@@ -510,7 +576,10 @@ static int get_syncpoint(nut_context_t * nut) {
 			nut->sc[i].last_key = 0;
 			nut->sc[i].eor = 0;
 		}
-		CHECK(add_syncpoint(nut, s, pts, eor, NULL));
+		if (nut->dopts.cache_syncpoints & 2) // during seeking, syncpoints go into cache immediately
+			CHECK(add_syncpoint(nut, s, pts, eor, NULL));
+		else // otherwise, queue to a linked list to avoid CPU cache trashing during playback
+			CHECK(queue_add_syncpoint(nut, s, pts, eor));
 	}
 err_out:
 	return err;
@@ -843,6 +912,8 @@ static int smart_find_syncpoint(nut_context_t * nut, syncpoint_t * sp, int backw
 	off_t pos = fss->i ? fss->pos : bctello(nut->i);
 
 	ERROR(!(nut->dopts.cache_syncpoints & 1) || !sl->len, -1);
+
+	flush_syncpoint_queue(nut);
 
 	if (i) i--;
 	else {
@@ -1351,6 +1422,7 @@ int nut_seek(nut_context_t * nut, double time_pos, int flags, const int * active
 		for (i = 0; i < nut->stream_count; i++) nut->sc[i].state.pts = (uint64_t)(time_pos / TO_TB(i).nom * TO_TB(i).den);
 		nut->seek_time_pos = time_pos;
 		nut->dopts.cache_syncpoints |= 2;
+		flush_syncpoint_queue(nut);
 	} else {
 		time_pos = nut->seek_time_pos;
 	}
@@ -1436,6 +1508,8 @@ nut_context_t * nut_demuxer_init(nut_demuxer_opts_t * dopts) {
 	nut->syncpoints.s = NULL;
 	nut->syncpoints.pts = NULL;
 	nut->syncpoints.eor = NULL;
+	nut->syncpoints.cached_pos = 0;
+	nut->syncpoints.linked = NULL;
 
 	nut->sc = NULL;
 	nut->tb = NULL;
@@ -1490,6 +1564,11 @@ void nut_demuxer_uninit(nut_context_t * nut) {
 	nut->alloc->free(nut->syncpoints.s);
 	nut->alloc->free(nut->syncpoints.pts);
 	nut->alloc->free(nut->syncpoints.eor);
+	while (nut->syncpoints.linked) {
+		syncpoint_linked_t * s = nut->syncpoints.linked;
+		nut->syncpoints.linked = s->prev;
+		nut->alloc->free(s);
+	}
 	nut->alloc->free(nut->sc);
 	nut->alloc->free(nut->tmp_buffer); // the caller's allocated stream list
 	nut->alloc->free(nut->info);
