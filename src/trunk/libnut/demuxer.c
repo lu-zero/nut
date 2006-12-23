@@ -412,23 +412,23 @@ err_out:
 static int add_syncpoint(nut_context_t * nut, syncpoint_t sp, uint64_t * pts, uint64_t * eor, int * out) {
 	syncpoint_list_t * sl = &nut->syncpoints;
 	int i, j, err = 0;
+	int pts_cache = nut->dopts.cache_syncpoints & 1;
 
-	assert(nut->dopts.cache_syncpoints & 1 || !pts); // pts information is never stored with no syncpoint cache
-	if (nut->dopts.cache_syncpoints & 1 && sp.pts_valid) assert(pts && eor); // code sanity check
+	if (pts_cache && sp.pts_valid) assert(pts && eor); // code sanity check
 
 	for (i = sl->len; i--; ) { // more often than not, we're adding at end of list
 		if (sl->s[i].pos > sp.pos) continue;
 		if (sp.pos < sl->s[i].pos + 16) { // syncpoint already in list
-			sl->s[i].pos = sp.pos;
 			assert(!sl->s[i].pts || sl->s[i].pts == sp.pts);
-			sl->s[i].pts = sp.pts;
 			assert(!sl->s[i].back_ptr || sl->s[i].back_ptr == sp.back_ptr);
+			sl->s[i].pos = sp.pos;
+			sl->s[i].pts = sp.pts;
 			sl->s[i].back_ptr = sp.back_ptr;
-			if (nut->dopts.cache_syncpoints & 1 && sp.pts_valid) {
+			if (pts_cache && sp.pts_valid) {
 				for (j = 0; j < nut->stream_count; j++) {
 					assert(!sl->s[i].pts_valid || sl->pts[i * nut->stream_count + j] == pts[j]);
-					sl->pts[i * nut->stream_count + j] = pts[j];
 					assert(!sl->s[i].pts_valid || sl->eor[i * nut->stream_count + j] == eor[j]);
+					sl->pts[i * nut->stream_count + j] = pts[j];
 					sl->eor[i * nut->stream_count + j] = eor[j];
 				}
 				sl->s[i].pts_valid = 1;
@@ -443,7 +443,7 @@ static int add_syncpoint(nut_context_t * nut, syncpoint_t sp, uint64_t * pts, ui
 	if (sl->len + 1 > sl->alloc_len) {
 		sl->alloc_len += PREALLOC_SIZE/4;
 		SAFE_REALLOC(nut->alloc, sl->s, sizeof(syncpoint_t), sl->alloc_len);
-		if (nut->dopts.cache_syncpoints & 1) {
+		if (pts_cache) {
 			SAFE_REALLOC(nut->alloc, sl->pts, nut->stream_count * sizeof(uint64_t), sl->alloc_len);
 			SAFE_REALLOC(nut->alloc, sl->eor, nut->stream_count * sizeof(uint64_t), sl->alloc_len);
 		}
@@ -451,11 +451,11 @@ static int add_syncpoint(nut_context_t * nut, syncpoint_t sp, uint64_t * pts, ui
 	memmove(sl->s + i + 1, sl->s + i, (sl->len - i) * sizeof(syncpoint_t));
 	sl->s[i] = sp;
 	if (sl->s[i].pts_valid) {
-		if (!(nut->dopts.cache_syncpoints & 1)) sl->s[i].pts_valid = 0; // pts_valid is not really true, only used for seen_next
+		if (!pts_cache) sl->s[i].pts_valid = 0; // pts_valid is not really true, only used for seen_next
 		if (i) sl->s[i-1].seen_next = 1;
 	}
 
-	if (nut->dopts.cache_syncpoints & 1) {
+	if (pts_cache) {
 		memmove(sl->pts + (i + 1) * nut->stream_count, sl->pts + i * nut->stream_count, (sl->len - i) * nut->stream_count * sizeof(uint64_t));
 		memmove(sl->eor + (i + 1) * nut->stream_count, sl->eor + i * nut->stream_count, (sl->len - i) * nut->stream_count * sizeof(uint64_t));
 		for (j = 0; j < nut->stream_count; j++) {
@@ -500,19 +500,17 @@ static int get_syncpoint(nut_context_t * nut) {
 
 	s.seen_next = 0;
 	s.pts_valid = !after_seek;
-	if (nut->dopts.cache_syncpoints & 1) {
+	if (nut->dopts.cache_syncpoints) { // either we're using syncpoint cache, or we're seeking and we need the cache
 		int i;
 		uint64_t pts[nut->stream_count];
 		uint64_t eor[nut->stream_count];
 		for (i = 0; i < nut->stream_count; i++) {
 			pts[i] = nut->sc[i].last_key;
-			nut->sc[i].last_key = 0;
 			eor[i] = nut->sc[i].eor;
+			nut->sc[i].last_key = 0;
 			nut->sc[i].eor = 0;
 		}
 		CHECK(add_syncpoint(nut, s, pts, eor, NULL));
-	} else if (nut->dopts.cache_syncpoints) { // we're seeking, we need syncpoint cache
-		CHECK(add_syncpoint(nut, s, NULL, NULL, NULL));
 	}
 err_out:
 	return err;
