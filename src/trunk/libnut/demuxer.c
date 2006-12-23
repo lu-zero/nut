@@ -535,7 +535,6 @@ err_out:
 	return err;
 }
 
-
 static void set_global_pts(nut_context_t * nut, uint64_t pts) {
 	int i;
 	TO_PTS(timestamp, pts)
