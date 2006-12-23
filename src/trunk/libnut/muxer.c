@@ -147,7 +147,7 @@ static void put_main_header(nut_context_t * nut) {
 	put_v(tmp, nut->max_distance);
 	put_v(tmp, nut->timebase_count);
 	for (i = 0; i < nut->timebase_count; i++) {
-		put_v(tmp, nut->tb[i].nom);
+		put_v(tmp, nut->tb[i].num);
 		put_v(tmp, nut->tb[i].den);
 	}
 	for (i = 0; i < 256; ) {
@@ -208,7 +208,7 @@ static void put_stream_header(nut_context_t * nut, int id) {
 			put_v(tmp, sc->sh.colorspace_type);
 			break;
 		case NUT_AUDIO_CLASS:
-			put_v(tmp, sc->sh.samplerate_nom);
+			put_v(tmp, sc->sh.samplerate_num);
 			put_v(tmp, sc->sh.samplerate_denom);
 			put_v(tmp, sc->sh.channel_count);
 			break;
@@ -598,7 +598,7 @@ nut_context_t * nut_muxer_init(const nut_muxer_opts_t * mopts, const nut_stream_
 		nut->sc[i].last_pts = 0;
 		nut->sc[i].last_dts = -1;
 		nut->sc[i].msb_pts_shift = 7; // TODO
-		nut->sc[i].max_pts_distance = (s[i].time_base.den + s[i].time_base.nom - 1) / s[i].time_base.nom; // TODO
+		nut->sc[i].max_pts_distance = (s[i].time_base.den + s[i].time_base.num - 1) / s[i].time_base.num; // TODO
 		nut->sc[i].eor = 0;
 		nut->sc[i].sh = s[i];
 		nut->sc[i].sh.max_pts = 0;
@@ -651,8 +651,8 @@ nut_context_t * nut_muxer_init(const nut_muxer_opts_t * mopts, const nut_stream_
 	}
 
 	for (i = 0; i < nut->timebase_count; i++) {
-		int t = gcd(nut->tb[i].nom, nut->tb[i].den);
-		nut->tb[i].nom /= t;
+		int t = gcd(nut->tb[i].num, nut->tb[i].den);
+		nut->tb[i].num /= t;
 		nut->tb[i].den /= t;
 	}
 

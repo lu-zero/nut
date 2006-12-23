@@ -185,9 +185,9 @@ static inline uint32_t crc32(uint8_t * buf, int len){
 
 static inline uint64_t convert_ts(uint64_t sn, nut_timebase_t from, nut_timebase_t to) {
 	uint64_t ln, d1, d2;
-	ln = (uint64_t)from.nom * to.den;
+	ln = (uint64_t)from.num * to.den;
 	d1 = from.den;
-	d2 = to.nom;
+	d2 = to.num;
 	return (ln / d1 * sn + (ln%d1) * sn / d1) / d2;
 }
 
@@ -228,9 +228,9 @@ static inline int gcd(int a, int b) {
 	int prefix##_t = (pts) % nut->timebase_count; \
 	uint64_t prefix##_p = (pts) / nut->timebase_count;
 
-#define TO_DOUBLE(t, pts) ((double)(pts) / nut->tb[t].den * nut->tb[t].nom)
+#define TO_DOUBLE(t, pts) ((double)(pts) / nut->tb[t].den * nut->tb[t].num)
 
-#define TO_DOUBLE_PTS(pts) ((double)((pts) / nut->timebase_count) / nut->tb[(pts) % nut->timebase_count].den * nut->tb[(pts) % nut->timebase_count].nom)
+#define TO_DOUBLE_PTS(pts) ((double)((pts) / nut->timebase_count) / nut->tb[(pts) % nut->timebase_count].den * nut->tb[(pts) % nut->timebase_count].num)
 
 #define TO_TB(i) nut->tb[nut->sc[i].timebase_id]
 

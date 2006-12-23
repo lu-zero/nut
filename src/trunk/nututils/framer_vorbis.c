@@ -103,12 +103,12 @@ static int setup_headers(framer_priv_t * vc, nut_stream_header_t * s) {
 	s->fourcc_len = 4;
 	s->fourcc = (uint8_t*)"vrbs";
 	s->time_base.den = sample_rate / gcd(sample_rate, i);
-	s->time_base.nom = i / gcd(sample_rate, i);
+	s->time_base.num = i / gcd(sample_rate, i);
 	s->fixed_fps = 0;
 	s->decode_delay = 0;
 	s->codec_specific_len = codec_specific_len;
 	s->codec_specific = vc->codec_specific;
-	s->samplerate_nom = sample_rate;
+	s->samplerate_num = sample_rate;
 	s->samplerate_denom = 1;
 	s->channel_count = channels;
 

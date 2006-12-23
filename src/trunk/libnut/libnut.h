@@ -37,7 +37,7 @@ typedef struct {
 
 /// Timebase struct \ingroup demuxer muxer
 typedef struct {
-	int nom; ///< Example: 1001
+	int num; ///< Example: 1001
 	int den; ///< Example: 24000
 } nut_timebase_t;
 
@@ -63,7 +63,7 @@ typedef struct {
 
 	/// \name audio
 	/// Only used if type is #NUT_AUDIO_CLASS @{
-	int samplerate_nom;       ///< Sample rate of audio. Example: 44100
+	int samplerate_num;       ///< Sample rate of audio. Example: 44100
 	int samplerate_denom;     ///< Sample rate denominator of audio. Example: 1
 	int channel_count;        ///< Amount of audio channels
 } nut_stream_header_t;

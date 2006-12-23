@@ -265,7 +265,7 @@ static int get_main_header(nut_context_t * nut) {
 	nut->tb = nut->alloc->malloc(nut->timebase_count * sizeof(nut_timebase_t));
 	ERROR(!nut->tb, NUT_ERR_OUT_OF_MEM);
 	for (i = 0; i < nut->timebase_count; i++) {
-		GET_V(tmp, nut->tb[i].nom);
+		GET_V(tmp, nut->tb[i].num);
 		GET_V(tmp, nut->tb[i].den);
 	}
 
@@ -335,7 +335,7 @@ static int get_stream_header(nut_context_t * nut) {
 			GET_V(tmp, sc->sh.colorspace_type);
 			break;
 		case NUT_AUDIO_CLASS:
-			GET_V(tmp, sc->sh.samplerate_nom);
+			GET_V(tmp, sc->sh.samplerate_num);
 			GET_V(tmp, sc->sh.samplerate_denom);
 			GET_V(tmp, sc->sh.channel_count);
 			break;
@@ -1163,7 +1163,7 @@ static int binary_search_syncpoint(nut_context_t * nut, double time_pos, off_t *
 	uint64_t timebases[nut->timebase_count];
 	syncpoint_list_t * sl = &nut->syncpoints;
 	int a = 0;
-	for (i = 0; i < nut->timebase_count; i++) timebases[i] = (uint64_t)(time_pos / nut->tb[i].nom * nut->tb[i].den);
+	for (i = 0; i < nut->timebase_count; i++) timebases[i] = (uint64_t)(time_pos / nut->tb[i].num * nut->tb[i].den);
 	assert(sl->len); // it is impossible for the first syncpoint to not have been read
 
 	// find last syncpoint if it's not already found
@@ -1419,7 +1419,7 @@ int nut_seek(nut_context_t * nut, double time_pos, int flags, const int * active
 		}
 		if (time_pos < 0.) time_pos = 0.;
 
-		for (i = 0; i < nut->stream_count; i++) nut->sc[i].state.pts = (uint64_t)(time_pos / TO_TB(i).nom * TO_TB(i).den);
+		for (i = 0; i < nut->stream_count; i++) nut->sc[i].state.pts = (uint64_t)(time_pos / TO_TB(i).num * TO_TB(i).den);
 		nut->seek_time_pos = time_pos;
 		nut->dopts.cache_syncpoints |= 2;
 		flush_syncpoint_queue(nut);

@@ -362,7 +362,7 @@ static int read_headers(demuxer_priv_t * avi, stream_t ** streams) {
 
 		avi->s[i].sh.type = avi->stream[i].type;
 		avi->s[i].sh.time_base.den = avi->stream[i].strh->dwRate;
-		avi->s[i].sh.time_base.nom = avi->stream[i].strh->dwScale;
+		avi->s[i].sh.time_base.num = avi->stream[i].strh->dwScale;
 		avi->s[i].sh.fixed_fps = 1;
 		avi->s[i].sh.codec_specific_len = avi->stream[i].extra_len;
 		avi->s[i].sh.codec_specific = avi->stream[i].extra;
@@ -385,7 +385,7 @@ static int read_headers(demuxer_priv_t * avi, stream_t ** streams) {
 
 			avi->s[i].sh.codec_specific_len = 0;
 
-			avi->s[i].sh.samplerate_nom = avi->stream[i].audio->nSamplesPerSec;
+			avi->s[i].sh.samplerate_num = avi->stream[i].audio->nSamplesPerSec;
 			avi->s[i].sh.samplerate_denom = 1;
 			avi->s[i].sh.channel_count = avi->stream[i].audio->nChannels;
 		}
