@@ -912,7 +912,7 @@ static int smart_find_syncpoint(nut_context_t * nut, syncpoint_t * sp, int backw
 
 	ERROR(!(nut->dopts.cache_syncpoints & 1) || !sl->len, -1);
 
-	flush_syncpoint_queue(nut);
+	CHECK(flush_syncpoint_queue(nut));
 
 	if (i) i--;
 	else {
@@ -1421,7 +1421,7 @@ int nut_seek(nut_context_t * nut, double time_pos, int flags, const int * active
 		for (i = 0; i < nut->stream_count; i++) nut->sc[i].state.pts = (uint64_t)(time_pos / TO_TB(i).num * TO_TB(i).den);
 		nut->seek_time_pos = time_pos;
 		nut->dopts.cache_syncpoints |= 2;
-		flush_syncpoint_queue(nut);
+		CHECK(flush_syncpoint_queue(nut));
 	} else {
 		time_pos = nut->seek_time_pos;
 	}
