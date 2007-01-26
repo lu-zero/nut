@@ -155,6 +155,7 @@ struct nut_context_s {
 
 	off_t before_seek; // position before any seek mess
 	off_t seek_status;
+	off_t binary_guess;
 	double seek_time_pos;
 
 	syncpoint_list_t syncpoints;

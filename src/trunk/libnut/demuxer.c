@@ -1143,13 +1143,13 @@ int nut_read_frame(nut_context_t * nut, int * len, uint8_t * buf) {
 	return 0;
 }
 
-static off_t seek_interpolate(int max_distance, double time_pos, off_t lo, off_t hi, double lo_pd, double hi_pd) {
+static off_t seek_interpolate(int max_distance, double time_pos, off_t lo, off_t hi, double lo_pd, double hi_pd, off_t fake_hi) {
 	double weight = 19./20.;
 	off_t guess;
-	if (hi - lo < max_distance) guess = lo + 16;
+	if (fake_hi - lo < max_distance) guess = lo + 16;
 	else { // linear interpolation
 		guess = (lo + (double)(hi-lo)/(hi_pd-lo_pd) * (time_pos-lo_pd))*weight + (lo+hi)/2.*(1.-weight);
-		if (hi - guess < max_distance) guess = hi - max_distance; //(lo + hi)/2;
+		if (fake_hi - guess < max_distance) guess = fake_hi - max_distance; //(lo + hi)/2;
 	}
 	if (guess < lo + 16) guess = lo + 16;
 	return guess;
@@ -1158,7 +1158,7 @@ static off_t seek_interpolate(int max_distance, double time_pos, off_t lo, off_t
 static int binary_search_syncpoint(nut_context_t * nut, double time_pos, off_t * start, off_t * end, syncpoint_t * stopper) {
 	int i, err = 0;
 	syncpoint_t s;
-	off_t fake_hi;
+	off_t fake_hi, * guess = &nut->binary_guess;
 	uint64_t timebases[nut->timebase_count];
 	syncpoint_list_t * sl = &nut->syncpoints;
 	int a = 0;
@@ -1200,34 +1200,53 @@ static int binary_search_syncpoint(nut_context_t * nut, double time_pos, off_t *
 
 #define LO (sl->s[i])
 #define HI (sl->s[i+1])
-	fake_hi = nut->seek_status ? nut->seek_status : HI.pos;
+	fake_hi = nut->seek_status ? (nut->seek_status >> 1) : HI.pos;
 
 	while (!LO.seen_next) {
 		// start binary search between LO (sl->s[i].pos) to HI (sl->s[i+1].pos) ...
-		off_t guess = seek_interpolate(nut->max_distance*2, time_pos, LO.pos, fake_hi, TO_DOUBLE_PTS(LO.pts), TO_DOUBLE_PTS(HI.pts));
+		if (!*guess) *guess = seek_interpolate(nut->max_distance*2, time_pos, LO.pos, HI.pos, TO_DOUBLE_PTS(LO.pts), TO_DOUBLE_PTS(HI.pts), fake_hi);
 
-		fprintf(stderr, "\n%d [ (%d,%.3f) .. (%d,%.3f) .. (%d,%.3f) ] ", i, (int)LO.pos, TO_DOUBLE_PTS(LO.pts), (int)guess, time_pos,
-		                                                                   (int)fake_hi, TO_DOUBLE_PTS(HI.pts));
+		fprintf(stderr, "\n%d [ (%d,%.3f) .. (%d,%.3f) .. (%d(%d),%.3f) ] ", i, (int)LO.pos, TO_DOUBLE_PTS(LO.pts), (int)*guess, time_pos,
+		                                                                   (int)HI.pos, (int)fake_hi, TO_DOUBLE_PTS(HI.pts));
 		a++;
 
-		if (!nut->seek_status) seek_buf(nut->i, guess, SEEK_SET);
-		nut->seek_status = fake_hi; // so we know where to continue off...
-		CHECK(smart_find_syncpoint(nut, &s, 0, fake_hi));
-		nut->seek_status = 0;
+		if (!(nut->seek_status & 1)) {
+			if (!nut->seek_status) seek_buf(nut->i, *guess, SEEK_SET);
+			nut->seek_status = fake_hi << 1;
+			CHECK(find_syncpoint(nut, &s, 0, fake_hi));
+			nut->seek_status = 0;
+		}
 
-		if (s.seen_next == 1 || s.pos >= fake_hi) { // we got back to 'HI'
-			// either we scanned everything from LO to HI, or we keep trying
-			if (guess <= LO.pos + 16) LO.seen_next = 1; // we are done!
-			else fake_hi = guess;
-			continue;
+scan_backwards:
+		if (nut->seek_status & 1 || s.seen_next == 1 || s.pos >= fake_hi) { // we got back to 'HI'
+			if (*guess == LO.pos + 16) { // we are done!
+				LO.seen_next = 1;
+				break;
+			}
+			// Now let's scan backwards from 'guess' to 'LO' - after this, we can set s.seen_next
+			if (!nut->seek_status) seek_buf(nut->i, *guess - nut->max_distance + 7, SEEK_SET);
+			nut->seek_status = (fake_hi << 1) + 1;
+			CHECK(find_syncpoint(nut, &s, 1, 0));
+			nut->seek_status = 0;
+ 			s.seen_next = 1; // now this can cause LO.seen_next to be set after add_syncpoint(), it's magic
 		}
 
 		CHECK(add_syncpoint(nut, s, NULL, NULL, timebases[s.pts%nut->timebase_count] < s.pts/nut->timebase_count ? NULL : &i));
-		if (HI.pos < fake_hi) fake_hi = HI.pos;
+
+		if (s.pos - *guess > nut->max_distance * 100) {
+			// we just scanned a very large area of (probably) damaged data
+			// let's avoid scanning it again by caching the syncpoint right before it with seen_next
+			s.seen_next = 1;
+			goto scan_backwards;
+		}
+
+		if (HI.pos < fake_hi) fake_hi = MIN(HI.pos, *guess);
+		*guess = 0;
 	}
+	*guess = 0;
 
 	fprintf(stderr, "\n[ (%d,%d) .. %d .. (%d,%d) ] => %d (%d seeks) %d\n",
-	        (int)LO.pos, (int)LO.pts, (int)timebases[0], (int)fake_hi, (int)HI.pts, (int)(LO.pos - LO.back_ptr), a, LO.back_ptr);
+	        (int)LO.pos, (int)LO.pts, (int)timebases[0], (int)HI.pos, (int)HI.pts, (int)(LO.pos - LO.back_ptr), a, LO.back_ptr);
 	// at this point, s[i].pts < P < s[i+1].pts, and s[i].seen_next is set
 	*start = LO.pos - LO.back_ptr;
 	*end = HI.pos;
@@ -1520,6 +1539,7 @@ nut_context_t * nut_demuxer_init(nut_demuxer_opts_t * dopts) {
 	nut->dopts = *dopts;
 	nut->seek_status = 0;
 	nut->before_seek = 0;
+	nut->binary_guess = 0;
 	nut->last_syncpoint = 0;
 	nut->find_syncpoint_state = (struct find_syncpoint_state_s){0,0,0,0};
 
