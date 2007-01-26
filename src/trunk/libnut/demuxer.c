@@ -1273,7 +1273,7 @@ static int linear_search_seek(nut_context_t * nut, int backwards, off_t start, o
 		nut->last_syncpoint = 0; // last_key is invalid
 		seek_buf(nut->i, s.pos, SEEK_SET); // go back to syncpoint. This will not need a seek.
 		nut->seek_status = s.pos << 1;
-		if (s.pos > start + 15) goto err_out; // error condition, we didn't get the syncpoint we wanted
+		ERROR(s.pos < start || s.pos > start + 15, 0); // error condition, we didn't get the syncpoint we wanted
 	}
 
 	if (stopper) {
@@ -1288,6 +1288,7 @@ static int linear_search_seek(nut_context_t * nut, int backwards, off_t start, o
 		if (stopper_syncpoint > bctello(nut->i)) stopper_syncpoint = 0; // don't premature
 	}
 
+#define CHECK_break(expr) { if ((err = (expr))) { if (end && err != NUT_ERR_EAGAIN) break; else goto err_out; } }
 	if (!(nut->seek_status & 1)) while (bctello(nut->i) < end || !end) {
 		int saw_syncpoint;
 		nut_packet_t pd;
@@ -1295,7 +1296,7 @@ static int linear_search_seek(nut_context_t * nut, int backwards, off_t start, o
 		buf_before = bctello(nut->i);
 		err = get_packet(nut, &pd, &saw_syncpoint); // we're counting on syncpoint cache!! for the good_key later, and stopper_syncpoint
 		if (err == -1) continue;
-		CHECK(err);
+		CHECK_break(err);
 
 		if (saw_syncpoint) {
 			if (stopper && !stopper_syncpoint && buf_before > stopper->pos - stopper->back_ptr + 15) {
@@ -1349,7 +1350,7 @@ static int linear_search_seek(nut_context_t * nut, int backwards, off_t start, o
 		// dts higher than requested pts
 		if (end && peek_dts(nut->sc[pd.stream].sh.decode_delay, nut->sc[pd.stream].pts_cache, pd.pts) > (int64_t)nut->sc[pd.stream].state.pts) break;
 
-		CHECK(skip_buffer(nut->i, pd.len));
+		CHECK_break(skip_buffer(nut->i, pd.len));
 		push_frame(nut, &pd);
 	}
 	if (!end) goto err_out; // forward seek
@@ -1359,7 +1360,7 @@ static int linear_search_seek(nut_context_t * nut, int backwards, off_t start, o
 		if (nut->sc[i].state.good_key && (!min_pos || nut->sc[i].state.good_key < min_pos)) min_pos = nut->sc[i].state.good_key;
 	}
 	if (!min_pos) {
-		fprintf(stderr, "BIG FAT WARNING\n");
+		fprintf(stderr, "BIG FAT WARNING (Possibly caused by `%s')", nut_error(err));
 		for (i = 0; i < nut->stream_count; i++) fprintf(stderr, "%d: %d\n", i, (int)nut->sc[i].state.good_key);
 		min_pos = nut->seek_status >> 1;
 	}
@@ -1383,6 +1384,7 @@ static int linear_search_seek(nut_context_t * nut, int backwards, off_t start, o
 		push_frame(nut, &pd);
 		CHECK(skip_buffer(nut->i, pd.len));
 	}
+	err = 0;
 
 err_out:
 	if (err != NUT_ERR_EAGAIN) { // unless EAGAIN
