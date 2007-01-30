@@ -7,6 +7,9 @@ libnut: FORCE
 nututils: libnut FORCE
 	${MAKE} -C nututils
 
+install:
+	${MAKE} -C libnut install
+
 
 distclean: clean
 
