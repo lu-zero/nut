@@ -1,45 +1,29 @@
-DO NOT USE NUTMERGE FOR _ANYTHING_ EXCEPT TESTING!!
-IT CREATES COMPLETELY INVALID BROKEN FILES, WHICH JUST "HAPPEN" TO WORK!
-
-
-instructions:
-tar jfx nut.tar.bz2
-cvs -z9 -d:pserver:anonymous@mplayerhq.hu:/cvsroot/mplayer co main
-make -C nut
-cd main
-ln -s ../../nut/demux_nut.c libmpdemux/
-patch -p0 --no-backup-if-mismatch < ../nut/mplayer.diff
-make mplayer
-
-In words:
-have your main nut/ directory in the same level as your CVS mplayer main/ 
-directory, copy demux_nut.c to libmpdemux/, apply the mplayer.diff, and 
-first run make in nut directory, and then make in mplayer directory.
+to compile:
+make
+make install
 
 
 to use:
-./nutmerge bla.avi bla.nut  # only mpeg-4 !
-./nutmerge bla.ogg bla.nut  # only vorbis, not theora
+./nutmerge bla.avi bla.nut  # only mpeg-4 with mp3
+./nutmerge bla.ogg bla.nut  # only vorbis
 
 
-to debug:
-Always look at $?  !
-./avireader bla.avi
-./oggreader bla.ogg
+to play with mplayer:
+./configure                 # libnut should be auto detected after make install here
+make
+./mplayer bla.nut
 
 
-to play:
-mplayer bla.nut
-
-auto detction should work fine.
+to play with ffmpeg:
+./configure --enable-libnut
+make
+./ffplay bla.nut
 
 
 to copy index to begginning of file:
-./nutindex old.nut new.nut
+./nutindex bla.nut new.nut
 
 
-If you have weird endianess, You'll need to compile with 
-'-DWORDS_BIGENDIAN', just uncomment the appropriate file in config.mak .
 
 
-- ods15
+Oded Shimon <ods15@ods15.dyndns.org>
