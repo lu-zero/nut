@@ -231,7 +231,7 @@ static inline int gcd(int a, int b) {
 
 #define TO_DOUBLE(t, pts) ((double)(pts) / nut->tb[t].den * nut->tb[t].num)
 
-#define TO_DOUBLE_PTS(pts) ((double)((pts) / nut->timebase_count) / nut->tb[(pts) % nut->timebase_count].den * nut->tb[(pts) % nut->timebase_count].num)
+#define TO_DOUBLE_PTS(pts) TO_DOUBLE((pts) / nut->timebase_count, (pts) % nut->timebase_count)
 
 #define TO_TB(i) nut->tb[nut->sc[i].timebase_id]
 
