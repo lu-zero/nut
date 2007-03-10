@@ -4,6 +4,10 @@
 #ifndef _NUT_H
 #define _NUT_H
 
+#include <stddef.h>
+#include <stdint.h>
+#include <sys/types.h>
+
 /// \defgroup common  Common Defines and Enums
 /// \defgroup muxer   libnut Muxer
 /// \defgroup demuxer libnut Demuxer
