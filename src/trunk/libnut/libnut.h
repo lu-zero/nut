@@ -65,7 +65,7 @@ typedef struct {
 	int sample_height;        ///< Ratio to stretch the video. May only be zero if #sample_width is zero
 	int colorspace_type;
 
-	/// \name audio
+	/// \name Audio
 	/// Only used if type is #NUT_AUDIO_CLASS @{
 	int samplerate_num;       ///< Sample rate of audio. Example: 44100
 	int samplerate_denom;     ///< Sample rate denominator of audio. Example: 1
