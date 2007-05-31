@@ -849,7 +849,6 @@ info packet types
         including "und" (Undetermined), "mul" (Multiple languages).
         See http://www.loc.gov/standards/iso639-2/
         and http://www.din.de/gremien/nas/nabd/iso3166ma/codlstp1/en_listp1.html
-        the language code
         A demuxer MUST ignore unknown language and country codes instead of
         treating them as an error.
     "Disposition"
