@@ -602,7 +602,7 @@ flags[frame_code], frame_flags (v)
                            presentation. (EOR)
        3  FLAG_CODED_PTS   If set, coded_pts is in the frame header.
        4  FLAG_STREAM_ID   If set, stream_id is coded in the frame header.
-       5  FLAG_SIZE_MSB    If set, data_size_msb at the frame header,
+       5  FLAG_SIZE_MSB    If set, data_size_msb is coded in the frame header,
                            otherwise data_size_msb is 0.
        6  FLAG_CHECKSUM    If set, the frame header contains a checksum.
        7  FLAG_RESERVED    If set, reserved_count is coded in the frame header.
@@ -925,8 +925,8 @@ demuxer (non-normative):
 
 In the absence of a valid header at the beginning, players SHOULD search for
 backup headers starting at offset 2^x; for each x players SHOULD end their
-search at a particular offset when any startcode (including a syncpoint) is
-found.
+search at a particular offset when any startcode (including the syncpoint
+startcode) is found.
 
 
 Seeking without an index (non-normative):
