@@ -612,7 +612,7 @@ flags[frame_code], frame_flags (v)
     EOR frames MUST be zero-length and must be set keyframe.
     All streams SHOULD end with EOR, where the pts of the EOR indicates the
     end presentation time of the final frame.
-    An EOR set stream is unset by the first content frames.
+    An EOR set stream is unset by the first content frame.
     EOR can only be unset in streams with zero decode_delay .
     FLAG_CHECKSUM MUST be set if the frame's data_size is strictly greater than
     2*max_distance or the difference abs(pts-last_pts) is strictly greater than
@@ -795,7 +795,7 @@ chapter_id (s)
     The ID of the chapter this packet applies to. If zero, the packet applies
     to the whole file. Positive chapter_id values represent real chapters and
     MUST NOT overlap.
-    A negative chapter_id indicates a sub region of the file and not a real
+    A negative chapter_id indicates a region of the file and not a real
     chapter. chapter_id MUST be unique to the region it represents.
     chapter_id n MUST NOT be used unless there are at least n chapters in the
     file.
