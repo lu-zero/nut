@@ -585,7 +585,7 @@ codec_specific_data (vb)
     the stripped result is not less valid per codec spec as before stripping.
 
 frame_code (f(8))
-    frame_code is an 8-bit field which exists before every frame, it can
+    frame_code is an 8 bit field which exists before every frame. It can
     store part of the size of the frame, the stream number, the timestamp
     and some flags amongst other things. What is not directly stored
     in it but is needed is stored in various fields immediately after it.
