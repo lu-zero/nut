@@ -885,9 +885,9 @@ Headers may be repeated, but if they are, then they MUST all be repeated
 together and repeated headers MUST be identical.
 
 Each set of repeated headers not at the beginning or end of the file SHOULD
-be stored at the earliest possible position after 2^x where x is an integer
-and the end of the file. So the headers may be repeated at 4102 if that is
-the closest position after 2^12=4096 at which the headers can be placed.
+be stored at the earliest possible position after 2^x where x is an integer.
+So the headers may be repeated at 4102 if that is the closest position after
+2^12=4096 at which the headers can be placed.
 
 Note: This allows an implementation reading the file to locate backup
 headers in O(log filesize) time as opposed to O(filesize).
