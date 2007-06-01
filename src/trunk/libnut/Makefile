@@ -22,7 +22,7 @@ libnut.a: ${OBJS}
 libnut.so: ${OBJS}
 	${CC} ${CFLAGS} -shared $^ -o $@
 
-.c.o: priv.h nut.h
+.c.o: priv.h libnut.h
 	${CC} ${CFLAGS} $^ -c -o $@
 
 clean:
