@@ -330,7 +330,7 @@ int main(int argc, char * argv[]) {
 	output_buffer_t oout, * out, omem, * mem = new_mem_buffer(&omem);
 	off_t end;
 	if (!fin || !fout) {
-		fprintf(stderr, "bleh\n");
+		fprintf(stderr, "%s <input-nut-file> <output-nut-file>\n", argv[0]);
 		return 1;
 	}
 	printf("Note! This program produces less error resiliant files by moving the main headers!\n");
