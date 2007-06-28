@@ -6,6 +6,7 @@
 #include <inttypes.h>
 #include <assert.h>
 #include <string.h>
+#include <sys/types.h>
 
 #define ID_STRING "nut/multimedia container"
 
