@@ -1,0 +1,276 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE rfc SYSTEM "rfc2629.dtd" [
+<!ENTITY rfc2119 SYSTEM "http://xml.resource.org/public/rfc/bibxml/reference.RFC.2119.xml">
+]>
+<?rfc toc="yes"?>
+<?rfc symrefs="yes"?>
+<?rfc compact="yes"?>
+<?rfc subcompact="no"?>
+<?rfc strict="no"?>
+<?rfc rfcedstyle="yes"?>
+<rfc category="std" docName=""
+     ipr="full3978">
+  <front>
+
+    <title abbrev="NUT Container Format">NUT Multimedia Container File Format
+    </title>
+
+    <!-- see RFC2223 for guidelines regarding author names -->
+
+    <author fullname="Michael Niedermayer" initials="M"
+            surname="Niedermayer">
+      <organization>FFmpeg</organization>
+
+      <address>
+        <email>michaelni@gmx.at</email>
+      </address>
+    </author>
+    <author fullname="Luca Barbato" initials="L" role="editor"
+            surname="Barbato">
+      <organization>Politecnico di Torino</organization>
+
+      <address>
+        <postal>
+          <street>Corso Duca degli Abruzzi 25</street>
+
+          <city>10135 Torino</city>
+
+          <country>Italy</country>
+        </postal>
+
+        <email>lu_zero@gentoo.org</email>
+      </address>
+    </author>
+
+    <date year="2007" />
+
+    <area>General</area>
+
+<!--    <workgroup>AVT Working Group</workgroup> -->
+
+    <keyword>Internet-Draft</keyword>
+
+    <keyword>RTP</keyword>
+
+    <keyword>SCTP</keyword>
+
+    <abstract>
+      <t>This memo defines a method for efficiently storing generic multimedia
+      streams so that operation like seeking and recover for error can be
+      performed with minimal computational cost. Minimal overhead and maximal
+      extensibility had been considered in the development of the format.</t>
+    </abstract>
+
+    <note title="Editors Note">
+      <t>All references to RFC XXXX are to be replaced by references to the
+         RFC number of this memo, when published.</t>
+    </note>
+
+  </front>
+
+  <middle>
+    <section title="Introduction">
+      <!-- It is good practice to echo the abstract in the Introduction, 
+providing citations here. -->
+
+      <t>NUT is a multimedia container format for storage of audio, video,
+      subtitles and related user defined streams, it provides exact timestamps
+      for synchronization and seeking, is simple, has low overhead and can
+      recover in case of errors in the stream.</t>
+      <t>This document defines:
+      <list style="hanging">
+        <t> The file format layout
+        </t>
+        <t> The common stream interleaving rules
+        </t>
+<!--        <t> A simple provision how to map nut streams to rtp.
+        </t> -->
+      </list>
+      </t>
+
+      <section title="Terminology">
+        <t>The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
+        "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this
+        document are to be interpreted as described in <xref target="RFC2119" />.</t>
+        <t> This document refers to the following definitions
+          <list style="hanging">
+            <t hangText="pts"> Presentation time of the first frame/sample that
+            is completed by decoding the coded frame.
+            </t>
+            <t hangText="dts"> The time when a frame is input into a
+            synchronous 1-in-1-out decoder.
+            </t>
+            <t hangText="frame"> Minimal unit of information that can be
+            decoded completely, it is usually holds a full frame video frame,
+            a group of audio samples or a subtitle line.
+            </t>
+            <t hangText="Keyframe"> A keyframe is a frame from which you can
+            start decoding.
+            The nth frame is a keyframe if and only if frames n, n+1, ... in
+            presentation order (that are all frames with a pts >= frame[n].pts)
+            can be decoded successfully without reference to frames prior n in
+            storage order (that are all frames with a dts &lt; frame[n].dts).
+            If no such frames exist (for example due to using overlapped
+            transforms like the MDCT in an audio codec), then the definition
+            shall be extended by dropping n out of the set of frames which
+            must be decodable, if this is still insufficient then n+1 shall
+            be dropped, and so on until there is a keyframe.
+            Every frame which is marked as a keyframe MUST be a keyframe
+            according to the definition above, a muxer MUST mark every frame
+            it knows is a keyframe as such, a muxer SHOULD NOT analyze future
+            frames to determine the keyframe status of the current frame but
+            instead just set the frame as non-keyframe.
+            </t>
+          </list>
+        </t>
+      </section>
+      <section title="Syntax Convetions">
+        <t> Since NUT heavily uses variable length fields, the simplest way to
+        describe it is using a pseudocode approach instead of graphical
+        bitfield descriptions.
+        </t>
+        <t> The syntax uses datatypes, tagnames and C-like constructs. </t>
+
+        <section title="Datatypes">
+
+        <t>
+          <list style="hanging">
+            <t hangText="f(n)"> n fixed bits in bigendian order</t>
+            <t hangText="u(n)"> Unsigned value encoded in n bits MSB-first</t>
+
+            <t hangText="v"> Unsigned variable length value.
+              <figure anchor="Variable Length Unsigned Figure" title="Variable
+              Length Unsigned Value">
+                <artwork><![CDATA[
+  value=0
+  do{
+      more_data                       u(1)
+      data                            u(7)
+      value= 128*value + data
+  }while(more_data)]]>
+                </artwork>
+              </figure>
+           Values can be encoded using the following logic: the data is in
+           network order, every byte has the most significant bit used as
+           flag and the following 7 used to store the value.
+           The first N bit are to be taken, where N is number of bits
+           representing the value modulo 7, and stored in the first byte.
+           If there are more bits, the flag bit is set to 1 and the subsequent
+           7bit are stored in the following byte, if there are remaining bits
+           set the flag to 1 and the same procedure is repeated. <br />
+           The ending byte has the flag bit set to 0.
+           In order to decode it is enough to iterate over the bytes until the
+           flag bit set to 0, for every byte the data is added to the
+           accumulated value multiplied by 128.
+            </t>
+            <t hangText="s"> Signed variable length value.
+              <figure anchor="Variable Length Signed Figure" title="Variable
+              Length Signed Value">
+                <artwork><![CDATA[
+    temp                                v
+    temp++
+    if(temp&1) value= -(temp>>1)
+    else       value=  (temp>>1)]]>
+                </artwork>
+              </figure>
+            The signed values are encoded as the absolute value multiplied by
+            2, positive numbers have 1 subtracted to the value. [FIXME: why not
+            just shift&amp;sign]
+            </t>
+            <t hangText="vb"> Variable length binary data (or utf-8 string).
+              <figure anchor="Variable Length String Figure" title="Variable
+              Length Signed Value">
+                <artwork><![CDATA[
+    length                              v
+    for(i=0; i<length; i++){
+        data[i]                         u(8)
+    }]]>
+                </artwork>
+              </figure>
+            Strings and binary data can be encoded basically writing the byte
+            count as a Variable Length Unsigned Value and the the string.
+            The strings MUST be encoded in utf-8
+            </t>
+            <t hangText="t"> Universal timestamp.
+              <figure anchor="Universal Timestamp" title="Variable
+              Length Timestamp">
+                <artwork><![CDATA[
+    tmp                                 v
+    id= tmp % time_base_count
+    value= (tmp / time_base_count) * time_base[id]]]>
+                </artwork>
+              </figure>
+            [FIXME]
+            </t>
+          </list>
+        </t>
+
+        </section>
+
+      </section>
+    </section>
+
+    <section title="NUT file layout">
+
+      <t></t>
+    
+      <section title="High level File structure">
+        <t>[TODO]</t>
+      </section>
+      <section title="Main Header">
+        <t>[TODO]</t>
+      </section>
+      <section title="Reserved Headers">
+        <t>[TODO]</t>
+      </section>
+      <section title="Stream Header">
+        <t>[TODO]</t>
+      </section>
+      <section title="Info Packet">
+        <t>[TODO]</t>
+      </section>
+      <section title="Index">
+        <t>[TODO]</t>
+      </section>
+      <section title="Syncpoint">
+        <t>[TODO]</t>
+      </section>
+    </section>
+
+    <section title="Interleaving Rules">
+    </section>
+   
+    <section title="IANA Considerations">
+      <t>[TODO] In order to comply with IESG policy as set forth in
+      http://www.ietf.org/ID-Checklist.html, every Internet-Draft that is
+      submitted to the IESG for publication MUST contain an IANA
+      Considerations section. </t>
+
+    </section>
+
+    <section title="Security Considerations">
+      <t>[TODO]</t>
+    </section>
+
+    <section title="Acknowledgements">
+      <t>Thanks to Marshall Rose for developing the XML2RFC format.</t>
+
+    </section>
+  </middle>
+
+  <back>
+
+    <references title="Normative References">
+
+      &rfc2119;
+
+      <!--  <t>[TODO]: Add your own normative references.</t>-->
+    </references>
+
+    <references title="Informative References">
+
+      <!-- <t>[TODO] Add your own informative references</t>-->
+    </references>
+  </back>
+</rfc>
+<!-- vim: set sw=2 sts=2 et tw=79: -->
