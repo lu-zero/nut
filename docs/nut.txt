@@ -168,7 +168,7 @@ file:
 The structure of an undamaged file should look like the following, but
 demuxers should be flexible and be able to deal with damaged headers so the
 above is a better loop in practice (not to mention it is simpler).
-Note: Demuxers MUST be able to deal with new and unknown headers.
+Note: Demuxers MUST ignore new and unknown headers.
 
 file:
     file_id_string

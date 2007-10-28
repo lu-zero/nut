@@ -275,7 +275,7 @@ providing citations here. -->
         syncpoints.
         Demuxers SHOULD be flexible and be able to deal with damaged headers so         is RECOMMENDED to use a loop able to adapt to corruptions and
         misordering, the file scheme in figure <xref="file representation" />
-        shows a possible parsing method. Demuxers MUST be able to deal with new
+        shows a possible parsing method. Demuxers MUST ignore new
         and unknown headers.</t>
         <figure anchor="file representation" title="File representation">
             <artwork><![CDATA[file:
