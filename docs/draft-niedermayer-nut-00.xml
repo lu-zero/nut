@@ -101,8 +101,8 @@
             synchronous 1-in-1-out decoder.
             </t>
             <t hangText="frame"> Minimal unit of information that can be
-            decoded, it is usually holds a video frame, a group of
-            audio samples or a subtitle line.
+            decoded, e.g. a video frame, a group of audio samples or a
+            subtitle line.
             </t>
             <t hangText="Keyframe"> A keyframe is a frame from which you can
             start decoding.
