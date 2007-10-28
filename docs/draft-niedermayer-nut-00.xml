@@ -101,8 +101,8 @@ providing citations here. -->
             synchronous 1-in-1-out decoder.
             </t>
             <t hangText="frame"> Minimal unit of information that can be
-            decoded completely, it is usually holds a full frame video frame,
-            a group of audio samples or a subtitle line.
+            decoded, it is usually holds a part of video frame, a group of
+            audio samples or a subtitle line.
             </t>
             <t hangText="Keyframe"> A keyframe is a frame from which you can
             start decoding.
@@ -212,10 +212,89 @@ providing citations here. -->
 
     <section title="NUT file layout">
 
-      <t></t>
-    
+      <t>Every NUT file starts with an identification string, main (global)
+      headers and per stream headers follow, frame data is interleaved with
+      syncpoint packets. Optional info packets and index packet MAY be present,
+      in multiple copies, in order to improve resilience</t>
+      <section title="Low level element description">
+        <section title="Startcodes">
+          <t>Every startcode is a fixed 64bit value, the MSB contains the value
+          'N', the following bytes contain a specific string. There are 5 types
+          of startcode, each of them is used as marker for a specific NUT
+          packet.</t>
+          <t>
+            <list style="hanging">
+              <t hangText="main_startcode">
+              <figure anchor="main_startcode" title="Main Startcode">
+                <artwork><![CDATA[
+    0x7A561F5F04ADULL + (((uint64_t)('N'<<8) + 'M')<<48)
+                ]]>
+                </artwork>
+              </figure>
+              </t>
+              <t hangText="stream_startcode">
+              <figure anchor="stream_startcode" title="Stream Startcode">
+                <artwork><![CDATA[
+    0x11405BF2F9DBULL + (((uint64_t)('N'<<8) + 'S')<<48)                
+                ]]>
+                </artwork>
+              </figure>
+              </t>
+              <t hangText="syncpoing_startcode">
+              <figure anchor="syncpoing_startcode" title="Syncpoint Startcode">
+                <artwork><![CDATA[
+    0xE4ADEECA4569ULL + (((uint64_t)('N'<<8) + 'K')<<48)                
+                ]]>
+                </artwork>
+              </figure>
+              </t>
+              <t hangText="index_startcode">
+              <figure anchor="index_startcode" title="Index Startcode">
+                <artwork><![CDATA[
+    0xDD672F23E64EULL + (((uint64_t)('N'<<8) + 'X')<<48)                
+                ]]>
+                </artwork>
+              </figure>
+              </t>
+              <t hangText="info_startcode">
+              <figure anchor="info_startcode" title="Info Startcode">
+                <artwork><![CDATA[
+    0xAB68B596BA78ULL + (((uint64_t)('N'<<8) + 'I')<<48)                
+                ]]>
+                </artwork>
+              </figure>
+              </t>
+            </list>
+        </section>
+      </section>
+
       <section title="High level File structure">
-        <t>[TODO]</t>
+        <t>The structure of an undamaged file SHOULD consist in the
+        file_id_string, the main header, the stream headers, the optional
+        info packets, the optional index, frames intermixed with syncpoints.
+        Demuxers SHOULD be flexible and be able to deal with damaged headers so         is RECOMMENDED to use a loop able to adapt to corruptions and
+        misordering, the file scheme in figure <xref="file representation" />
+        shows a possible parsing method. Demuxers MUST be able to deal with new
+        and unknown headers.</t>
+        <figure anchor="file representation" title="File representation">
+            <artwork><![CDATA[file:
+    file_id_string
+    while(!eof){
+        if(next_byte == 'N'){
+            packet_header
+            switch(startcode){
+                case      main_startcode:  main_header; break;
+                case    stream_startcode:stream_header; break;
+                case      info_startcode:  info_packet; break;
+                case     index_startcode:        index; break;
+                case syncpoint_startcode:    syncpoint; break;
+            }
+            packet_footer
+        }else
+            frame
+    }]]>
+            </artwork>
+        </figure>
       </section>
       <section title="Main Header">
         <t>[TODO]</t>
@@ -226,7 +305,7 @@ providing citations here. -->
       <section title="Stream Header">
         <t>[TODO]</t>
       </section>
-      <section title="Info Packet">
+      <section title="Info">
         <t>[TODO]</t>
       </section>
       <section title="Index">
