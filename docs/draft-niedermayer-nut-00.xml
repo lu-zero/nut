@@ -269,9 +269,10 @@ providing citations here. -->
       </section>
 
       <section title="High level File structure">
-        <t>The structure of an undamaged file SHOULD consist in the
-        file_id_string, the main header, the stream headers, the optional
-        info packets, the optional index, frames intermixed with syncpoints.
+        <t>The structure of an undamaged file SHOULD consists in the following
+        elements: file_id_string, the main header, the stream headers,
+        the optional info packets, the optional index, frames intermixed with
+        syncpoints.
         Demuxers SHOULD be flexible and be able to deal with damaged headers so         is RECOMMENDED to use a loop able to adapt to corruptions and
         misordering, the file scheme in figure <xref="file representation" />
         shows a possible parsing method. Demuxers MUST be able to deal with new
