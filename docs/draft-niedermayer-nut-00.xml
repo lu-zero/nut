@@ -70,8 +70,8 @@
 
   <middle>
     <section title="Introduction">
-      <!-- It is good practice to echo the abstract in the Introduction, 
-providing citations here. -->
+      <!-- It is good practice to echo the abstract in the Introduction,
+           providing citations here. -->
 
       <t>NUT is a multimedia container format for storage of audio, video,
       subtitles and related user defined streams, it provides exact timestamps
@@ -235,7 +235,7 @@ providing citations here. -->
               <t hangText="stream_startcode">
               <figure anchor="stream_startcode" title="Stream Startcode">
                 <artwork><![CDATA[
-    0x11405BF2F9DBULL + (((uint64_t)('N'<<8) + 'S')<<48)                
+    0x11405BF2F9DBULL + (((uint64_t)('N'<<8) + 'S')<<48)
                 ]]>
                 </artwork>
               </figure>
@@ -243,7 +243,7 @@ providing citations here. -->
               <t hangText="syncpoing_startcode">
               <figure anchor="syncpoing_startcode" title="Syncpoint Startcode">
                 <artwork><![CDATA[
-    0xE4ADEECA4569ULL + (((uint64_t)('N'<<8) + 'K')<<48)                
+    0xE4ADEECA4569ULL + (((uint64_t)('N'<<8) + 'K')<<48)
                 ]]>
                 </artwork>
               </figure>
@@ -251,7 +251,7 @@ providing citations here. -->
               <t hangText="index_startcode">
               <figure anchor="index_startcode" title="Index Startcode">
                 <artwork><![CDATA[
-    0xDD672F23E64EULL + (((uint64_t)('N'<<8) + 'X')<<48)                
+    0xDD672F23E64EULL + (((uint64_t)('N'<<8) + 'X')<<48)
                 ]]>
                 </artwork>
               </figure>
@@ -259,7 +259,7 @@ providing citations here. -->
               <t hangText="info_startcode">
               <figure anchor="info_startcode" title="Info Startcode">
                 <artwork><![CDATA[
-    0xAB68B596BA78ULL + (((uint64_t)('N'<<8) + 'I')<<48)                
+    0xAB68B596BA78ULL + (((uint64_t)('N'<<8) + 'I')<<48)
                 ]]>
                 </artwork>
               </figure>
@@ -319,7 +319,7 @@ providing citations here. -->
 
     <section title="Interleaving Rules">
     </section>
-   
+
     <section title="IANA Considerations">
       <t>[TODO] In order to comply with IESG policy as set forth in
       http://www.ietf.org/ID-Checklist.html, every Internet-Draft that is
