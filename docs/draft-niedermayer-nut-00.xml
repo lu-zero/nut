@@ -331,7 +331,13 @@
     <section title="Security Considerations">
       <t>[TODO]</t>
     </section>
-
+    <section title="Copying Conditions">
+      <t>The authors agree to grant third parties the irrevocable right to
+      copy, use and distribute the work, with or without modification, in
+      any medium, without royalty, provided that, unless separate permission
+      is granted, redistributed modified works do not contain misleading
+      author, version, name of work, or endorsement information.</t>
+    </section>
     <section title="Acknowledgements">
       <t>Thanks to Marshall Rose for developing the XML2RFC format.</t>
 
