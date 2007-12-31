@@ -124,7 +124,7 @@
           </list>
         </t>
       </section>
-      <section title="Syntax Convetions">
+      <section title="Syntax Conventions">
         <t> Since NUT heavily uses variable length fields, the simplest way to
         describe it is using a pseudocode approach instead of graphical
         bitfield descriptions.
@@ -222,7 +222,6 @@
           'N', the following bytes contain a specific string. There are 5 types
           of startcode, each of them is used as marker for a specific NUT
           packet.</t>
-          <t>
             <list style="hanging">
               <t hangText="main_startcode">
               <figure anchor="main_startcode" title="Main Startcode">
@@ -267,28 +266,28 @@
             </list>
         </section>
       </section>
-
       <section title="High level File structure">
         <t>The structure of an undamaged file SHOULD consists in the following
         elements: file_id_string, the main header, the stream headers,
         the optional info packets, the optional index, frames intermixed with
         syncpoints.
         Demuxers SHOULD be flexible and be able to deal with damaged headers so         is RECOMMENDED to use a loop able to adapt to corruptions and
-        misordering, the file scheme in figure <xref="file representation" />
+        misordering, the file scheme in figure <xref target="file layout" />
         shows a possible parsing method. Demuxers MUST ignore new
-        and unknown headers.</t>
-        <figure anchor="file representation" title="File representation">
+        and unknown headers, considering them as "reserved".</t>
+        <figure anchor="file layout" title="File layout structure">
             <artwork><![CDATA[file:
     file_id_string
     while(!eof){
         if(next_byte == 'N'){
             packet_header
             switch(startcode){
-                case      main_startcode:  main_header; break;
-                case    stream_startcode:stream_header; break;
-                case      info_startcode:  info_packet; break;
-                case     index_startcode:        index; break;
-                case syncpoint_startcode:    syncpoint; break;
+                case      main_startcode:     main_header; break;
+                case    stream_startcode:   stream_header; break;
+                case      info_startcode:     info_packet; break;
+                case     index_startcode:           index; break;
+                case syncpoint_startcode:       syncpoint; break;
+                case   unknown_startcode:reserved_headers; break;
             }
             packet_footer
         }else
@@ -296,24 +295,229 @@
     }]]>
             </artwork>
         </figure>
-      </section>
-      <section title="Main Header">
-        <t>[TODO]</t>
-      </section>
-      <section title="Reserved Headers">
-        <t>[TODO]</t>
-      </section>
-      <section title="Stream Header">
-        <t>[TODO]</t>
-      </section>
-      <section title="Info">
-        <t>[TODO]</t>
-      </section>
-      <section title="Index">
-        <t>[TODO]</t>
-      </section>
-      <section title="Syncpoint">
-        <t>[TODO]</t>
+        <section title="Common Elements">
+          <t>Each element in nut starts with a packet_header [FIXME explain why
+          and detail a bit], and end with a packet_footer.</t>
+        </section>
+        <section title="Main Header">
+          <t>The main header [FIXME describe]</t>
+          <figure anchor="main_header" title="Main header structure">
+            <artwork><![CDATA[main_header:
+      version                             v
+      stream_count                        v
+      max_distance                        v
+      time_base_count                     v
+      for(i=0; i<time_base_count; i++)
+          time_base_num                   v
+          time_base_denom                 v
+          time_base[i]= time_base_num/time_base_denom
+      tmp_pts=0
+      tmp_mul=1
+      tmp_stream=0
+      for(i=0; i<256; ){
+          tmp_flag                        v
+          tmp_fields                      v
+          if(tmp_fields>0) tmp_pts        s
+          if(tmp_fields>1) tmp_mul        v
+          if(tmp_fields>2) tmp_stream     v
+          if(tmp_fields>3) tmp_size       v
+          else tmp_size=0
+          if(tmp_fields>4) tmp_res        v
+          else tmp_res=0
+          if(tmp_fields>5) count          v
+          else count= tmp_mul - tmp_size
+          for(j=6; j<tmp_fields; j++){
+              tmp_reserved[i]             v
+          }
+          for(j=0; j<count && i<256; j++, i++){
+              if (i == 'N') {
+                  flags[i]= FLAG_INVALID;
+                  j--;
+                  continue;
+              }
+              flags[i]= tmp_flag;
+              stream_id[i]= tmp_stream;
+              data_size_mul[i]= tmp_mul;
+              data_size_lsb[i]= tmp_size + j;
+              pts_delta[i]= tmp_pts;
+              reserved_count[i]= tmp_res;
+          }
+      }
+      reserved_bytes]]>
+            </artwork>
+          </figure>
+        </section>
+        <section title="Reserved Headers">
+          <t>Any element with an unknown startcode is considered reserved and
+          MUST be ignored.</t>
+          <figure anchor="reserved header" title="Reserved header structure">
+            <artwork><![CDATA[reserved_headers
+      while(next_byte == 'N' && next_code !=      main_startcode
+                             && next_code !=    stream_startcode
+                             && next_code !=      info_startcode
+                             && next_code !=     index_startcode
+                             && next_code != syncpoint_startcode){
+          packet_header
+          reserved_bytes
+          packet_footer
+      }]]>
+              </artwork>
+          </figure>
+        </section>
+        <section title="Stream Header">
+          <t>[TODO]</t>
+          <figure anchor="stream header" title="Stream header structure">
+            <artwork><![CDATA[stream_header:
+      stream_id                           v
+      stream_class                        v
+      fourcc                              vb
+      time_base_id                        v
+      msb_pts_shift                       v
+      max_pts_distance                    v
+      decode_delay                        v
+      stream_flags                        v
+      codec_specific_data                 vb
+      if(stream_class == video){
+          width                           v
+          height                          v
+          sample_width                    v
+          sample_height                   v
+          colorspace_type                 v
+      }else if(stream_class == audio){
+          samplerate_num                  v
+          samplerate_denom                v
+          channel_count                   v
+      }
+      reserved_bytes]]>
+            </artwork>
+          </figure>
+        </section>
+        <section title="Basic Packets">
+          <section title="Frame">
+            <t>[TODO]</t>
+            <figure anchor="frame structure" title="Frame structure">
+              <artwork><![CDATA[frame:
+    frame_code                          f(8)
+    frame_flags= flags[frame_code]
+    frame_res= reserved_count[frame_code]
+    if(frame_flags&FLAG_CODED){
+        coded_flags                     v
+        frame_flags ^= coded_flags
+    }
+    if(frame_flags&FLAG_STREAM_ID){
+        stream_id                       v
+    }
+    if(frame_flags&FLAG_CODED_PTS){
+        coded_pts                       v
+    }
+    if(frame_flags&FLAG_SIZE_MSB){
+        data_size_msb                   v
+    }
+    if(frame_flags&FLAG_RESERVED)
+        frame_res                       v
+    for(i=0; i<frame_res; i++)
+        reserved                        v
+    if(frame_flags&FLAG_CHECKSUM){
+        checksum                        u(32)
+    }
+    data]]>
+              </artwork>
+            </figure>
+          </section>
+          <section title="Info">
+            <t>[TODO]</t>
+            <figure anchor="info structure" title="Info structure">
+              <artwork><![CDATA[info_packet:
+    stream_id_plus1                     v
+    chapter_id                          s (Note: Due to a typo this was v
+                                           until 2006-11-04.)
+    chapter_start                       t
+    chapter_len                         v
+    count                               v
+    for(i=0; i<count; i++){
+        name                            vb
+        value                           s
+        if (value==-1){
+            type= "UTF-8"
+            value                       vb
+        }else if (value==-2){
+            type                        vb
+            value                       vb
+        }else if (value==-3){
+            type= "s"
+            value                       s
+        }else if (value==-4){
+            type= "t"
+            value                       t
+        }else if (value<-4){
+            type= "r"
+            value.den= -value-4
+            value.num                   s
+        }else{
+            type= "v"
+        }
+    }
+    reserved_bytes]]>
+              </artwork>
+            </figure>
+          </section>
+          <section title="Index">
+            <t>[TODO]</t>
+            <figure anchor="index structure" title="Index structure">
+              <artwork><![CDATA[index:
+    max_pts                             t
+    syncpoints                          v
+    for(i=0; i<syncpoints; i++){
+        syncpoint_pos_div16             v
+    }
+    for(i=0; i<stream_count; i++){
+        last_pts= -1
+        for(j=0; j<syncpoints; ){
+            x                           v
+            type= x & 1
+            x>>=1
+            n=j
+            if(type){
+                flag= x & 1
+                x>>=1
+                while(x--)
+                    has_keyframe[n++][i]=flag
+                has_keyframe[n++][i]=!flag;
+            }else{
+                while(x != 1){
+                    has_keyframe[n++][i]=x&1;
+                    x>>=1;
+                }
+            }
+            for(; j<n && j<syncpoints; j++){
+                if (!has_keyframe[j][i]) continue
+                A                           v
+                if(!A){
+                    A                       v
+                    B                       v
+                    eor_pts[j][i] = last_pts + A + B
+                }else
+                    B=0
+                keyframe_pts[j][i] = last_pts + A
+                last_pts += A + B
+            }
+        }
+    }
+    reserved_bytes
+    index_ptr                           u(64)]]>
+              </artwork>
+            </figure>
+          </section>
+          <section title="Syncpoint">
+            <t>[TODO]</t>
+            <figure anchor="syncpoint structure" title="Syncpoint structure">
+              <artwork><![CDATA[syncpoint:
+    global_key_pts                      t
+    back_ptr_div16                      v
+    reserved_bytes]]>
+              </artwork>
+            </figure>          </section>
+        </section>
       </section>
     </section>
 
