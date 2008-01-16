@@ -859,6 +859,11 @@ info packet types
         Note: Names of fields SHOULD be in English if a word with the same
               meaning exists in English.
         Note: MUST be less than 64 bytes long.
+    "Replaces"
+        v (stream id)
+        This stream is a supperior alternative (higher resolution or
+        otherwise) of the given stream. And it should be preferred over it if
+        the decoder is capable of decoding it.
 
 value
     value of this name/type pair
