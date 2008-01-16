@@ -835,6 +835,8 @@ info packet types
     "SourceCodecTag"
         The source codec ID like a FourCC which was used to store a specific
         stream in its SourceContainer.
+    "SourceFilename"
+        The filename of the source.
     "CaptureDevice"
         "BT878", "BT848", "webcam", ... (or more precise names)
     "CreationTime"
