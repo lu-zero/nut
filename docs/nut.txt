@@ -866,6 +866,11 @@ info packet types
         This stream is a supperior alternative (higher resolution or
         otherwise) of the given stream. And it should be preferred over it if
         the decoder is capable of decoding it.
+    "UsesFont"
+        "Times New Roman", "Arial", ... FIXME should we use the filename
+        instead? is there some other unique way to identify fonts?
+        This stream uses the specified font, if it is unavailable presentation
+        might be less pretty.
 
 value
     value of this name/type pair
