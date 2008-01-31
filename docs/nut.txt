@@ -863,9 +863,9 @@ info packet types
         Note: MUST be less than 64 bytes long.
     "Replaces"
         v (stream id)
-        This stream is a supperior alternative (higher resolution or
-        otherwise) of the given stream. And it should be preferred over it if
-        the decoder is capable of decoding it.
+        This stream is a superior alternative (higher resolution or otherwise)
+        of the given stream. It should be preferred if the decoder is capable
+        of decoding it.
     "UsesFont"
         "Times New Roman", "Arial", ... FIXME should we use the filename
         instead? is there some other unique way to identify fonts?
