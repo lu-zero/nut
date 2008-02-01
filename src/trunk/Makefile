@@ -19,3 +19,5 @@ clean:
 	$(MAKE) -C nututils clean
 
 FORCE:
+
+.PHONY: all libnut nututils install distclean clean FORCE

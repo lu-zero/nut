@@ -21,3 +21,5 @@ nutparse: nutparse.c
 
 clean:
 	rm -f *\~ nutmerge nutindex nutparse avireader oggreader *.o
+
+.PHONY: all clean

@@ -26,3 +26,5 @@ libnut.so: $(OBJS)
 
 clean:
 	rm -f *\~ libnut.so libnut.a *.o
+
+.PHONY: all install uninstall clean
