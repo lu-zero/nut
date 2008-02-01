@@ -11,10 +11,7 @@ nututils: libnut
 install:
 	$(MAKE) -C libnut install
 
-
-distclean: clean
-
-clean:
+clean distclean:
 	$(MAKE) -C libnut clean
 	$(MAKE) -C nututils clean
 
