@@ -19,6 +19,8 @@ nutindex: nutindex.c
 nutparse: nutparse.c
 	$(CC) $(CFLAGS) $^ -o $@
 
+avireader nutindex nutmerge nutparse oggreader: nutmerge.h
+
 clean:
 	rm -f *\~ nutmerge nutindex nutparse avireader oggreader *.o
 
