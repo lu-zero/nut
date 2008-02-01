@@ -1,8 +1,8 @@
 // (C) 2005-2006 Oded Shimon
 // This file is available under the MIT/X license, see COPYING
 
-#ifndef LIBNUT_NUT_H_
-#define LIBNUT_NUT_H_
+#ifndef LIBNUT_NUT_H
+#define LIBNUT_NUT_H
 
 #include <stddef.h>
 #include <stdint.h>
@@ -592,4 +592,4 @@ int nut_seek(nut_context_t * nut, double time_pos, int flags, const int * active
  * After nut_seek, nut_read_next_packet should be called to get the next frame.
  */
 
-#endif // LIBNUT_NUT_H_
+#endif // LIBNUT_NUT_H
