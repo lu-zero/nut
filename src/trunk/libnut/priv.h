@@ -41,7 +41,7 @@ typedef struct {
 	int is_mem;
 	uint8_t * buf;
 	uint8_t * buf_ptr;
-	int write_len; // memory allocated
+	int write_len; // allocated memory
 	int read_len;  // data in memory
 	off_t file_pos;
 	off_t filesize;
@@ -53,7 +53,7 @@ typedef struct {
         int is_mem;
 	uint8_t * buf;
 	uint8_t * buf_ptr;
-	int write_len; // memory allocated
+	int write_len; // allocated memory
 	off_t file_pos;
 	nut_alloc_t * alloc;
 } output_buffer_t;
@@ -89,7 +89,7 @@ typedef struct {
 	uint64_t * pts; // each elem is stream_count items, +1 to real pts, 0 means there is no key
 	uint64_t * eor; // same as pts, is the pts of last eor in syncpoint region _IF_ eor is set by syncpoint.
 	int cached_pos;
-	syncpoint_linked_t * linked; // entires are entered in reverse order for speed, points to END of list
+	syncpoint_linked_t * linked; // entries are entered in reverse order for speed, points to END of list
 } syncpoint_list_t;
 
 typedef struct {
@@ -107,7 +107,7 @@ typedef struct {
 } seek_state_t;
 
 typedef struct {
-	uint64_t last_key; // muxer.c, re-set to 0 on every keyframe
+	uint64_t last_key; // muxer.c, reset to 0 on every keyframe
 	uint64_t last_pts;
 	int64_t last_dts;
 	int msb_pts_shift;
