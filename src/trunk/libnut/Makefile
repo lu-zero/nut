@@ -14,13 +14,13 @@ uninstall:
 	rm -f $(prefix)/lib/libnut.a
 	rm -f $(prefix)/include/libnut.h
 
-libnut.a: ${OBJS}
+libnut.a: $(OBJS)
 	rm -f $@
-	${AR} rc $@ $^
+	$(AR) rc $@ $^
 	$(RANLIB) $@
 
-libnut.so: ${OBJS}
-	${CC} ${CFLAGS} -shared $^ -o $@
+libnut.so: $(OBJS)
+	$(CC) $(CFLAGS) -shared $^ -o $@
 
 *.o: priv.h libnut.h
 

@@ -3,12 +3,12 @@ include config.mak
 all: libnut nututils
 
 libnut: FORCE
-	${MAKE} -C libnut
+	$(MAKE) -C libnut
 nututils: libnut FORCE
-	${MAKE} -C nututils
+	$(MAKE) -C nututils
 
 install:
-	${MAKE} -C libnut install
+	$(MAKE) -C libnut install
 
 
 distclean: clean
