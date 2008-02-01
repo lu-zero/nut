@@ -242,12 +242,12 @@ int nut_seek(nut_context_t * nut, double time_pos, int flags, const int * active
  *
  * Reference implementation for NUT open container format.
  *
- * libnut source code can be downloaded from svn://svn.mplayerhq.hu/nut
+ * libnut source code is at svn://svn.mplayerhq.hu/nut/src/libnut/
  *
  * Copyright of this library is MIT/X license. For more details, see
  * \ref License.
  *
- * For more information on the format, please visit http://www.nut.hu
+ * For more information on the format, please visit http://www.nut-container.org/
  */
 
 /*! \page License
