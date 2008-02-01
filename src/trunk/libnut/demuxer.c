@@ -803,7 +803,7 @@ static int find_main_headers(nut_context_t * nut) {
 			if ((err = get_header(nut->i, NULL)) == NUT_ERR_EAGAIN) goto err_out;
 			if (err) { tmp = err = 0; break; } // bad
 
-			// EOF is a legal error here - when reading the last headers in file
+			// EOF is a legal error here - when reading the last headers in the file
 			if ((err = get_bytes(nut->i, 8, &tmp)) == NUT_ERR_EOF) { err = 0; tmp = SYNCPOINT_STARTCODE; }
 			CHECK(err); // if get_bytes returns EAGAIN or a memory error, check for that
 		} while (tmp != SYNCPOINT_STARTCODE);
@@ -832,7 +832,7 @@ static int find_main_headers(nut_context_t * nut) {
 		}
 	}
 	seek_buf(nut->i, 1 << ++nut->seek_status, SEEK_SET);
-	// evantually we'll hit EOF and give up
+	// eventually we'll hit EOF and give up
 	return find_main_headers(nut);
 err_out:
 	if (err == NUT_ERR_EOF && !nut->last_syncpoint && nut->seek_status) {
@@ -888,7 +888,7 @@ retry:
 		return 0;
 	}
 
-	if (read < nut->max_distance) return buf_eof(nut->i); // too little read
+	if (read < nut->max_distance) return buf_eof(nut->i); // too little was read
 
 	if (backwards) {
 		nut->i->buf_ptr = nut->i->buf;
@@ -919,7 +919,7 @@ static int smart_find_syncpoint(nut_context_t * nut, syncpoint_t * sp, int backw
 		for (i = 0; i < sl->len; i++) if (sl->s[i].pos+15 > pos) break;
 		ERROR(i == sl->len || (i && !sl->s[i-1].seen_next), -1);
 
-		// trust the caller if it gave more percise syncpoint location
+		// trust the caller if it gave more precise syncpoint location
 		if (ABS(pos - sl->s[i].pos) > 15) seek_buf(nut->i, sl->s[i].pos, SEEK_SET);
 	}
 	fss->i = i + 1;
@@ -994,7 +994,7 @@ int nut_read_next_packet(nut_context_t * nut, nut_packet_t * pd) {
 	if (nut->seek_status) { // in error mode!
 		syncpoint_t s;
 		CHECK(smart_find_syncpoint(nut, &s, 0, 0));
-		nut->i->buf_ptr = get_buf(nut->i, s.pos); // go back to begginning of syncpoint
+		nut->i->buf_ptr = get_buf(nut->i, s.pos); // go back to beginning of syncpoint
 		flush_buf(nut->i);
 		clear_dts_cache(nut);
 		nut->last_syncpoint = 0;
@@ -1047,7 +1047,7 @@ static int get_headers(nut_context_t * nut, int read_info) {
 		} else {
 			CHECK(get_header(nut->i, NULL));
 		}
-		// EOF is a legal error here - when reading the last headers in file
+		// EOF is a legal error here - when reading the last headers in the file
 		if ((err = get_bytes(nut->i, 8, &tmp)) == NUT_ERR_EOF) { tmp = err = 0; break; }
 		CHECK(err); // it's just barely possible for get_bytes to return a memory error, check for that
 	}
@@ -1103,7 +1103,7 @@ int nut_read_headers(nut_context_t * nut, nut_stream_header_t * s [], nut_info_p
 
 	// step 4 - find the first syncpoint in file
 	if (nut->last_headers > 1024 && !nut->seek_status && nut->i->isc.seek) {
-		// the headers weren't found in begginning of file
+		// the headers weren't found in the beginning of the file
 		assert(nut->i->isc.seek);
 		seek_buf(nut->i, 0, SEEK_SET);
 		nut->seek_status = 1;
@@ -1167,7 +1167,7 @@ static int binary_search_syncpoint(nut_context_t * nut, double time_pos, off_t *
 
 	// find last syncpoint if it's not already found
 	if (!sl->s[sl->len-1].seen_next) {
-		// searching bakwards from EOF
+		// searching backwards from EOF
 		if (!nut->seek_status) seek_buf(nut->i, -nut->max_distance, SEEK_END);
 		nut->seek_status = 1;
 		CHECK(find_syncpoint(nut, &s, 1, 0));
@@ -1267,7 +1267,7 @@ static int linear_search_seek(nut_context_t * nut, int backwards, off_t start, o
 		syncpoint_t s;
 		if (!nut->seek_status) seek_buf(nut->i, start, SEEK_SET);
 		nut->seek_status = 1;
-		// find closest syncpoint by linear search, SHOULD be one pointed by back_ptr...
+		// find closest syncpoint by linear search, SHOULD be one pointed to by back_ptr...
 		CHECK(smart_find_syncpoint(nut, &s, !!end, 0));
 		clear_dts_cache(nut);
 		nut->last_syncpoint = 0; // last_key is invalid
@@ -1334,7 +1334,7 @@ static int linear_search_seek(nut_context_t * nut, int backwards, off_t start, o
 		} else if (stopper && pd.flags&NUT_FLAG_KEY) {
 			off_t back_ptr = stopper->pos - stopper->back_ptr;
 			TO_PTS(stopper, stopper->pts)
-			// only relavent if pts is smaller than stopper, and we passed stopper's back_ptr
+			// only relevant if pts is smaller than stopper, and we passed stopper's back_ptr
 			if (compare_ts(pd.pts, TO_TB(pd.stream), stopper_p, nut->tb[stopper_t]) < 0 && buf_before >= back_ptr) {
 				if (!stopper_syncpoint) nut->sc[pd.stream].state.good_key = 1;
 				else if (nut->sc[pd.stream].state.good_key) {
@@ -1463,7 +1463,7 @@ int nut_seek(nut_context_t * nut, double time_pos, int flags, const int * active
 				uint64_t tmp;
 				if (!nut->sc[j].state.active) continue;
 				tmp = sl->pts[i * nut->stream_count + j];
-				if (tmp--) { // -- because all pts array is off-by-one. zero indicate no keyframe.
+				if (tmp--) { // -- because all pts array is off-by-one. Zero indicates no keyframe.
 					if (tmp > nut->sc[j].state.pts) { if (!last_sync) last_sync = i; }
 					else sync[j] = (i-1);
 				}
@@ -1495,7 +1495,7 @@ int nut_seek(nut_context_t * nut, double time_pos, int flags, const int * active
 	if (start) { // "unsuccessful" seek needs no linear search
 		if (!(flags & 2)) { // regular seek
 			CHECK(linear_search_seek(nut, backwards, start, end, stopper.pos ? &stopper : NULL));
-		} else { // forwards seek, find keyframe
+		} else { // seek forwards, find keyframe
 			CHECK(linear_search_seek(nut, backwards, end, 0, NULL));
 		}
 	}
@@ -1612,7 +1612,7 @@ const char * nut_error(int error) {
 		case NUT_ERR_NO_HEADERS: return "No headers found!";
 		case NUT_ERR_NOT_SEEKABLE: return "Cannot seek to that position.";
 		case NUT_ERR_OUT_OF_ORDER: return "out of order dts";
-		case NUT_ERR_MAX_PTS_DISTANCE: return "Pts difference higher than max_pts_distance.";
+		case NUT_ERR_MAX_PTS_DISTANCE: return "pts difference higher than max_pts_distance.";
 		case NUT_ERR_BAD_STREAM_ORDER: return "Stream headers are stored in wrong order.";
 		case NUT_ERR_NOSTREAM_STARTCODE: return "Expected stream startcode not found.";
 		case NUT_ERR_BAD_EOF: return "Invalid forward_ptr!";

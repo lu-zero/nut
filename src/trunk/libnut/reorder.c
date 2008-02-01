@@ -46,7 +46,7 @@ static void flushcheck_frames(nut_context_t * nut) {
 				}
 			}
 			// MN rule, (i < j) && (i.dts <= j.pts)
-			// actually, strict DTS.
+			// actually, strict dts
 			if (min == -1 || nut->sc[i].packets[0].dts <= min) {
 				for (j = 1; j < nut->sc[i].num_packets; j++) {
 					if (min != -1 && nut->sc[i].packets[j].dts > min) break;
