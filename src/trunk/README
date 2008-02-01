@@ -4,12 +4,12 @@ make install
 
 
 to use:
-./nutmerge bla.avi bla.nut  # only mpeg-4 with mp3
-./nutmerge bla.ogg bla.nut  # only vorbis
+./nutmerge bla.avi bla.nut  # only MPEG-4 with MP3
+./nutmerge bla.ogg bla.nut  # only Vorbis
 
 
 to play with mplayer:
-./configure                 # libnut should be auto detected after make install here
+./configure                 # libnut should be autodetected after make install
 make
 ./mplayer bla.nut
 
@@ -20,7 +20,7 @@ make
 ./ffplay bla.nut
 
 
-to copy index to begginning of file:
+to copy index to beginning of file:
 ./nutindex bla.nut new.nut
 
 
