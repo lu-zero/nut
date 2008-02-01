@@ -240,11 +240,11 @@ int nut_seek(nut_context_t * nut, double time_pos, int flags, const int * active
  * \author Oded Shimon <ods15@ods15.dyndns.org>
  * \date 2005-2006
  *
- * Reference implementation for NUT open container format.
+ * Reference implementation for the NUT open container format.
  *
  * libnut source code is at svn://svn.mplayerhq.hu/nut/src/libnut/
  *
- * Copyright of this library is MIT/X license. For more details, see
+ * This library is covered by the MIT/X license. For more details, see
  * \ref License.
  *
  * For more information on the format, please visit http://www.nut-container.org/
@@ -255,7 +255,7 @@ int nut_seek(nut_context_t * nut, double time_pos, int flags, const int * active
  */
 
 /*! \struct nut_alloc_t
- * libc semantics are assumed to all functions. (realloc must work with NULL or zero size)
+ * libc semantics are assumed for all functions (realloc must work with NULL or zero size).
  *
  * #malloc function pointer may be NULL. This indicates using libc malloc, realloc and free functions.
  *
@@ -288,34 +288,34 @@ int nut_seek(nut_context_t * nut, double time_pos, int flags, const int * active
 
 /*! \var char nut_info_field_t::type[7]
  * Type of field value
- * - "v" - Integer value
- * - "s" - Signed integer value
- * - "r" - Fraction rational
- * - "t" - Timestamp
+ * - "v" - integer value
+ * - "s" - signed integer value
+ * - "r" - fraction rational
+ * - "t" - timestamp
  * - "UTF-8" - UTF-8 coded string
- * - Other - Binary data
+ * - Other - binary data
  */
 
 /*! \var int64_t nut_info_field_t::val
- * - "v" - Integer value
- * - "s" - Integer value
- * - "r" - Numerator of fraction
- * - "t" - Integer timestamp in timebase #tb
- * - Other - Length of #data in bytes
+ * - "v" - integer value
+ * - "s" - integer value
+ * - "r" - numerator of fraction
+ * - "t" - integer timestamp in timebase #tb
+ * - Other - length of #data in bytes
  *
- * In the case of UTF-8 string, length of #data \b must \b not contain the
+ * In the case an of UTF-8 string, length of #data \b must \b not contain the
  * terminating NUL (U+0000).
  */
 
 /*! \var nut_timebase_t nut_info_field_t::tb
- * In the case of muxer, values of #tb \b must be identical to the
+ * In the muxer case, values of #tb \b must be identical to the
  * timebase of one of the streams.
  */
 
 /*! \var uint8_t * nut_info_field_t::data
- * Even in the case of UTF-8 string, this data is \b not NULL terminated.
+ * Even in the case of an UTF-8 string, this data is \b not NULL terminated.
  *
- * For muxer, this value \b must be NULL if info field carries no binary
+ * For the muxer, this value \b must be NULL if info field carries no binary
  * data.
  */
 
@@ -325,21 +325,21 @@ int nut_seek(nut_context_t * nut, double time_pos, int flags, const int * active
  */
 
 /*! \var nut_info_packet_t::chapter_id
- * Value of 0 indicates info packet applies to complete file.
+ * A value of 0 indicates that the info packet applies to the complete file.
  *
  * Positive values are real chapters. Real chapters must not overlap. The
  * #chapter_id of a real chapter must not be higher than the total amount
  * of real chapters in the file.
  *
- * Negative values indicate a subsection of file and may overlap.
+ * Negative values indicate a file subsection and may overlap.
  *
- * If #chapter_id is 0, #chapter_start and #chapter_len provide length of
- * entire file.
+ * If #chapter_id is 0, #chapter_start and #chapter_len provide the length
+ * of the entire file.
  */
 
 /*! \var nut_info_packet_t::chapter_tb
- * In muxing, values #chapter_tb \b must be identical to the timebase of
- * one of the streams
+ * When muxing, values #chapter_tb \b must be identical to the timebase of
+ * one of the streams.
  */
 
 /*!
@@ -356,25 +356,25 @@ int nut_seek(nut_context_t * nut, double time_pos, int flags, const int * active
  * - 4096  FLAG_CODED
  * - 8192  FLAG_INVALID
  *
- * Last entry of frame table \b must have flag==-1.
+ * The last entry of nut_frame_table_input_t \b must have flag == -1.
  */
 
 /*! \fn nut_context_t * nut_muxer_init(const nut_muxer_opts_t * mopts, const nut_stream_header_t s[], const nut_info_packet_t info[])
- * \param mopts Muxer options
- * \param s     Stream header data, terminated by \a type=-1.
- * \param info  Info packet data, terminated by \a count=-1. May be \a NULL.
+ * \param mopts muxer options
+ * \param s     Stream header data, terminated by \a type = -1.
+ * \param info  Info packet data, terminated by \a count = -1. May be \a NULL.
  * \return NUT muxer context
  *
- * In case nut_muxer_opts_t::realtime_stream is set, the first packet given
- * to the nut_output_stream_t::write() function given by muxer options will
- * be all of the main headers. This packet must be given exactly once at
- * the begginning of any stream forwarded out.
+ * In case nut_muxer_opts_t::realtime_stream is set, the first packet passed
+ * to the nut_output_stream_t::write() function will be all of the main
+ * headers. This packet must be passed along exactly once with the
+ * beginning of any stream forwarded out.
  */
 
 /*! \fn void nut_muxer_uninit(nut_context_t *nut)
  * \param nut NUT muxer context
  *
- * Optionally writes index if nut_muxer_opts_t::write_index is set and
+ * Optionaly writes index if nut_muxer_opts_t::write_index is set and
  * nut_muxer_opts_t::realtime_stream is unset.
  *
  * \warning Must \b not be used directly if nut_write_frame_reorder() was used.
@@ -383,12 +383,12 @@ int nut_seek(nut_context_t * nut, double time_pos, int flags, const int * active
 
 /*! \fn void nut_write_frame(nut_context_t * nut, const nut_packet_t * p, const uint8_t * buf)
  * \param nut NUT muxer context
- * \param p   Infomation on the frame written.
- * \param buf Actual data of frame.
+ * \param p   information about the frame
+ * \param buf actual frame data
  *
  * If nut_muxer_opts_t::realtime_stream realtime_stream is unset, repeated
  * headers will be written at some positions. Syncpoints will be written in
- * accordance to NUT spec. If nut_muxer_opts_t::realtime_stream is set,
+ * accordance to the NUT spec. If nut_muxer_opts_t::realtime_stream is set,
  * calling this function will result in a single nut_output_stream_t::write()
  * call, which will be the full frame NUT packet. If the packet starts with
  * a syncpoint startcode, it may be used as a start point after giving the
@@ -403,17 +403,17 @@ int nut_seek(nut_context_t * nut, double time_pos, int flags, const int * active
 
 /*! \fn void nut_write_info(nut_context_t * nut, const nut_info_packet_t * info)
  * \param nut NUT muxer context
- * \param info A single info packet.
+ * \param info a single info packet
  *
- * The use of this function is \b illegal in non realtime streams, and will
+ * The use of this function is \b illegal in non-realtime streams, and will
  * do nothing if nut_muxer_opts_t::realtime_stream is not set. The result
  * is a single call to nut_output_stream_t::write() with the NUT info packet.
  */
 
 /*! \fn void nut_write_frame_reorder(nut_context_t * nut, const nut_packet_t * p, const uint8_t * buf)
  * \param nut NUT muxer context
- * \param p   Infomation on the frame written.
- * \param buf Actual data of frame.
+ * \param p   information about the frame
+ * \param buf actual frame data
  *
  * Uses an internal buffer and sorts the frames to meet NUT's ordering rule.
  * Calls to this function \b must \b not be mixed with calls to
@@ -431,10 +431,10 @@ int nut_seek(nut_context_t * nut, double time_pos, int flags, const int * active
  */
 
 /*! \fn void nut_framecode_generate(const nut_stream_header_t s[], nut_frame_table_input_t fti[256])
- * \param s   Stream header data, terminated by \a type=-1.
- * \param fti Output framecode table data. Must be pre-allocated to 256 entries.
+ * \param s   Stream header data, terminated by \a type = -1.
+ * \param fti Output framecode table data, must be preallocated to 256 entries.
  *
- * Creates an optimized framecode table for NUT main header based on stream
+ * Creates an optimized framecode table for the NUT main header based on stream
  * types and codecs. Currently recognized fourcc values are "mp4v", "h264",
  * "mp3 ", and "vrbs".
  *
@@ -445,10 +445,10 @@ int nut_seek(nut_context_t * nut, double time_pos, int flags, const int * active
 /*! \addtogroup demuxer
  * All of the demuxer related functions return an integer value
  * representing one of the following return codes:
- * - 0 (=#NUT_ERR_NO_ERROR) Success
- * - #NUT_ERR_EOF           Unexpected or expected EOF
- * - #NUT_ERR_EAGAIN        Insufficient data for demuxing
- * - #NUT_ERR_NOT_SEEKABLE  Unsuccessful seek in nut_seek()
+ * - 0 (=#NUT_ERR_NO_ERROR) success
+ * - #NUT_ERR_EOF           unexpected or expected EOF
+ * - #NUT_ERR_EAGAIN        insufficient data for demuxing
+ * - #NUT_ERR_NOT_SEEKABLE  unsuccessful seek in nut_seek()
  *
  * \par NUT_ERR_EOF
  * If any function returns EOF, it can be recovered by using nut_seek().
@@ -456,18 +456,18 @@ int nut_seek(nut_context_t * nut, double time_pos, int flags, const int * active
  * error and only nut_demuxer_uninit() can be called.
  *
  * \par NUT_ERR_EAGAIN
- * Indicates not enough data was given from nut_input_stream_t::read()
- * function, but EOF was not met. Whichever function returned this should
- * be re-called given the exact same params when more data is available.
+ * Indicates that not enough data was returned by nut_input_stream_t::read(),
+ * but EOF was not reached. Whichever function returned this should be called
+ * again with the exact same parameters when more data is available.
  * The exception to this is nut_read_frame(), which should be called with
- * an updated \a buf param.
+ * an updated \a buf parameter.
  *
  * \par NUT_ERR_NOT_SEEKABLE
  * Can only be returned from nut_seek(). Indicates that no seek has been
- * performed and that the stream is in the exact same position before the
- * seek.
+ * performed and that the stream is in the exact same position it was in
+ * before the seek.
  *
- * \par Other errors
+ * \par other errors
  * All errors except the list above are fatal.
  * The only legal operation after a fatal error is nut_demuxer_uninit().
  */
@@ -484,7 +484,7 @@ int nut_seek(nut_context_t * nut, double time_pos, int flags, const int * active
  * nut_seek() with an unseekable stream will yield #NUT_ERR_NOT_SEEKABLE
  *
  * Parameter whence must support the following libc defines:
- * - SEEK_SET - pos is used as offset from begginning of file
+ * - SEEK_SET - pos is used as offset from beginning of file
  * - SEEK_CUR - pos is used as offset from current position
  * - SEEK_END - pos is used as offset from end of file
  */
@@ -502,7 +502,7 @@ int nut_seek(nut_context_t * nut, double time_pos, int flags, const int * active
  */
 
 /*! \var off_t nut_input_stream_t::file_pos
- * Must contain position in file at begginning of demuxing. Should
+ * Must contain the position in the file at which demuxing begins. Should
  * usually be zero.
  */
 
@@ -511,33 +511,33 @@ int nut_seek(nut_context_t * nut, double time_pos, int flags, const int * active
  * \param s    Pointer to stream header variable to be set to an array
  * \param info Pointer to info header variable, may be NULL.
  *
- * Both `s' and `info' are handeled by context, and are illegal pointers
+ * Both `s' and `info' are handled by context and are illegal pointers
  * after nut_demuxer_uninit().
  *
- * If main NUT headers are not found at begginning of file and the input
- * stream is seekable, Several parts of the file are searched for the main
+ * If main NUT headers are not found at beginning of file and the input
+ * stream is seekable, several parts of the file are searched for the main
  * headers before giving up in accordance to NUT spec (EOF and 2^n
  * locations).
  *
  * Any error returned from this function except #NUT_ERR_EAGAIN is fatal.
- * No other functions may be called until a successful call to
- * nut_read_headers().
+ * No other functions may be called before a call to
+ * nut_read_headers() succeeds.
  */
 
 /*! \fn int nut_read_next_packet(nut_context_t * nut, nut_packet_t * pd)
  * \param nut NUT demuxer context
  * \param pd  Pointer to frame header struct to be filled with next frame
- *            info.
+ *            information.
  *
  * After a successful call to nut_read_next_packet(), nut_read_frame()
  * \b must be called.
  *
  * If nut_demuxer_opts_t::new_info is non-NULL, a new info packet may be
- * seen before decoding of frame header and this function pointer will be
+ * seen before decoding the frame header and this function pointer will be
  * called (possibly even several times).
  *
- * If a stream error is detected during decoding of frame header,
- * nut_read_next_packet() will attempt to recover from the error and gives
+ * If a stream error is detected during frame header decoding,
+ * nut_read_next_packet() will attempt to recover from the error and return
  * the next undamaged frame in the stream.
  */
 
@@ -548,11 +548,11 @@ int nut_seek(nut_context_t * nut, double time_pos, int flags, const int * active
  *
  * This function must be called \b after nut_read_next_packet().
  *
- * If the function return #NUT_ERR_EAGAIN or #NUT_ERR_EOF, \a len will
+ * If the function returns #NUT_ERR_EAGAIN or #NUT_ERR_EOF, \a len will
  * return the amount of bytes actually read.
  *
- * Data is always written to the \b begginning of the buffer \a buf, so it
- * must be moved accordingly in case of beign called again for
+ * Data is always written to the \b beginning of the buffer \a buf, so it
+ * must be moved accordingly in case of being called again for
  * #NUT_ERR_EAGAIN.
  *
  * \par Example:
@@ -566,14 +566,14 @@ int nut_seek(nut_context_t * nut, double time_pos, int flags, const int * active
 
 /*! \fn int nut_seek(nut_context_t * nut, double time_pos, int flags, const int * active_streams)
  * \param nut            NUT demuxer context
- * \param time_pos       Position to seek to in seconds
- * \param flags          Bitfield given as seek options.
- * \param active_streams -1 terminated list of all streams that are active.
- *                       May be NULL - indicates all streams are active.
+ * \param time_pos       position to seek to in seconds
+ * \param flags          bitfield with seek options
+ * \param active_streams List of all active streams terminated by -1,
+ *                       may be NULL indicating that all streams are active.
  *
  * Flag bitfield options:
  * - 1 RELATIVE: If set, \a time_pos is relative to current position,
- *               otherwise it is absoloute.
+ *               otherwise it is absolute.
  * - 2 FORWARD:  If set, the seek should find the nearest keyframe
  *               after the target position. If unset, the nearest
  *               keyframe before the target position is picked.
@@ -582,12 +582,12 @@ int nut_seek(nut_context_t * nut, double time_pos, int flags, const int * active
  * backwards seeking, a keyframe for all active streams is garunteed to be
  * found before the target presentation timestamp.
  *
- * In forward seeking, no percise seeking is preformed. The function seeks
+ * In forward seeking, no precise seeking is performed. The function seeks
  * to the first keyframe for an active stream after the target timestamp.
  *
  * If the function returns #NUT_ERR_NOT_SEEKABLE, no seek was performed.
- * If #NUT_ERR_EOF is returned, requested position is outside bounds of
- * file.
+ * If #NUT_ERR_EOF is returned, the requested position is outside the
+ * bounds of the file.
  *
  * After nut_seek, nut_read_next_packet should be called to get the next frame.
  */
