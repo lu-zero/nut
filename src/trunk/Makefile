@@ -2,10 +2,10 @@ include config.mak
 
 all: libnut nututils
 
-libnut: FORCE
+libnut:
 	$(MAKE) -C libnut
 
-nututils: libnut FORCE
+nututils: libnut
 	$(MAKE) -C nututils
 
 install:
@@ -17,7 +17,5 @@ distclean: clean
 clean:
 	$(MAKE) -C libnut clean
 	$(MAKE) -C nututils clean
-
-FORCE:
 
 .PHONY: all libnut nututils install distclean clean FORCE
