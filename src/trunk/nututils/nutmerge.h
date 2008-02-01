@@ -1,6 +1,9 @@
 // (C) 2005-2006 Oded Shimon
 // This file is available under the MIT/X license, see COPYING
 
+#ifndef NUTUTILS_NUTMERGE_H
+#define NUTUTILS_NUTMERGE_H
+
 #include <inttypes.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -96,3 +99,5 @@ enum nutmerge_errors {
 	err_vorbis_header,
 	err_vorbis_packet,
 };
+
+#endif // NUTUTILS_NUTMERGE_H
