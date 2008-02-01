@@ -141,7 +141,7 @@ int main(int argc, char * argv []) {
 		argv += 2;
 		argc -= 2;
 	}
-	if (argc < 3) { fprintf(stderr, "bleh, more params you fool...\n"); return 1; }
+	if (argc < 3) { fprintf(stderr, "usage: %s source.avi output.nut\n", argv[0]); return 1; }
 	extension = argv[1];
 	for (i = 0; argv[1][i]; i++) if (argv[1][i] == '.') extension = &argv[1][i+1];
 	for (i = 0; ndemuxers[i]; i++) if (!strcmp(ndemuxers[i]->extension, extension)) break;
