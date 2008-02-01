@@ -4,6 +4,7 @@ all: libnut nututils
 
 libnut: FORCE
 	$(MAKE) -C libnut
+
 nututils: libnut FORCE
 	$(MAKE) -C nututils
 
