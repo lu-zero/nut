@@ -73,7 +73,7 @@ static int setup_headers(framer_priv_t * vc, nut_stream_header_t * s) {
 	uint8_t * p;
 	packet_t pd[3];
 
-	// need first 3 packets - TODO - support work directly from good codec_specific instead of ogg crap
+	// need first 3 packets - TODO - support working directly from good codec_specific instead of Ogg crap
 	CHECK(get_stream_packet(vc->stream, &pd[0])); pd_read++;
 	CHECK(get_stream_packet(vc->stream, &pd[1])); pd_read++;
 	CHECK(get_stream_packet(vc->stream, &pd[2])); pd_read++;
@@ -309,7 +309,7 @@ static int get_packet(framer_priv_t * vc, packet_t * p) {
 	if (vc->pts == -1) vc->pts = -MIN(prevbs, mybs)/2; // negative pts for first frame
 
 	vc->pts += MIN(prevbs, mybs)/2; // overlapped with prev
-	vc->pts += (mybs - prevbs)/4; // self contained
+	vc->pts += (mybs - prevbs)/4; // self-contained
 	vc->pts += (mybs - nextbs)/4;
 
 	p->p.pts = last_pts;

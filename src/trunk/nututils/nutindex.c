@@ -40,7 +40,7 @@ typedef struct {
         int is_mem;
 	uint8_t * buf;
 	uint8_t * buf_ptr;
-	int write_len; // memory allocated
+	int write_len; // allocated memory
 	off_t file_pos;
 	FILE * out;
 } output_buffer_t;
@@ -130,7 +130,7 @@ typedef struct {
 	FILE * in;
 	uint8_t * buf;
 	uint8_t * buf_ptr;
-	int write_len; // memory allocated
+	int write_len; // allocated memory
 	int read_len;  // data in memory
 	off_t file_pos;
 	off_t filesize;
@@ -313,7 +313,7 @@ static int find_copy_index(input_buffer_t * in, output_buffer_t * out, off_t * e
 
 	forward_ptr += new_idx_len-idx_len;
 
-	idx_len = (in->filesize - 12) - bctello(in); // from where we are, until the index_ptr and checksum, copy everything
+	idx_len = (in->filesize - 12) - bctello(in); // copy everything from where we are until the index_ptr and checksum
 	if (get_data(in, idx_len, out->buf_ptr)) return 1;
 	out->buf_ptr += idx_len;
 
@@ -333,7 +333,7 @@ int main(int argc, char * argv[]) {
 		fprintf(stderr, "%s <input-nut-file> <output-nut-file>\n", argv[0]);
 		return 1;
 	}
-	printf("Note! This program produces less error resiliant files by moving the main headers!\n");
+	printf("Note! This program produces less error resilient files by moving the main headers!\n");
 
 	in = new_input_buffer(&iin, fin);
 	out = new_output_buffer(&oout, fout);

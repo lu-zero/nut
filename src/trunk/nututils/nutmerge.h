@@ -25,7 +25,7 @@ enum nutmerge_codecs {
 
 typedef struct {
 	nut_packet_t p;
-	uint8_t * buf; // the demuxer mallocs this, nutmerge (or framer) evantually frees it
+	uint8_t * buf; // the demuxer mallocs this, nutmerge (or framer) eventually frees it
 } packet_t;
 
 typedef struct {

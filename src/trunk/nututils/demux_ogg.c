@@ -12,7 +12,7 @@ typedef struct ogg_stream_s ogg_stream_t;
 
 struct ogg_stream_s {
 	int serial;
-	int leftover; // buffer for "next page" nonsense. always re-alloced
+	int leftover; // buffer for "next page" nonsense. always reallocated
 	uint8_t * leftover_buf;
 };
 
@@ -21,7 +21,7 @@ struct demuxer_priv_s {
 	ogg_stream_t * os;
 	stream_t * s;
 	int nstreams;
-	int stream_count; // when nutmerge_streams was handed to api...
+	int stream_count; // when nutmerge_streams was handed to the API ...
 };
 
 static struct { enum nutmerge_codecs id; uint8_t * magic; int magic_len; } codecs[] = {
@@ -77,7 +77,7 @@ static int read_page(demuxer_priv_t * ogg, int * stream) {
 			p.buf = malloc(len);
 			p.p.len = len;
 			p.p.stream = *stream;
-			p.p.flags = p.p.pts = p.p.next_pts = 0; // ogg sucks
+			p.p.flags = p.p.pts = p.p.next_pts = 0; // Ogg sucks
 			memcpy(p.buf, os->leftover_buf, os->leftover);
 			FREAD(ogg->in, len - os->leftover, p.buf + os->leftover);
 			push_packet(&ogg->s[*stream], &p);

@@ -774,7 +774,7 @@ static void parse_frame(int frame_type)
 	}
 	printf(" pts: %"PRIi64" (%.3lf s)", streams[stream_id].last_pts,
 	       time_in_s(streams[stream_id].last_pts, streams[stream_id].time_base_id));
-	/* TODO: check pts monotoneness and other pts/dts constraints */
+	/* TODO: check pts monotonicity and other pts/dts constraints */
 	printf(" data_size: %"PRIu64"\n", data_size_msb * frame_types[frame_type].data_size_mul + frame_types[frame_type].data_size_lsb);
 	if ((frame_flags & (FLAG_KEY | FLAG_EOR)) == FLAG_EOR)
 		error("eor frames must be key frames");

@@ -37,15 +37,15 @@ static int get_packet(framer_priv_t * mc, packet_t * p) {
 	if (!(p->p.flags & NUT_FLAG_KEY) ^ (type != 0)) printf("Error detected stream %d frame %d\n", p->p.stream, (int)p->p.pts);
 	p->p.flags |= (type == 0 ? NUT_FLAG_KEY : 0);
 
-	if (type == 2) { p->p.pts--; return 0; } // B frame, simple
+	if (type == 2) { p->p.pts--; return 0; } // B-frame, simple
 	if (type == 3) printf("S-Frame %d\n", (int)p->p.pts);
 
-	// I, P or S, needs forward B frame check
+	// I, P or S, needs forward B-frame check
 
 	while ((err = peek_stream_packet(mc->stream, &tmp_p, n++)) != -1) {
 		if (err) return err;
 		CHECK(find_frame_type(tmp_p.p.len, tmp_p.buf, &type));
-		if (type != 2) break; // not b frame, we're done.
+		if (type != 2) break; // Not a B-frame, we're done.
 		p->p.pts++;
 	}
 

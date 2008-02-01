@@ -39,7 +39,7 @@ static int get_packet(framer_priv_t * mp, packet_t * p) {
 	if (layer==4) return err_mp3_bad_packet;
 	if (freq==3)  return err_mp3_bad_packet;
 
-	//>>19&0x3
+	//>>19 & 0x3
 	if (newhead & (1<<20)) { // MPEG 1.0 (lsf==0) or MPEG 2.0 (lsf==1)
 	  lsf = (newhead & (1<<19)) ? 0 : 1;
 	  if (lsf) freq += 3;
