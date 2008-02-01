@@ -8,13 +8,13 @@
 #include <stdint.h>
 #include <sys/types.h>
 
-/// \defgroup common  Common Defines and Enums
-/// \defgroup muxer   libnut Muxer
-/// \defgroup demuxer libnut Demuxer
+/// \defgroup common  common defines and enums
+/// \defgroup muxer   libnut muxer
+/// \defgroup demuxer libnut demuxer
 
 /// \addtogroup common
 /// @{
-#define NUT_VERSION 2 ///< Version of NUT specification this library implements
+#define NUT_VERSION 2 ///< Version of NUT specification this library implements.
 
 enum nut_stream_class_t {
 	NUT_VIDEO_CLASS    = 0, ///< = 0
@@ -23,167 +23,167 @@ enum nut_stream_class_t {
 	NUT_USERDATA_CLASS = 3, ///< = 3
 };
 
-/// Frame flags bitfield (several flags may be set at once)
+/// frame flags bitfield (several flags may be set at once)
 enum nut_frame_flags_t {
-	NUT_FLAG_KEY = 1,  ///< Marks frame as keyframe
-	NUT_FLAG_EOR = 2,  ///< Marks end of relavence for stream. #NUT_FLAG_KEY \b must be set together with this flag.
+	NUT_FLAG_KEY = 1,  ///< Marks a frame as keyframe.
+	NUT_FLAG_EOR = 2,  ///< Marks end of relevance for stream. #NUT_FLAG_KEY \b must be set together with this flag.
 };
 /// @}
 
 typedef struct nut_context_s nut_context_t;
 
-/// Memory allocation function pointers \ingroup demuxer muxer
+/// memory allocation function pointers \ingroup demuxer muxer
 typedef struct {
-	void * (*malloc)(size_t size);             ///< Memory allocation malloc function pointer
-	void * (*realloc)(void *ptr, size_t size); ///< Memory allocation realloc function pointer
-	void (*free)(void *ptr);                   ///< Memory allocation free function pointer
+	void * (*malloc)(size_t size);             ///< memory allocation malloc function pointer
+	void * (*realloc)(void *ptr, size_t size); ///< memory allocation realloc function pointer
+	void (*free)(void *ptr);                   ///< memory allocation free function pointer
 } nut_alloc_t;
 
-/// Timebase struct \ingroup demuxer muxer
+/// timebase struct \ingroup demuxer muxer
 typedef struct {
 	int num; ///< Example: 1001
 	int den; ///< Example: 24000
 } nut_timebase_t;
 
-/// Stream header struct \ingroup demuxer muxer
+/// stream header struct \ingroup demuxer muxer
 typedef struct {
-	int type;                 ///< Possible values are enum ::nut_stream_class_t. Value of -1 terminates a stream header array
-	int fourcc_len;           ///< Length of fourcc
+	int type;                 ///< Possible values are enum ::nut_stream_class_t. A value of -1 terminates a stream header array.
+	int fourcc_len;           ///< fourcc length
 	uint8_t * fourcc;         ///< fourcc in big-endian format
-	nut_timebase_t time_base; ///< Timebase of stream
-	int fixed_fps;            ///< Flag if stream is fixed fps or not
-	int decode_delay;         ///< Decode delay of codec in this stream
-	int codec_specific_len;   ///< Length of codec specific data
-	uint8_t * codec_specific; ///< Codec specific data. May be NULL if #codec_specific_len is zero.
-	uint64_t max_pts;         ///< Only used in demuxer. If non-zero, then it is the highest value in stream
+	nut_timebase_t time_base; ///< stream timebase
+	int fixed_fps;            ///< denote stream as fixed or variable fps
+	int decode_delay;         ///< decode delay of codec in this stream
+	int codec_specific_len;   ///< length of codec-specific data
+	uint8_t * codec_specific; ///< Codec specific data, may be NULL if #codec_specific_len is zero.
+	uint64_t max_pts;         ///< Only used in demuxer. If non-zero, then it is the highest value in the stream.
 
 	/// \name Video
 	/// Only used if type is #NUT_VIDEO_CLASS @{
-	int width;                ///< Width of video in pixels
-	int height;               ///< Height of video in pixels
-	int sample_width;         ///< Ratio to stretch the video. May only be zero if #sample_height is zero
-	int sample_height;        ///< Ratio to stretch the video. May only be zero if #sample_width is zero
+	int width;                ///< width of video in pixels
+	int height;               ///< height of video in pixels
+	int sample_width;         ///< Ratio to stretch the video, may only be zero if #sample_height is zero.
+	int sample_height;        ///< Ratio to stretch the video, may only be zero if #sample_width is zero.
 	int colorspace_type;
 
 	/// \name Audio
 	/// Only used if type is #NUT_AUDIO_CLASS @{
-	int samplerate_num;       ///< Sample rate of audio. Example: 44100
-	int samplerate_denom;     ///< Sample rate denominator of audio. Example: 1
-	int channel_count;        ///< Amount of audio channels
+	int samplerate_num;       ///< audio sample rate, example: 44100
+	int samplerate_denom;     ///< audio sample rate denominator, example: 1
+	int channel_count;        ///< number of audio channels
 } nut_stream_header_t;
 
-/// Single info field struct \ingroup demuxer muxer
+/// single info field struct \ingroup demuxer muxer
 typedef struct {
 	char type[7];      ///< NULL-terminated string
-	char name[65];     ///< NULL-terminated string. Name of info field
-	int64_t val;       ///< Meaning of value defined by #type
-	int den;           ///< Used if #type is "r". #val is the numerator
-	nut_timebase_t tb; ///< Used if #type is "t"
-	uint8_t * data;    ///< Used if #type is non-numeric
+	char name[65];     ///< NULL-terminated string, name of info field
+	int64_t val;       ///< meaning of value defined by #type
+	int den;           ///< Used if #type is "r", #val is the numerator.
+	nut_timebase_t tb; ///< Used if #type is "t".
+	uint8_t * data;    ///< Used if #type is non-numeric.
 } nut_info_field_t;
 
-/// Single info packet struct \ingroup demuxer muxer
+/// single info packet struct \ingroup demuxer muxer
 typedef struct {
-	int count;                 ///< Indicates how many info fields are provided in #fields
-	int stream_id_plus1;       ///< Zero indicates non-stream-specific info packet
-	int chapter_id;            ///< Indicates which subsection of file this info packet applies to
-	nut_timebase_t chapter_tb; ///< Timebase of #chapter_start and #chapter_len
-	uint64_t chapter_start;    ///< Start of chapter or complete file
-	uint64_t chapter_len;      ///< Length of chapter or complete file
-	nut_info_field_t * fields; ///< Info fields, has #count elements
+	int count;                 ///< number of info fields in #fields.
+	int stream_id_plus1;       ///< Zero indicates non-stream-specific info packet.
+	int chapter_id;            ///< subsection of the file this info packet applies to
+	nut_timebase_t chapter_tb; ///< timebase of #chapter_start and #chapter_len
+	uint64_t chapter_start;    ///< start of chapter or complete file
+	uint64_t chapter_len;      ///< length of chapter or complete file
+	nut_info_field_t * fields; ///< Info fields, has #count elements.
 } nut_info_packet_t;
 
-/// Single frame packet struct \ingroup demuxer muxer
+/// single frame packet struct \ingroup demuxer muxer
 typedef struct {
-	int len;          ///< Length of frame in bytes. \b Must be zero if #NUT_FLAG_EOR is set.
-	int stream;       ///< Stream index of frame
-	uint64_t pts;     ///< Presentation timestamp of frame
-	int flags;        ///< Frame flags from #nut_frame_flags_t
+	int len;          ///< Length of frame in bytes, \b must be zero if #NUT_FLAG_EOR is set.
+	int stream;       ///< stream index of frame
+	uint64_t pts;     ///< presentation timestamp of frame
+	int flags;        ///< frame flags from #nut_frame_flags_t
 	int64_t next_pts; ///< Only used in muxer. Only necessary if nut_write_frame_reorder() is used.
 } nut_packet_t;
 
 
 
 /*****************************************
- * Muxer                                 *
+ * muxer                                 *
  *****************************************/
 
 /// \addtogroup muxer
 /// @{
 
-/// Output stream struct
+/// output stream struct
 typedef struct {
-	void * priv;                                                ///< Opaque priv pointer to be given to function calls
-	int (*write)(void * priv, size_t len, const uint8_t * buf); ///< If NULL, nut_output_stream_t::priv is used as FILE*
+	void * priv;                                                ///< opaque priv pointer to be passed to function calls
+	int (*write)(void * priv, size_t len, const uint8_t * buf); ///< If NULL, nut_output_stream_t::priv is used as FILE*.
 } nut_output_stream_t;
 
-/// NUT Framecode table input
+/// NUT framecode table input
 typedef struct {
-	int flag;   ///< Flags of framecode entry.
+	int flag;   ///< framecode entry flags
 	int pts;    ///< pts delta from previous frame
 	int stream; ///< stream_id of frame
-	int mul;    ///< Multiplier for coded frame size
+	int mul;    ///< multiplier for coded frame size
 	int size;   ///< LSB for coded frame size
 	int count;  ///< Explicit count of framecode entry, \b should be (mul-size) in almost all cases.
 } nut_frame_table_input_t;
 
-/// Muxer options struct
+/// muxer options struct
 typedef struct {
-	nut_output_stream_t output;    ///< Output stream function pointers
-	nut_alloc_t alloc;             ///< Memory allocation function pointers
-	int write_index;               ///< Writes index at end-of-file
-	int realtime_stream;           ///< Implies no write_index
-	int max_distance;              ///< Valid values from 32-65536. Recommended value is 32768. Lower values give better seekability and error detection and recovery but cause higher overhead.
-	nut_frame_table_input_t * fti; ///< Framecode table. May be NULL.
+	nut_output_stream_t output;    ///< output stream function pointers
+	nut_alloc_t alloc;             ///< memory allocation function pointers
+	int write_index;               ///< whether or not to write an index
+	int realtime_stream;           ///< Implies no write_index.
+	int max_distance;              ///< Valid values are 32-65536, the recommended value is 32768. Lower values give better seekability and error detection and recovery but cause higher overhead.
+	nut_frame_table_input_t * fti; ///< Framecode table, may be NULL.
 } nut_muxer_opts_t;
 
-/// Allocates NUT muxer context and writes headers to file
+/// Allocates NUT muxer context and writes headers to file.
 nut_context_t * nut_muxer_init(const nut_muxer_opts_t * mopts, const nut_stream_header_t s[], const nut_info_packet_t info[]);
 
-/// Deallocates NUT muxer context
+/// Deallocates NUT muxer context.
 void nut_muxer_uninit(nut_context_t * nut);
 
-/// Writes a single frame to NUT file
+/// Writes a single frame to a NUT file.
 void nut_write_frame(nut_context_t * nut, const nut_packet_t * p, const uint8_t * buf);
 
-/// Write a single info packet to NUT file
+/// Writes a single info packet to a NUT file.
 void nut_write_info(nut_context_t * nut, const nut_info_packet_t * info);
 
-/// Buffers and sorts a single frame to be written NUT file
+/// Buffers and sorts a single frame to be written to a NUT file.
 void nut_write_frame_reorder(nut_context_t * nut, const nut_packet_t * p, const uint8_t * buf);
 
-/// Flushes reorder buffer and deallocates NUT muxer context
+/// Flushes reorder buffer and deallocates NUT muxer context.
 void nut_muxer_uninit_reorder(nut_context_t * nut);
 
-/// Creates an optimized framecode table for NUT main header based on stream info
+/// Creates an optimized framecode table for the NUT main header based on stream info.
 void nut_framecode_generate(const nut_stream_header_t s[], nut_frame_table_input_t fti[256]);
 /// @}
 
 
 
 /*****************************************
- * Demuxer                               *
+ * demuxer                               *
  *****************************************/
 
 /// \addtogroup demuxer
 /// @{
 
-/// Input stream struct
+/// input stream struct
 typedef struct {
-	void * priv;                                            ///< Opaque priv pointer to be given to function calls
-	size_t (*read)(void * priv, size_t len, uint8_t * buf); ///< Input stream read function. Must return amount of bytes actually read.
-	off_t (*seek)(void * priv, long long pos, int whence);  ///< Input stream seek function. Must return position in file after seek.
+	void * priv;                                            ///< opaque priv pointer to be passed to function calls
+	size_t (*read)(void * priv, size_t len, uint8_t * buf); ///< Input stream read function, must return amount of bytes actually read.
+	off_t (*seek)(void * priv, long long pos, int whence);  ///< Input stream seek function, must return position in file after seek.
 	int (*eof)(void * priv);                                ///< Returns if EOF has been met in stream in case of read error.
-	off_t file_pos;                                         ///< File position at begginning of read.
+	off_t file_pos;                                         ///< file position at beginning of read
 } nut_input_stream_t;
 
-/// Demuxer options struct
+/// demuxer options struct
 typedef struct {
-	nut_input_stream_t input;  ///< Input stream function pointers
-	nut_alloc_t alloc;         ///< Memory allocation function pointers
-	int read_index;            ///< Seeks to end-of-file at begginning of playback to search for index. Implies cache_syncpoints
-	int cache_syncpoints;      ///< Improoves seekability and error recovery greatly, but costs some memory (0.5mb for very large files).
-	void * info_priv;          ///< Opaque priv pointer to be given to #new_info
+	nut_input_stream_t input;  ///< input stream function pointers
+	nut_alloc_t alloc;         ///< memory allocation function pointers
+	int read_index;            ///< Seeks to end-of-file at beginning of playback to search for index. Implies cache_syncpoints.
+	int cache_syncpoints;      ///< Improves seekability and error recovery greatly, but costs some memory (0.5MB for very large files).
+	void * info_priv;          ///< opaque priv pointer to be passed to #new_info
 	void (*new_info)(void * priv, nut_info_packet_t * info); ///< Function to be called when info is found mid-stream. May be NULL.
 } nut_demuxer_opts_t;
 
@@ -192,7 +192,7 @@ enum nut_errors {
 	NUT_ERR_EOF           = 1,    ///< = 1
 	NUT_ERR_EAGAIN        = 2,    ///< = 2
 	NUT_ERR_OUT_OF_MEM    = 3,    ///< = 3
-	NUT_ERR_NOT_SEEKABLE,         ///< Can only be returned by nut_seek(). Indicates that the seek was not successful.
+	NUT_ERR_NOT_SEEKABLE,         ///< Can only be returned by nut_seek(). Indicates that the seek was unsuccessful.
 	NUT_ERR_GENERAL_ERROR,
 	NUT_ERR_BAD_VERSION,
 	NUT_ERR_NOT_FRAME_NOT_N,
@@ -208,25 +208,25 @@ enum nut_errors {
 	NUT_ERR_BAD_EOF,
 };
 
-/// Creates a NUT demuxer context. Does not read any information from file
+/// Creates a NUT demuxer context. Does not read any information from file.
 nut_context_t * nut_demuxer_init(nut_demuxer_opts_t * dopts);
 
-/// Frees a NUT demuxer context. No other functions can be called after this
+/// Frees a NUT demuxer context. No other functions can be called after this.
 void nut_demuxer_uninit(nut_context_t * nut);
 
-/// Read headers and index, \b must be called at begginning
+/// Reads headers and index, \b must be called at init.
 int nut_read_headers(nut_context_t * nut, nut_stream_header_t * s [], nut_info_packet_t * info []);
 
-/// Gets frame header, must be called before each packet
+/// Gets frame header, must be called before each packet.
 int nut_read_next_packet(nut_context_t * nut, nut_packet_t * pd);
 
-/// Just reads the frame \b data, not the header
+/// Reads just the frame \b data, not the header.
 int nut_read_frame(nut_context_t * nut, int * len, uint8_t * buf);
 
-/// Gives human readable description of the error return code of any demuxing function
+/// Gives human readable description of the error return code of any demuxing function.
 const char * nut_error(int error);
 
-/// Seeks to requested position in seconds
+/// Seeks to the requested position in seconds.
 int nut_seek(nut_context_t * nut, double time_pos, int flags, const int * active_streams);
 /// @}
 
