@@ -1285,7 +1285,7 @@ static int linear_search_seek(nut_context_t * nut, int backwards, off_t start, o
 				break;
 			}
 		}
-		if (stopper_syncpoint > bctello(nut->i)) stopper_syncpoint = 0; // don't premature
+		if (stopper_syncpoint > bctello(nut->i)) stopper_syncpoint = 0; // do not load stopper_syncpoint position before it is actually reached
 	}
 
 #define CHECK_break(expr) { if ((err = (expr))) { if (end && err != NUT_ERR_EAGAIN) break; else goto err_out; } }
@@ -1495,7 +1495,7 @@ int nut_seek(nut_context_t * nut, double time_pos, int flags, const int * active
 	if (start) { // "unsuccessful" seek needs no linear search
 		if (!(flags & 2)) { // regular seek
 			CHECK(linear_search_seek(nut, backwards, start, end, stopper.pos ? &stopper : NULL));
-		} else { // seek forwards, find keyframe
+		} else { // forward seek, find keyframe
 			CHECK(linear_search_seek(nut, backwards, end, 0, NULL));
 		}
 	}
