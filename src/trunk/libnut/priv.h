@@ -1,8 +1,8 @@
 // (C) 2005-2006 Oded Shimon
 // This file is available under the MIT/X license, see COPYING
 
-#ifndef _NUT_PRIV_H
-#define _NUT_PRIV_H
+#ifndef LIBNUT_NUT_PRIV_H_
+#define LIBNUT_NUT_PRIV_H_
 
 //#define NDEBUG
 //#define TRACE
@@ -235,4 +235,4 @@ static inline int gcd(int a, int b) {
 
 #define TO_TB(i) nut->tb[nut->sc[i].timebase_id]
 
-#endif // _NUT_PRIV_H
+#endif // LIBNUT_NUT_PRIV_H_
