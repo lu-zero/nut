@@ -12,11 +12,17 @@ nututils/nutmerge: nututils/demux_avi.c nututils/demux_ogg.c nututils/framer_mp3
 
 $(NUTUTILS_PROGS): CFLAGS += -Ilibnut
 
-install:
+install: install-libnut install-nututils
+
+install-libnut: libnut
 	install -d $(prefix)/lib
 	install -m 644 libnut/libnut.a $(prefix)/lib
 	install -d $(prefix)/include
 	install -m 644 libnut/libnut.h $(prefix)/include
+
+install-nututils: nututils
+	install -d $(prefix)/bin
+	install -m 755 $(NUTUTILS_PROGS) $(prefix)/bin
 
 uninstall:
 	rm -f $(prefix)/lib/libnut.a
@@ -26,4 +32,4 @@ clean distclean:
 	rm -f libnut/*\~ libnut/*.o libnut/libnut.so libnut/libnut.a
 	rm -f nututils/*\~ nututils/*.o  $(NUTUTILS_PROGS)
 
-.PHONY: all libnut nututils install uninstall clean distclean
+.PHONY: all libnut nututils install* uninstall clean distclean
