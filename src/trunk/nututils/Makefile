@@ -1,6 +1,6 @@
 include ../config.mak
 
-CFLAGS += -I../libnut -lm
+CFLAGS += -I../libnut
 
 all: avireader nutmerge nutindex nutparse # oggreader
 
