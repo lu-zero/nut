@@ -2,7 +2,6 @@
 // This file is available under the MIT/X license, see COPYING
 
 #include "nutmerge.h"
-#include <math.h>
 #include <string.h>
 
 FILE * stats = NULL;
