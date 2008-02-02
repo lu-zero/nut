@@ -17,7 +17,7 @@ libnut/libnut.so: $(LIBNUT_OBJS)
 
 $(LIBNUT_OBJS): libnut/priv.h libnut/libnut.h
 
-nututils: libnut $(NUTUTILS_PROGS)
+nututils: $(NUTUTILS_PROGS)
 
 nututils/nutmerge: nututils/demux_avi.c nututils/demux_ogg.c nututils/framer_mp3.c nututils/framer_mpeg4.c nututils/framer_vorbis.c nututils/nutmerge.h libnut/libnut.a # nututils/demux_nut.c
 
