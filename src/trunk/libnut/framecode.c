@@ -41,11 +41,11 @@ void nut_framecode_generate(const nut_stream_header_t s[], nut_frame_table_input
 			fti[n++] = (fti_t){ NUT_FLAG_KEY|              FLAG_SIZE_MSB,    1,      i,   1,    0,     1 };
 			fti[n++] = (fti_t){ NUT_FLAG_KEY|FLAG_CHECKSUM|FLAG_SIZE_MSB,    1,      i,   1,    0,     1 };
 			fti[n++] = (fti_t){             FLAG_CODED_PTS|FLAG_SIZE_MSB,    0,      i,   1,    0,     1 };
-			if (s[i].fourcc_len == 4 && !strncmp(s[i].fourcc, "mp4v", 4)) {
+			if (s[i].fourcc_len == 4 && !strncmp((char*)s[i].fourcc, "mp4v", 4)) {
 				fti[n++] = (fti_t){                                0,    1,      i,   7,    6,     1 };
 				fti[n++] = (fti_t){                                0,    2,      i,   7,    6,     1 };
 				consume[i] = e_consume_mpeg4;
-			} else if (s[i].fourcc_len == 4 && !strncmp(s[i].fourcc, "h264", 4)) {
+			} else if (s[i].fourcc_len == 4 && !strncmp((char*)s[i].fourcc, "h264", 4)) {
 				consume[i] = e_consume_h264;
 			} else {
 				consume[i] = e_consume_video;
@@ -54,13 +54,13 @@ void nut_framecode_generate(const nut_stream_header_t s[], nut_frame_table_input
 		case NUT_AUDIO_CLASS:
 			fti[n++] = (fti_t){NUT_FLAG_KEY|               FLAG_SIZE_MSB,    1,      i,   1,    0,     1 };
 			fti[n++] = (fti_t){NUT_FLAG_KEY|FLAG_CODED_PTS|FLAG_SIZE_MSB,    0,      i,   1,    0,     1 };
-			if (s[i].fourcc_len == 4 && !strncmp(s[i].fourcc, "mp3 ", 4)) {
+			if (s[i].fourcc_len == 4 && !strncmp((char*)s[i].fourcc, "mp3 ", 4)) {
 				int j, a[] = {288,336,384,480,576,672,768,960};
 				for (j = 0; j < sizeof a/sizeof*a; j++)
 					fti[n++] = (fti_t){             NUT_FLAG_KEY,    1,   i, a[j]+1, a[j],     1 };
 				fti[n++] = (fti_t){       NUT_FLAG_KEY|FLAG_SIZE_MSB,    1,      i,   4,    0,     1 };
 				fti[n++] = (fti_t){       NUT_FLAG_KEY|FLAG_SIZE_MSB,    1,      i,   4,    2,     1 };
-			} else if (s[i].fourcc_len == 4 && !strncmp(s[i].fourcc, "vrbs", 4)) {
+			} else if (s[i].fourcc_len == 4 && !strncmp((char*)s[i].fourcc, "vrbs", 4)) {
 				fti[n++] = (fti_t){       NUT_FLAG_KEY|FLAG_SIZE_MSB,    2,      i,   1,    0,     1 };
 				fti[n++] = (fti_t){       NUT_FLAG_KEY|FLAG_SIZE_MSB,    9,      i,   1,    0,     1 };
 				fti[n++] = (fti_t){       NUT_FLAG_KEY|FLAG_SIZE_MSB,   23,      i,   1,    0,     1 };
