@@ -134,7 +134,7 @@ static void put_header(output_buffer_t * bc, output_buffer_t * in, output_buffer
 	put_bytes(in, 4, crc32(in->buf, bctello(in)));
 
 	put_data(bc, bctello(in), in->buf);
-	if (startcode != SYNCPOINT_STARTCODE) fprintf(stderr, "header/index size: %d\n", (int)(bctello(tmp) + bctello(in)));
+	if (startcode != SYNCPOINT_STARTCODE) debug_msg("header/index size: %d\n", (int)(bctello(tmp) + bctello(in)));
 }
 
 static void put_main_header(nut_context_t * nut) {
@@ -411,7 +411,7 @@ static int frame_header(nut_context_t * nut, output_buffer_t * tmp, const nut_pa
 
 	if (fd->len > 2*nut->max_distance) checksum = 1;
 	if (ABS(pts_delta) > sc->max_pts_distance) {
-		fprintf(stderr, "%d > %d || %d - %d > %d   \n", fd->len, 2*nut->max_distance, (int)fd->pts, (int)sc->last_pts, sc->max_pts_distance);
+		debug_msg("%d > %d || %d - %d > %d   \n", fd->len, 2*nut->max_distance, (int)fd->pts, (int)sc->last_pts, sc->max_pts_distance);
 		checksum = 1;
 	}
 
@@ -496,7 +496,7 @@ void nut_write_frame(nut_context_t * nut, const nut_packet_t * fd, const uint8_t
         for (i = 0; i < nut->stream_count; i++) {
 		if (nut->sc[i].last_dts == -1) continue;
 		if (compare_ts(fd->pts, TO_TB(fd->stream), nut->sc[i].last_dts, TO_TB(i)) < 0)
-			fprintf(stderr, "%lld %d (%f) %lld %d (%f) \n",
+			debug_msg("%lld %d (%f) %lld %d (%f) \n",
 				fd->pts, fd->stream, TO_DOUBLE(fd->stream, fd->pts),
 				nut->sc[i].last_dts, i, TO_DOUBLE(i, nut->sc[i].last_dts));
 		assert(compare_ts(fd->pts, TO_TB(fd->stream), nut->sc[i].last_dts, TO_TB(i)) >= 0);
@@ -554,12 +554,12 @@ nut_context_t * nut_muxer_init(const nut_muxer_opts_t * mopts, const nut_stream_
 		nut_framecode_generate(s, mfti);
 		fti = mfti;
 	}
-	fprintf(stderr, "/""/ { %4s, %3s, %6s, %3s, %4s, %5s },\n", "flag", "pts", "stream", "mul", "size", "count");
+	debug_msg("/""/ { %4s, %3s, %6s, %3s, %4s, %5s },\n", "flag", "pts", "stream", "mul", "size", "count");
 	for (n=i=0; i < 256; n++) {
 		int j;
 		assert(fti[n].flag != -1);
 
-		fprintf(stderr, "   { %4d, %3d, %6d, %3d, %4d, %5d },\n", fti[n].flag, fti[n].pts, fti[n].stream, fti[n].mul, fti[n].size, fti[n].count);
+		debug_msg("   { %4d, %3d, %6d, %3d, %4d, %5d },\n", fti[n].flag, fti[n].pts, fti[n].stream, fti[n].mul, fti[n].size, fti[n].count);
 		for(j = 0; j < fti[n].count && i < 256; j++, i++) {
 			if (i == 'N') {
 				nut->ft[i].flags = FLAG_INVALID;
@@ -573,7 +573,7 @@ nut_context_t * nut_muxer_init(const nut_muxer_opts_t * mopts, const nut_stream_
 			nut->ft[i].lsb       = fti[n].size + j;
 		}
 	}
-	fprintf(stderr, "   { %4d, %3d, %6d, %3d, %4d, %5d },\n", fti[n].flag, fti[n].pts, fti[n].stream, fti[n].mul, fti[n].size, fti[n].count);
+	debug_msg("   { %4d, %3d, %6d, %3d, %4d, %5d },\n", fti[n].flag, fti[n].pts, fti[n].stream, fti[n].mul, fti[n].size, fti[n].count);
 	assert(fti[n].flag == -1);
 
 	nut->sync_overhead = 0;
@@ -678,15 +678,15 @@ void nut_muxer_uninit(nut_context_t * nut) {
 
 	for (i = 0; i < nut->stream_count; i++) {
 		total += nut->sc[i].tot_size;
-		fprintf(stderr, "Stream %d:\n", i);
-		fprintf(stderr, "   frames: %d\n", nut->sc[i].total_frames);
-		fprintf(stderr, "   TOT: ");
-		fprintf(stderr, "packet size: %d ", nut->sc[i].tot_size);
-		fprintf(stderr, "packet overhead: %d ", nut->sc[i].overhead);
-		fprintf(stderr, "(%.2lf%%)\n", (double)nut->sc[i].overhead / nut->sc[i].tot_size * 100);
-		fprintf(stderr, "   AVG: ");
-		fprintf(stderr, "packet size: %.2lf ", (double)nut->sc[i].tot_size / nut->sc[i].total_frames);
-		fprintf(stderr, "packet overhead: %.2lf\n", (double)nut->sc[i].overhead / nut->sc[i].total_frames);
+		debug_msg("Stream %d:\n", i);
+		debug_msg("   frames: %d\n", nut->sc[i].total_frames);
+		debug_msg("   TOT: ");
+		debug_msg("packet size: %d ", nut->sc[i].tot_size);
+		debug_msg("packet overhead: %d ", nut->sc[i].overhead);
+		debug_msg("(%.2lf%%)\n", (double)nut->sc[i].overhead / nut->sc[i].tot_size * 100);
+		debug_msg("   AVG: ");
+		debug_msg("packet size: %.2lf ", (double)nut->sc[i].tot_size / nut->sc[i].total_frames);
+		debug_msg("packet overhead: %.2lf\n", (double)nut->sc[i].overhead / nut->sc[i].total_frames);
 
 		nut->alloc->free(nut->sc[i].sh.fourcc);
 		nut->alloc->free(nut->sc[i].sh.codec_specific);
@@ -703,7 +703,7 @@ void nut_muxer_uninit(nut_context_t * nut) {
 	}
 	nut->alloc->free(nut->info);
 
-	fprintf(stderr, "Syncpoints: %d size: %d\n", nut->syncpoints.len, nut->sync_overhead);
+	debug_msg("Syncpoints: %d size: %d\n", nut->syncpoints.len, nut->sync_overhead);
 
 	nut->alloc->free(nut->syncpoints.s);
 	nut->alloc->free(nut->syncpoints.pts);
@@ -711,7 +711,7 @@ void nut_muxer_uninit(nut_context_t * nut) {
 
 	free_buffer(nut->tmp_buffer);
 	free_buffer(nut->tmp_buffer2);
-	fprintf(stderr, "TOTAL: %d bytes data, %d bytes overhead, %.2lf%% overhead\n", total,
+	debug_msg("TOTAL: %d bytes data, %d bytes overhead, %.2lf%% overhead\n", total,
 		(int)bctello(nut->o) - total, (double)(bctello(nut->o) - total) / total*100);
 	free_buffer(nut->o); // flushes file
 	nut->alloc->free(nut);

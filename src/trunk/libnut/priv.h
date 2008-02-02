@@ -4,8 +4,16 @@
 #ifndef LIBNUT_PRIV_H
 #define LIBNUT_PRIV_H
 
-//#define NDEBUG
+//#define NDEBUG // disables asserts
+//#define DEBUG
 //#define TRACE
+
+#ifdef DEBUG
+#define debug_msg(...) fprintf(stderr, __VA_ARGS__)
+#else
+#define debug_msg(...)
+#endif
+
 #include <assert.h>
 #include <inttypes.h>
 #include <stdlib.h>

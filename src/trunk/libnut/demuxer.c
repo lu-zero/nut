@@ -54,11 +54,11 @@ static void seek_buf(input_buffer_t * bc, long long pos, int whence) {
 		}
 	}
 	if (whence == SEEK_CUR) pos -= bc->read_len - (bc->buf_ptr - bc->buf);
-	fprintf(stderr, "seeking %d ", (int)pos);
+	debug_msg("seeking %d ", (int)pos);
 	switch (whence) {
-		case SEEK_SET: fprintf(stderr, "SEEK_SET   "); break;
-		case SEEK_CUR: fprintf(stderr, "SEEK_CUR   "); break;
-		case SEEK_END: fprintf(stderr, "SEEK_END   "); break;
+		case SEEK_SET: debug_msg("SEEK_SET   "); break;
+		case SEEK_CUR: debug_msg("SEEK_CUR   "); break;
+		case SEEK_END: debug_msg("SEEK_END   "); break;
 	}
 	bc->file_pos = bc->isc.seek(bc->isc.priv, pos, whence);
 	bc->buf_ptr = bc->buf;
@@ -650,7 +650,7 @@ static int get_index(nut_context_t * nut) {
 		}
 	}
 
-	fprintf(stderr, "NUT index read successfully, %d syncpoints\n", sl->len);
+	debug_msg("NUT index read successfully, %d syncpoints\n", sl->len);
 
 err_out:
 	return err;
@@ -757,7 +757,7 @@ static int get_packet(nut_context_t * nut, nut_packet_t * pd, int * saw_syncpoin
 	for (i = 0; i < nut->stream_count; i++) {
 		if (nut->sc[i].last_dts == -1) continue;
 		if (compare_ts(pd->pts, TO_TB(pd->stream), nut->sc[i].last_dts, TO_TB(i)) < 0)
-			fprintf(stderr, "%lld %d (%f) %lld %d (%f) \n",
+			debug_msg("%lld %d (%f) %lld %d (%f) \n",
 				pd->pts, pd->stream, TO_DOUBLE(pd->stream, pd->pts),
 				nut->sc[i].last_dts, i, TO_DOUBLE(i, nut->sc[i].last_dts));
 		ERROR(compare_ts(pd->pts, TO_TB(pd->stream), nut->sc[i].last_dts, TO_TB(i)) < 0, NUT_ERR_OUT_OF_ORDER);
@@ -1003,7 +1003,7 @@ int nut_read_next_packet(nut_context_t * nut, nut_packet_t * pd) {
 
 	while ((err = get_packet(nut, pd, NULL)) == -1) flush_buf(nut->i);
 	if (err > NUT_ERR_OUT_OF_MEM) { // some error occured!
-		fprintf(stderr, "NUT: %s\n", nut_error(err));
+		debug_msg("NUT: %s\n", nut_error(err));
 		// rewind as much as possible
 		if (nut->i->isc.seek) seek_buf(nut->i, nut->last_syncpoint + 16, SEEK_SET);
 		else nut->i->buf_ptr = nut->i->buf + MIN(16, nut->i->read_len);
@@ -1206,7 +1206,7 @@ static int binary_search_syncpoint(nut_context_t * nut, double time_pos, off_t *
 		// start binary search between LO (sl->s[i].pos) to HI (sl->s[i+1].pos) ...
 		if (!*guess) *guess = seek_interpolate(nut->max_distance*2, time_pos, LO.pos, HI.pos, TO_DOUBLE_PTS(LO.pts), TO_DOUBLE_PTS(HI.pts), fake_hi);
 
-		fprintf(stderr, "\n%d [ (%d,%.3f) .. (%d,%.3f) .. (%d(%d),%.3f) ] ", i, (int)LO.pos, TO_DOUBLE_PTS(LO.pts), (int)*guess, time_pos,
+		debug_msg("\n%d [ (%d,%.3f) .. (%d,%.3f) .. (%d(%d),%.3f) ] ", i, (int)LO.pos, TO_DOUBLE_PTS(LO.pts), (int)*guess, time_pos,
 		                                                                   (int)HI.pos, (int)fake_hi, TO_DOUBLE_PTS(HI.pts));
 		a++;
 
@@ -1245,7 +1245,7 @@ scan_backwards:
 	}
 	*guess = 0;
 
-	fprintf(stderr, "\n[ (%d,%d) .. %d .. (%d,%d) ] => %d (%d seeks) %d\n",
+	debug_msg("\n[ (%d,%d) .. %d .. (%d,%d) ] => %d (%d seeks) %d\n",
 	        (int)LO.pos, (int)LO.pts, (int)timebases[0], (int)HI.pos, (int)HI.pts, (int)(LO.pos - LO.back_ptr), a, LO.back_ptr);
 	// at this point, s[i].pts < P < s[i+1].pts, and s[i].seen_next is set
 	*start = LO.pos - LO.back_ptr;
@@ -1360,8 +1360,8 @@ static int linear_search_seek(nut_context_t * nut, int backwards, off_t start, o
 		if (nut->sc[i].state.good_key && (!min_pos || nut->sc[i].state.good_key < min_pos)) min_pos = nut->sc[i].state.good_key;
 	}
 	if (!min_pos) {
-		fprintf(stderr, "BIG FAT WARNING (Possibly caused by `%s')", nut_error(err));
-		for (i = 0; i < nut->stream_count; i++) fprintf(stderr, "%d: %d\n", i, (int)nut->sc[i].state.good_key);
+		debug_msg("BIG FAT WARNING (Possibly caused by `%s')", nut_error(err));
+		for (i = 0; i < nut->stream_count; i++) debug_msg("%d: %d\n", i, (int)nut->sc[i].state.good_key);
 		min_pos = nut->seek_status >> 1;
 	}
 
@@ -1490,7 +1490,7 @@ int nut_seek(nut_context_t * nut, double time_pos, int flags, const int * active
 	}
 
 	if (start == 0) CHECK(binary_search_syncpoint(nut, time_pos, &start, &end, &stopper));
-	else fprintf(stderr, "============= NO BINARY SEARCH   \n");
+	else debug_msg("============= NO BINARY SEARCH   \n");
 
 	if (start) { // "unsuccessful" seek needs no linear search
 		if (!(flags & 2)) { // regular seek
@@ -1499,7 +1499,7 @@ int nut_seek(nut_context_t * nut, double time_pos, int flags, const int * active
 			CHECK(linear_search_seek(nut, backwards, end, 0, NULL));
 		}
 	}
-	fprintf(stderr, "DONE SEEK\n");
+	debug_msg("DONE SEEK\n");
 err_out:
 	if (err != NUT_ERR_EAGAIN) { // unless EAGAIN
 		syncpoint_list_t * sl = &nut->syncpoints;
