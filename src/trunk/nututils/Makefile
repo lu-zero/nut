@@ -4,10 +4,7 @@ CFLAGS += -I../libnut -lm
 
 all: avireader nutmerge nutindex nutparse # oggreader
 
-avireader: demux_avi.c
-	$(CC) $(CFLAGS) -DSTANDALONE $^ -o $@
-
-oggreader: demux_ogg.c
+%reader: demux_%.c
 	$(CC) $(CFLAGS) -DSTANDALONE $^ -o $@
 
 nutmerge: demux_ogg.c demux_avi.c framer_vorbis.c framer_mp3.c framer_mpeg4.c nutmerge.c ../libnut/libnut.a # demux_nut.c
