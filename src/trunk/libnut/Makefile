@@ -24,7 +24,4 @@ libnut.so: $(OBJS)
 
 *.o: priv.h libnut.h
 
-clean:
-	rm -f *\~ libnut.so libnut.a *.o
-
-.PHONY: all install uninstall clean
+.PHONY: all install uninstall

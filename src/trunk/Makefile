@@ -12,7 +12,7 @@ install:
 	$(MAKE) -C libnut install
 
 clean distclean:
-	$(MAKE) -C libnut clean
-	$(MAKE) -C nututils clean
+	rm -f libnut/*\~ libnut/*.o libnut/libnut.so libnut/libnut.a
+	rm -f nututils/*\~ nututils/*.o nututils/nutmerge nututils/nutindex nututils/nutparse
 
 .PHONY: all libnut nututils install distclean clean
