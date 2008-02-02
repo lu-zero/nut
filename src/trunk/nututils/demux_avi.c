@@ -472,7 +472,7 @@ demuxer_t avi_demuxer = {
 };
 
 
-#ifdef AVI_PROG
+#ifdef STANDALONE
 void ready_stream(stream_t * streams){}
 void push_packet(stream_t * stream, packet_t * p){}
 void free_streams(stream_t * streams){}
@@ -585,4 +585,4 @@ err_out:
 	fclose(in);
 	return err;
 }
-#endif
+#endif // STANDALONE

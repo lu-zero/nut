@@ -156,7 +156,7 @@ demuxer_t ogg_demuxer = {
 	NULL
 };
 
-#ifdef OGG_PROG
+#ifdef STANDALONE
 int main(int argc, char *argv[]) {
 	FILE * in;
 	demuxer_priv_t * ogg = NULL;
@@ -196,4 +196,4 @@ int main(int argc, char *argv[]) {
 	if (err == -1) err = 0;
 	return err;
 }
-#endif
+#endif // STANDALONE
