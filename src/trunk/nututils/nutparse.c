@@ -182,11 +182,6 @@ static int64_t read_svar(void)
 	return convert_to_signed(read_var());
 }
 
-static int64_t read_svar_restricted(void)
-{
-	return convert_to_signed(read_var_restricted());
-}
-
 static uint64_t convert_ts(uint64_t t, int tb_from, int tb_to)
 {
 	uint64_t ln = time_bases[tb_from].num * time_bases[tb_to].denom;
@@ -451,7 +446,7 @@ static void parse_stream_header(void)
 		if (value && gcd(value, value2) != 1)
 			error("sample_width/height must be relatively prime");
 		printf("  colorspace_type: %"PRIu64"\n", read_var());
-	} else if (class = 1) {
+	} else if (class == 1) {
 		value = read_var();
 		printf("  samplerate_num: %"PRIu64"\n", value);
 		if (!value)
@@ -491,7 +486,7 @@ static void parse_index(void)
 	uint64_t last_pos;
 	int64_t last_pts;
 	uint64_t j, x, xx, n, a, b;
-	int tbid, i, type, flag, has_keyframe;
+	int tbid, i, type, flag = 0, has_keyframe;
 
 	if (stream_count < 0)
 		error("no main_header before index");
@@ -704,7 +699,7 @@ static void parse_frame(int frame_type)
 	uint64_t value;
 	uint64_t frame_flags;
 	uint64_t stream_id;
-	uint64_t coded_pts;
+	uint64_t coded_pts = 0;
 	int64_t pts_delta;
 	uint64_t data_size_msb;
 	uint64_t reserved_count;
