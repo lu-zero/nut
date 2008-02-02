@@ -5,8 +5,11 @@ all: libnut nututils
 libnut:
 	$(MAKE) -C libnut
 
-nututils: libnut
-	$(MAKE) -C nututils
+nututils: libnut nututils/nutmerge nututils/nutindex nututils/nutparse
+
+nututils/nutmerge: nututils/demux_avi.c nututils/demux_ogg.c nututils/framer_mp3.c nututils/framer_mpeg4.c nututils/framer_vorbis.c nututils/nutmerge.h libnut/libnut.a # nututils/demux_nut.c
+
+nututils/nutmerge nututils/nutindex nututils/nutparse: CFLAGS += -Ilibnut
 
 install:
 	install -d $(prefix)/lib
