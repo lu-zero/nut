@@ -1,10 +1,21 @@
 include config.mak
 
+LIBNUT_OBJS = libnut/muxer.o libnut/demuxer.o libnut/reorder.o libnut/framecode.o
 NUTUTILS_PROGS = nututils/nutmerge nututils/nutindex nututils/nutparse
+
 all: libnut nututils
 
-libnut:
-	$(MAKE) -C libnut
+libnut: libnut/libnut.a libnut/libnut.so
+
+libnut/libnut.a: $(LIBNUT_OBJS)
+	rm -f $@
+	$(AR) rc $@ $^
+	$(RANLIB) $@
+
+libnut/libnut.so: $(LIBNUT_OBJS)
+	$(CC) $(CFLAGS) -shared $^ -o $@
+
+$(LIBNUT_OBJS): libnut/priv.h libnut/libnut.h
 
 nututils: libnut $(NUTUTILS_PROGS)
 
