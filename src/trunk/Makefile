@@ -24,12 +24,17 @@ install-nututils: nututils
 	install -d $(prefix)/bin
 	install -m 755 $(NUTUTILS_PROGS) $(prefix)/bin
 
-uninstall:
+uninstall: uninstall-libnut uninstall-nututils
+
+uninstall-libnut:
 	rm -f $(prefix)/lib/libnut.a
 	rm -f $(prefix)/include/libnut.h
+
+uninstall-nututils:
+	rm -f $(addprefix $(prefix)/bin/, $(subst nututils/,,$(NUTUTILS_PROGS)))
 
 clean distclean:
 	rm -f libnut/*\~ libnut/*.o libnut/libnut.so libnut/libnut.a
 	rm -f nututils/*\~ nututils/*.o  $(NUTUTILS_PROGS)
 
-.PHONY: all libnut nututils install* uninstall clean distclean
+.PHONY: all libnut nututils install* uninstall* clean distclean
