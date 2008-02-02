@@ -1,5 +1,5 @@
 ==================================
-NUT Open Container Format 20061104
+NUT Open Container Format 20080202
 ==================================
 
 
@@ -53,15 +53,20 @@ SHOULD  It is recommended to be done that way, but not strictly required.
 keyframe
     A keyframe is a frame from which you can start decoding, a more
     exact definition is below
-    The nth frame is a keyframe if and only if frames n, n+1, ... in
-    presentation order (that are all frames with a pts >= frame[n].pts) can
-    be decoded successfully without reference to frames prior n in storage
-    order (that are all frames with a dts < frame[n].dts).
-    If no such frames exist (for example due to using overlapped transforms
-    like the MDCT in an audio codec), then the definition shall be extended
-    by dropping n out of the set of frames which must be decodable, if this
-    is still insufficient then n+1 shall be dropped, and so on until there is
-    a keyframe.
+
+    A frame in a stream is a keyframe if and only if all of the following are true
+    * Decoding can successfully begin using any standard compliant decoder without
+      requireing access to prior frames.
+    * Begining decoding instead at a subsequent frame would cause fewer frames
+      to be decoded successfully.
+
+    successfull decoding here means that the specific frame is virtually
+    identical to what one would get if decoding would have begun from the very
+    first frame
+    Note, "virtually identical" here is used instead of "identical" to allow
+    codecs which converge toward the same output when started from different
+    points but dont neccessarily ever reach exactly identical output.
+
     Every frame which is marked as a keyframe MUST be a keyframe according to
     the definition above, a muxer MUST mark every frame it knows is a keyframe
     as such, a muxer SHOULD NOT analyze future frames to determine the
@@ -313,6 +318,9 @@ frame:
     }
     if(frame_flags&FLAG_SIZE_MSB){
         data_size_msb                   v
+    }
+    if(frame_flags&FLAG_MATCH_TIME){
+        match_time_delta                s
     }
     if(frame_flags&FLAG_RESERVED)
         frame_res                       v
@@ -606,6 +614,8 @@ flags[frame_code], frame_flags (v)
                            otherwise data_size_msb is 0.
        6  FLAG_CHECKSUM    If set, the frame header contains a checksum.
        7  FLAG_RESERVED    If set, reserved_count is coded in the frame header.
+      11  FLAG_MATCH_TIME  If set, match_time_delta is coded in the frame
+                           header, otherwise its 0.
       12  FLAG_CODED       If set, coded_flags are stored in the frame header.
       13  FLAG_INVALID     If set, frame_code is invalid.
 
@@ -663,6 +673,13 @@ coded_pts (v)
     mask  = ( 1 << msb_pts_shift ) - 1;
     delta = last_pts - mask / 2
     pts   = ( (pts_lsb - delta) & mask ) + delta
+
+match_time_delta
+    If FLAG_MATCH_TIME is not set, then this is 0
+    This is the time difference in stream timebase units from the pts at which
+    the output from the decoder has converged independant of the availability
+    of previous frames (that is the frames are virtually identical no matter
+    if decoding started from the very first frame or from this keyframe).
 
 lsb_pts
     Least significant bits of the pts in time_base precision.
@@ -738,7 +755,8 @@ back_ptr_div16 (v)
     back_ptr must point to a position up to 15 bytes before a syncpoint
     startcode, relative to position of current syncpoint. The syncpoint
     pointed to MUST be the closest syncpoint such that at least one keyframe
-    with a pts lower or equal to the current syncpoint's global_key_pts for
+    with a pts+match_time_delta lower or equal to the current syncpoint's
+    global_key_pts for
     all streams lies between it and the current syncpoint.
 
     A stream where EOR is set is to be ignored for back_ptr.
@@ -769,7 +787,8 @@ has_keyframe
     the last syncpoint.
 
 keyframe_pts
-    The pts of the first keyframe for this stream in the region between the
+    The pts+match_time_delta of the first keyframe for this stream in the
+    region between the
     2 syncpoints, in the stream's timebase. (EOR frames are also keyframes.)
 
 eor_pts
