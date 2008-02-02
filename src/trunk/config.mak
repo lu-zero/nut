@@ -1,10 +1,10 @@
 PREFIX = /usr/local
 prefix = $(DESTDIR)$(PREFIX)
 
-CFLAGS = -Os -fomit-frame-pointer -Wall
-#CFLAGS = -g -DDEBUG -Wall
+#CFLAGS += -DDEBUG
 
-#CFLAGS += -DWORDS_BIGENDIAN
+CFLAGS += -Os -fomit-frame-pointer -g -Wall
+
 CFLAGS += -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64
 
 CC = cc

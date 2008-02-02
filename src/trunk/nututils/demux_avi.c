@@ -7,18 +7,6 @@
 #define mmioFOURCC(ch0, ch1, ch2, ch3) ((ch0) | ((ch1) << 8) | ((ch2) << 16) | ((ch3) << 24))
 #define strFOURCC(str) mmioFOURCC((str)[0], (str)[1], (str)[2], (str)[3])
 
-#ifdef WORDS_BIGENDIAN
-#define FIXENDIAN32(a) do { \
-	(a) = (((a) & 0xFF00FF00) >> 8)  | (((a) & 0x00FF00FF) << 8); \
-	(a) = (((a) & 0xFFFF0000) >> 16) | (((a) & 0x0000FFFF) << 16); \
-	} while(0)
-#define FIXENDIAN16(a) \
-	(a) = (((a) & 0xFF00) >> 8)  | (((a) & 0x00FF) << 8)
-#else
-#define FIXENDIAN32(a) do{}while(0)
-#define FIXENDIAN16(a) do{}while(0)
-#endif
-
 #define FREAD(file, len, var) do { if (fread((var), 1, (len), (file)) != (len)) return err_unexpected_eof; }while(0)
 
 typedef struct riff_tree_s {
@@ -37,7 +25,7 @@ typedef struct {
 	riff_tree_t * tree;
 } full_riff_tree_t;
 
-typedef struct  __attribute__((packed)) {
+typedef struct {
 	uint8_t wFormatTag[2];
 	uint16_t nChannels;
 	uint32_t nSamplesPerSec;
@@ -45,9 +33,9 @@ typedef struct  __attribute__((packed)) {
 	uint16_t nBlockAlign;
 	uint16_t wBitsPerSample;
 	uint16_t cbSize;
-} WAVEFORMATEX;
+} audio_header_t;
 
-typedef struct  __attribute__((packed)) {
+typedef struct {
 	uint32_t biSize;
 	uint32_t biWidth;
 	uint32_t biHeight;
@@ -59,9 +47,9 @@ typedef struct  __attribute__((packed)) {
 	uint32_t biYPelsPerMeter;
 	uint32_t biClrUsed;
 	uint32_t biClrImportant;
-} BITMAPINFOHEADER;
+} video_header_t;
 
-typedef struct  __attribute__((packed)) {
+typedef struct {
 	uint32_t dwMicroSecPerFrame;
 	uint32_t dwMaxBytesPerSec;
 	uint32_t dwReserved1;
@@ -76,9 +64,9 @@ typedef struct  __attribute__((packed)) {
 	uint32_t dwRate;
 	uint32_t dwStart;
 	uint32_t dwLength;
-} MainAVIHeader;
+} avi_header_t;
 
-typedef struct  __attribute__((packed)) {
+typedef struct {
 	uint8_t fccType[4];
 	uint8_t fccHandler[4];
 	uint32_t dwFlags;
@@ -92,45 +80,122 @@ typedef struct  __attribute__((packed)) {
 	uint32_t dwQuality;
 	uint32_t dwSampleSize;
 	uint16_t rcframe[4];
-} AVIStreamHeader;
+} avi_stream_header_t;
 
-typedef struct __attribute__((packed)) {
+typedef struct {
 	uint8_t ckid[4];
 	uint32_t dwFlags;
 	uint32_t dwChunkOffset;
 	uint32_t dwChunkLength;
-} AVIINDEXENTRY;
+} avi_index_entry_t;
 
 typedef struct {
 	int type; // 0 video, 1 audio
-	AVIStreamHeader * strh; // these are all pointers to data
-	BITMAPINFOHEADER * video;
-	WAVEFORMATEX * audio;
+	avi_stream_header_t * strh;
+	video_header_t * video;
+	audio_header_t * audio;
 	int extra_len;
 	int last_pts;
 	uint8_t * extra;
-} AVIStreamContext;
+} avi_stream_context_t;
 
 struct demuxer_priv_s {
 	FILE * in;
 	full_riff_tree_t * riff;
 	stream_t * s;
-	MainAVIHeader * avih;
-	AVIStreamContext * stream; // this is an array, free this
-	AVIINDEXENTRY * index; // this is an array and data
+	avi_header_t * avih;
+	avi_stream_context_t * stream; // this is an array, free this
+	avi_index_entry_t * index; // this is an array and data
 	int packets;
 	int cur;
 };
 
+#define READ_B(out, ptr, count) do { memcpy(out, ptr, count); ptr += count; } while (0)
+#define READ_16(out, ptr) do { out = ((uint8_t*)ptr)[0] | (((uint8_t*)ptr)[1] << 8); ptr += 2; } while (0)
+#define READ_32(out, ptr) do { out = ((uint8_t*)ptr)[0] | (((uint8_t*)ptr)[1] << 8) | (((uint8_t*)ptr)[2] << 16) | (((uint8_t*)ptr)[3] << 24); ptr += 4; } while (0)
+
+static void data_to_audio_header(void * data, audio_header_t * out) {
+	uint8_t * p = data;
+	READ_B(out->wFormatTag, p, 2);
+	READ_16(out->nChannels, p);
+	READ_32(out->nSamplesPerSec, p);
+	READ_32(out->nAvgBytesPerSec, p);
+	READ_16(out->nBlockAlign, p);
+	READ_16(out->wBitsPerSample, p);
+	READ_16(out->cbSize, p);
+}
+
+static void data_to_video_header(void * data, video_header_t * out) {
+	uint8_t * p = data;
+	READ_32(out->biSize, p);
+	READ_32(out->biWidth, p);
+	READ_32(out->biHeight, p);
+	READ_16(out->biPlanes, p);
+	READ_16(out->biBitCount, p);
+	READ_B(out->biCompression, p, 4);
+	READ_32(out->biSizeImage, p);
+	READ_32(out->biXPelsPerMeter, p);
+	READ_32(out->biYPelsPerMeter, p);
+	READ_32(out->biClrUsed, p);
+	READ_32(out->biClrImportant, p);
+}
+
+static void data_to_avi_header(void * data, avi_header_t * out) {
+	uint8_t * p = data;
+	READ_32(out->dwMicroSecPerFrame, p);
+	READ_32(out->dwMaxBytesPerSec, p);
+	READ_32(out->dwReserved1, p);
+	READ_32(out->dwFlags, p);
+	READ_32(out->dwTotalFrames, p);
+	READ_32(out->dwInitialFrames, p);
+	READ_32(out->dwStreams, p);
+	READ_32(out->dwSuggestedBufferSize, p);
+	READ_32(out->dwWidth, p);
+	READ_32(out->dwHeight, p);
+	READ_32(out->dwScale, p);
+	READ_32(out->dwRate, p);
+	READ_32(out->dwStart, p);
+	READ_32(out->dwLength, p);
+}
+
+static void data_to_stream_header(void * data, avi_stream_header_t * out) {
+	uint8_t * p = data;
+	READ_B(out->fccType, p, 4);
+	READ_B(out->fccHandler, p, 4);
+	READ_32(out->dwFlags, p);
+	READ_32(out->dwReserved1, p);
+	READ_32(out->dwInitialFrames, p);
+	READ_32(out->dwScale, p);
+	READ_32(out->dwRate, p);
+	READ_32(out->dwStart, p);
+	READ_32(out->dwLength, p);
+	READ_32(out->dwSuggestedBufferSize, p);
+	READ_32(out->dwQuality, p);
+	READ_32(out->dwSampleSize, p);
+	READ_16(out->rcframe[0], p);
+	READ_16(out->rcframe[1], p);
+	READ_16(out->rcframe[2], p);
+	READ_16(out->rcframe[3], p);
+}
+
+static void data_to_index_entry(void * data, avi_index_entry_t * out) {
+	uint8_t * p = data;
+	READ_B(out->ckid, p, 4);
+	READ_32(out->dwFlags, p);
+	READ_32(out->dwChunkOffset, p);
+	READ_32(out->dwChunkLength, p);
+}
+
 static int mk_riff_tree(FILE * in, riff_tree_t * tree) {
+	char lenc[4], * p = lenc;
 	int left;
 	tree->tree = NULL;
 	tree->data = NULL;
 	tree->amount = 0;
 	tree->offset = ftell(in);
 	FREAD(in, 4, tree->name);
-	FREAD(in, 4, &tree->len);
-	FIXENDIAN32(tree->len);
+	FREAD(in, 4, lenc);
+	READ_32(tree->len, p);
 	left = tree->len;
 
 	switch(strFOURCC(tree->name)) {
@@ -201,21 +266,20 @@ static void uninit_riff(full_riff_tree_t * full) {
 	free(full);
 }
 
-static int avi_read_stream_header(AVIStreamContext * stream, riff_tree_t * tree) {
-	int i, j;
+static int avi_read_stream_header(avi_stream_context_t * stream, riff_tree_t * tree) {
+	int i;
 	assert(tree->type == 0);
 	assert(strFOURCC(tree->listname) == mmioFOURCC('s','t','r','l'));
 
 	for (i = 0; i < tree->amount; i++) {
 		if (tree->tree[i].type == 1 && !strncmp(tree->tree[i].name, "strh", 4)) {
 			if (tree->tree[i].len != 56) return err_avi_bad_strh_len;
-			stream->strh = (AVIStreamHeader*)tree->tree[i].data;
+			stream->strh = malloc(sizeof(avi_stream_header_t));
+			data_to_stream_header(tree->tree[i].data, stream->strh);
 			break;
 		}
 	}
 	if (i == tree->amount) return err_avi_no_strh;
-
-	for(i = 2; i < 12; i++) FIXENDIAN32(((uint32_t*)stream->strh)[i]);
 
 	for (i = 0; i < tree->amount; i++) {
 		if (tree->tree[i].type == 1 && !strncmp(tree->tree[i].name, "strf", 4)) {
@@ -224,20 +288,16 @@ static int avi_read_stream_header(AVIStreamContext * stream, riff_tree_t * tree)
 				case mmioFOURCC('v','i','d','s'):
 					if (len < 40) return err_avi_bad_vids_len;
 					stream->type = 0;
-					stream->video = (BITMAPINFOHEADER*)tree->tree[i].data;
-					for(j = 0; j < 3; j++)  FIXENDIAN32(((uint32_t*)stream->video)[j]);
-					for(j = 6; j < 8; j++)  FIXENDIAN16(((uint16_t*)stream->video)[j]);
-					for(j = 5; j < 10; j++) FIXENDIAN32(((uint32_t*)stream->video)[j]);
+					stream->video = malloc(sizeof(video_header_t));
+					data_to_video_header(tree->tree[i].data, stream->video);
 					stream->extra_len = len - 40;
 					if (len > 40) stream->extra = (uint8_t*)tree->tree[i].data + 40;
 					break;
 				case mmioFOURCC('a','u','d','s'):
 					if (len < 18) return err_avi_bad_auds_len;
 					stream->type = 1;
-					stream->audio = (WAVEFORMATEX *)tree->tree[i].data;
-					for(j = 1; j < 2; j++) FIXENDIAN16(((uint16_t*)stream->audio)[j]);
-					for(j = 1; j < 3; j++) FIXENDIAN32(((uint32_t*)stream->audio)[j]);
-					for(j = 6; j < 9; j++) FIXENDIAN16(((uint16_t*)stream->audio)[j]);
+					stream->audio = malloc(sizeof(audio_header_t));
+					data_to_audio_header(tree->tree[i].data, stream->audio);
 					stream->extra_len = len - 18;
 					if (len > 18) stream->extra = (uint8_t*)tree->tree[i].data + 18;
 					break;
@@ -260,16 +320,15 @@ static int avi_read_main_header(demuxer_priv_t * avi, const riff_tree_t * tree) 
 	for (i = 0; i < tree->amount; i++) {
 		if (tree->tree[i].type == 1 && !strncmp(tree->tree[i].name, "avih", 4)) {
 			if (tree->tree[i].len != 56) return err_avi_bad_avih_len;
-			avi->avih = (MainAVIHeader*)tree->tree[i].data;
+			avi->avih = malloc(sizeof(avi_header_t));
+			data_to_avi_header(tree->tree[i].data, avi->avih);
 			break;
 		}
 	}
 	if (i == tree->amount) return err_avi_no_avih;
 
-	for(i = 0; i < 14; i++) FIXENDIAN32(((uint32_t*)avi->avih)[i]);
-
 	if (avi->avih->dwStreams > 200) return err_avi_stream_overflow;
-	avi->stream = malloc(avi->avih->dwStreams * sizeof(AVIStreamContext));
+	avi->stream = malloc(avi->avih->dwStreams * sizeof(avi_stream_context_t));
 	for (i = 0; i < avi->avih->dwStreams; i++) {
 		avi->stream[i].video = NULL;
 		avi->stream[i].audio = NULL;
@@ -302,16 +361,14 @@ static int avi_read_headers(demuxer_priv_t * avi) {
 	}
 	if (i == tree->amount) return err_avi_no_hdrl;
 	for (i = 0; i < avi->riff->amount; i++) {
-		int j;
+		int j, ii;
 		tree = &avi->riff->tree[i];
 		for (j = 0; j < tree->amount; j++) {
 			if (tree->tree[j].type == 1 && !strncmp(tree->tree[j].name, "idx1", 4)) {
-				avi->index = (AVIINDEXENTRY *)tree->tree[j].data;
 				avi->packets = tree->tree[j].len / 16;
-				for (i = 0; i < avi->packets; i++) {
-					FIXENDIAN32(avi->index[i].dwFlags);
-					FIXENDIAN32(avi->index[i].dwChunkOffset);
-					FIXENDIAN32(avi->index[i].dwChunkLength);
+				avi->index = calloc(avi->packets, sizeof(avi_index_entry_t));
+				for (ii = 0; ii < avi->packets; ii++) {
+					data_to_index_entry((char*)tree->tree[j].data + 16*ii, avi->index + ii);
 				}
 				break;
 			}
@@ -395,16 +452,16 @@ static int read_headers(demuxer_priv_t * avi, stream_t ** streams) {
 }
 
 static int fill_buffer(demuxer_priv_t * avi) {
-	char fourcc[4];
-	uint32_t len;
+	char fourcc[4], lenc[4], * plen = lenc;
+	int len;
 	packet_t p;
 	if (ftell(avi->in) & 1) fgetc(avi->in);
 
 	if (avi->cur >= avi->packets) return -1;
 
 	FREAD(avi->in, 4, fourcc);
-	FREAD(avi->in, 4, &len);
-	FIXENDIAN32(len);
+	FREAD(avi->in, 4, lenc);
+	READ_32(len, plen);
 	p.p.len = len;
 	p.p.flags = (avi->index[avi->cur++].dwFlags & 0x10) ? NUT_FLAG_KEY : 0;
 	p.p.stream = (fourcc[0] - '0') * 10 + (fourcc[1] - '0');
@@ -443,8 +500,16 @@ static demuxer_priv_t * init(FILE * in) {
 }
 
 static void uninit(demuxer_priv_t * avi) {
+	int i, streams = avi->avih ? avi->avih->dwStreams : 0;
 	uninit_riff(avi->riff);
+	if (avi->stream) for (i = 0; i < streams; i++) {
+		free(avi->stream[i].strh);
+		free(avi->stream[i].video);
+		free(avi->stream[i].audio);
+	}
 	free(avi->stream);
+	free(avi->avih);
+	free(avi->index);
 	free_streams(avi->s);
 	free(avi->s);
 	free(avi);
