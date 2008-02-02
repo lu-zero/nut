@@ -16,6 +16,7 @@
 /// @{
 #define NUT_VERSION 2 ///< Version of NUT specification this library implements.
 
+/// Stream class values. Only one can be set. Higher values are not legal.
 enum nut_stream_class_t {
 	NUT_VIDEO_CLASS    = 0, ///< = 0
 	NUT_AUDIO_CLASS    = 1, ///< = 1
@@ -187,6 +188,7 @@ typedef struct {
 	void (*new_info)(void * priv, nut_info_packet_t * info); ///< Function to be called when info is found mid-stream. May be NULL.
 } nut_demuxer_opts_t;
 
+/// Possible errors given from demuxer functions. Only the first 4 errors should ever be returned, the rest are internal.
 enum nut_errors {
 	NUT_ERR_NO_ERROR      = 0,    ///< = 0
 	NUT_ERR_EOF           = 1,    ///< = 1
