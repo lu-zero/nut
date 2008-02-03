@@ -39,6 +39,7 @@ uninstall: uninstall-libnut uninstall-nututils
 
 uninstall-libnut:
 	rm -f $(prefix)/lib/libnut.a
+	rm -f $(prefix)/lib/libnut.so
 	rm -f $(prefix)/include/libnut.h
 
 uninstall-nututils:
