@@ -25,10 +25,15 @@ $(NUTUTILS_PROGS): CFLAGS += -Ilibnut
 
 install: install-libnut install-nututils
 
-install-libnut: libnut
+install-libnut: libnut install-libnut-headers
 	install -d $(prefix)/lib
 	install -m 644 libnut/libnut.a $(prefix)/lib
-	test -e libnut/libnut.so && install -m 644 libnut/libnut.so $(prefix)/lib
+
+install-libnut-shared: libnut/libnut.so install-libnut-headers
+	install -d $(prefix)/lib
+	install -m 644 libnut/libnut.so $(prefix)/lib
+
+install-libnut-headers:
 	install -d $(prefix)/include
 	install -m 644 libnut/libnut.h $(prefix)/include
 
