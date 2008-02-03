@@ -54,18 +54,19 @@ keyframe
     A keyframe is a frame from which you can start decoding, a more
     exact definition is below
 
-    A frame in a stream is a keyframe if and only if all of the following are true
-    * Decoding can successfully begin using any standard compliant decoder without
-      requireing access to prior frames.
-    * Begining decoding instead at a subsequent frame would cause fewer frames
+    A frame in a stream is a keyframe if and only if all of the following
+    are true:
+    * Decoding can successfully begin using any standard-compliant decoder
+      without requiring access to prior frames.
+    * Starting decoding at a subsequent frame would cause fewer frames
       to be decoded successfully.
 
-    successfull decoding here means that the specific frame is virtually
-    identical to what one would get if decoding would have begun from the very
-    first frame
-    Note, "virtually identical" here is used instead of "identical" to allow
+    Successful decoding here means that the specific frame is virtually
+    identical to what one would get if decoding would have begun from
+    the very first frame.
+    Note, "virtually identical" is used here instead of "identical" to allow
     codecs which converge toward the same output when started from different
-    points but dont neccessarily ever reach exactly identical output.
+    points but do not necessarily ever reach exactly identical output.
 
     Every frame which is marked as a keyframe MUST be a keyframe according to
     the definition above, a muxer MUST mark every frame it knows is a keyframe
