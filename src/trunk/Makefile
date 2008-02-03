@@ -5,7 +5,7 @@ NUTUTILS_PROGS = nututils/nutmerge nututils/nutindex nututils/nutparse
 
 all: libnut nututils
 
-libnut: libnut/libnut.a libnut/libnut.so
+libnut: libnut/libnut.a
 
 libnut/libnut.a: $(LIBNUT_OBJS)
 	rm -f $@
@@ -27,7 +27,8 @@ install: install-libnut install-nututils
 
 install-libnut: libnut
 	install -d $(prefix)/lib
-	install -m 644 libnut/libnut.a libnut/libnut.so $(prefix)/lib
+	install -m 644 libnut/libnut.a $(prefix)/lib
+	test -e libnut/libnut.so && install -m 644 libnut/libnut.so $(prefix)/lib
 	install -d $(prefix)/include
 	install -m 644 libnut/libnut.h $(prefix)/include
 
