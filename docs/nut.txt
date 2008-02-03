@@ -61,8 +61,8 @@ keyframe
     * Starting decoding at a subsequent frame would cause fewer frames
       to be decoded successfully.
 
-    Successful decoding here means that the specific frame is virtually
-    identical to what one would get if decoding would have begun from
+    Successful decoding here means that a specific decoded frame is
+    virtually identical to what one would get, had decoding begun from
     the very first frame.
     Note, "virtually identical" is used here instead of "identical" to allow
     codecs which converge toward the same output when started from different
