@@ -886,6 +886,17 @@ info packet types
         This stream is a superior alternative (higher resolution or otherwise)
         of the given stream. It should be preferred if the decoder is capable
         of decoding it.
+    "Depends"
+        v (stream id)
+        This stream depends on the specified stream. That is if its
+        unavailable then this stream cannot be decoded. This is used to store
+        dependancies for scalability for example.
+    "Uses"
+        v (stream id)
+        This stream can use the specified stream. But its existence is not
+        mandatory for decoding this stream. Although if its unavailable
+        quality might suffer. Examples are font attachments or higher quality
+        samples from music instruments.
     "UsesFont"
         "Times New Roman", "Arial", ... FIXME should we use the filename
         instead? is there some other unique way to identify fonts?
