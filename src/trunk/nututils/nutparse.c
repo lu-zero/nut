@@ -462,7 +462,7 @@ static void parse_stream_header(void)
 	}
 }
 
-static void parse_syncpoint(void)
+static void parse_syncpoint(uint64_t pos)
 {
 	uint64_t value, pts;
 	int tbid, i;
@@ -476,7 +476,7 @@ static void parse_syncpoint(void)
 	for (i = 0; i < stream_count; ++i)
 		streams[i].last_pts = convert_ts(pts, tbid, streams[i].time_base_id);
 	value = read_var();
-	printf("  back_ptr_div16: %"PRIu64" (%"PRIu64")\n", value, value * 16 + 15);
+	printf("  back_ptr_div16: %"PRIu64" (%"PRIu64") -> 0x%"PRIx64"\n", value, value * 16 + 15, pos - (value * 16 + 15));
 }
 
 static void parse_index(void)
@@ -623,6 +623,8 @@ static void parse_packet(void)
 	uint64_t forward_ptr;
 	uint32_t checksum, actual_checksum;
 	uint64_t end_pos;
+	uint64_t packet_start = file_position - 1;
+	int i;
 
 	/* TODO: check max_distance */
 	startcode = read_fixed(7) | ((uint64_t)'N' << 56);
@@ -646,7 +648,9 @@ static void parse_packet(void)
 		printf("unknown_packet");
 		break;
 	}
-	printf(" at 0x%"PRIx64"\n", file_position - 8);
+	printf(" at 0x%"PRIx64" [0x%"PRIx64, packet_start, packet_start - 1);
+	for (i = 2; i < 16; i++) printf(" 0x%"PRIx64, packet_start - i);
+	printf("]\n");
 	printf("  startcode: 0x%016"PRIx64"\n", startcode);
 	forward_ptr = read_var_restricted();
 	printf("  forward_ptr: %"PRIu64"\n", forward_ptr);
@@ -667,7 +671,7 @@ static void parse_packet(void)
 		parse_stream_header();
 		break;
 	case SYNCPOINT_STARTCODE:
-		parse_syncpoint();
+		parse_syncpoint(packet_start);
 		break;
 	case INDEX_STARTCODE:
 		end_pos -= 8; /* special handling for index_ptr behind reserved_bytes */
