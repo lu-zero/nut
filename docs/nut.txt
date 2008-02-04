@@ -947,7 +947,7 @@ redundant and enhanchement streams. So for example if the file contains 2
 independant video streams encoding the same content at 2 different bitrates.
 Then only one is mandatory, which that is, is at the discretion of the muxer.
 Enhancement streams like font attachments are also non mandatory.
-The muxer SHOULD repeat non mandatory stream headers like mandatory ones if
+The muxer SHOULD repeat non mandatory headers like mandatory ones if
 the overhead is not excessive.
 
 
