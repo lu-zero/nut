@@ -247,7 +247,7 @@ main_header:
     tmp_pts=0
     tmp_mul=1
     tmp_stream=0
-    tmp_match=0
+    tmp_match=1-(1<<62)
     for(i=0; i<256; ){
         tmp_flag                        v
         tmp_fields                      v
@@ -683,6 +683,10 @@ match_time_delta
     the output from the decoder has converged independent from the availability
     of previous frames (that is the frames are virtually identical no matter
     if decoding started from the very first frame or from this keyframe).
+    If its value is 1-(1<<62) then match_time_delta is unspecified, that is
+    the muxer didnt have enough knowledge to set it.
+    A muxer MUST only set it to 1-(1<<62) if it does not know the correct
+    value. That is, it is not allowed to randomly discard known values.
 
 lsb_pts
     Least significant bits of the pts in time_base precision.
