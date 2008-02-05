@@ -619,7 +619,7 @@ flags[frame_code], frame_flags (v)
        6  FLAG_CHECKSUM    If set, the frame header contains a checksum.
        7  FLAG_RESERVED    If set, reserved_count is coded in the frame header.
       11  FLAG_MATCH_TIME  If set, match_time_delta is coded in the frame
-                           header, otherwise its 0.
+                           header
       12  FLAG_CODED       If set, coded_flags are stored in the frame header.
       13  FLAG_INVALID     If set, frame_code is invalid.
 
@@ -679,7 +679,6 @@ coded_pts (v)
     pts   = ( (pts_lsb - delta) & mask ) + delta
 
 match_time_delta
-    If FLAG_MATCH_TIME is not set, then this is 0
     This is the time difference in stream timebase units from the pts at which
     the output from the decoder has converged independent from the availability
     of previous frames (that is the frames are virtually identical no matter
