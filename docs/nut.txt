@@ -247,6 +247,7 @@ main_header:
     tmp_pts=0
     tmp_mul=1
     tmp_stream=0
+    tmp_match=0
     for(i=0; i<256; ){
         tmp_flag                        v
         tmp_fields                      v
@@ -259,7 +260,8 @@ main_header:
         else tmp_res=0
         if(tmp_fields>5) count          v
         else count= tmp_mul - tmp_size
-        for(j=6; j<tmp_fields; j++){
+        if(tmp_fields>6) tmp_match      s
+        for(j=7; j<tmp_fields; j++){
             tmp_reserved[i]             v
         }
         for(j=0; j<count && i<256; j++, i++){
@@ -274,6 +276,7 @@ main_header:
             data_size_lsb[i]= tmp_size + j;
             pts_delta[i]= tmp_pts;
             reserved_count[i]= tmp_res;
+            match_time_delta[i]= tmp_match;
         }
     }
     reserved_bytes
