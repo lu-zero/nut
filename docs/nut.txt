@@ -497,7 +497,7 @@ stream_class (v)
     0    video
     1    audio
     2    subtitles
-    3    userdata
+    3    user data
     Note: The remaining values are reserved and MUST NOT be used.
           A demuxer MUST ignore streams with reserved classes.
 
@@ -576,7 +576,7 @@ stream_flags (v)
        1  FLAG_FIXED_FPS  indicates that the fps is fixed
 
 codec_specific_data (vb)
-    Private global data for a codec (could be huffman tables or ...).
+    Private global data for a codec (could be Huffman tables or ...).
     If a codec has a global header it SHOULD be placed in here instead of
     at the start of every keyframe.
     The exact format is specified in the codec specification.
@@ -684,7 +684,7 @@ match_time_delta
     of previous frames (that is the frames are virtually identical no matter
     if decoding started from the very first frame or from this keyframe).
     If its value is 1-(1<<62) then match_time_delta is unspecified, that is
-    the muxer didnt have enough knowledge to set it.
+    the muxer did not have enough knowledge to set it.
     A muxer MUST only set it to 1-(1<<62) if it does not know the correct
     value. That is, it is not allowed to randomly discard known values.
 
