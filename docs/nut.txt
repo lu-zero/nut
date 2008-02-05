@@ -678,7 +678,7 @@ coded_pts (v)
 match_time_delta
     If FLAG_MATCH_TIME is not set, then this is 0
     This is the time difference in stream timebase units from the pts at which
-    the output from the decoder has converged independant of the availability
+    the output from the decoder has converged independent from the availability
     of previous frames (that is the frames are virtually identical no matter
     if decoding started from the very first frame or from this keyframe).
 
@@ -888,15 +888,15 @@ info packet types
         of decoding it.
     "Depends"
         v (stream id)
-        This stream depends on the specified stream. That is if its
-        unavailable then this stream cannot be decoded. This is used to store
-        dependancies for scalability for example.
+        This stream depends on the specified stream. That is if the specified
+        stream is unavailable then this stream cannot be decoded. This is used
+        to store dependencies for scalability for example.
     "Uses"
         v (stream id)
-        This stream can use the specified stream. But its existence is not
-        mandatory for decoding this stream. Although if its unavailable
-        quality might suffer. Examples are font attachments or higher quality
-        samples from music instruments.
+        This stream can use the specified stream. But the existence of the
+        specified stream is not mandatory for decoding this stream, although
+        quality might suffer if it is unavailable. Examples: font attachments
+        or higher quality samples from musical instruments
     "UsesFont"
         "Times New Roman", "Arial", ... FIXME should we use the filename
         instead? is there some other unique way to identify fonts?
@@ -942,12 +942,12 @@ in a file).
 
 There MUST be a syncpoint immediately before the first frame after any headers.
 
-The main header is mandatory, so are all stream headers except thouse for
-redundant and enhanchement streams. So for example if the file contains 2
-independant video streams encoding the same content at 2 different bitrates.
+The main header is mandatory, so are all stream headers except those for
+redundant and enhancement streams. So for example if the file contains 2
+independent video streams encoding the same content at 2 different bitrates.
 Then only one is mandatory, which that is, is at the discretion of the muxer.
-Enhancement streams like font attachments are also non mandatory.
-The muxer SHOULD repeat non mandatory headers like mandatory ones if
+Enhancement streams like font attachments are also non-mandatory.
+The muxer SHOULD repeat non-mandatory headers like mandatory ones if
 the overhead is not excessive.
 
 
