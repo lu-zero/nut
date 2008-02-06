@@ -684,7 +684,7 @@ match_time_delta
     of previous frames (that is the frames are virtually identical no matter
     if decoding started from the very first frame or from this keyframe).
     If its value is 1-(1<<62) then match_time_delta is unspecified, that is
-    the muxer did not have enough knowledge to set it.
+    the muxer lacked sufficient information to set it.
     A muxer MUST only set it to 1-(1<<62) if it does not know the correct
     value. That is, it is not allowed to randomly discard known values.
 
