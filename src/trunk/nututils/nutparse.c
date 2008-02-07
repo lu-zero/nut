@@ -27,6 +27,7 @@
 #define FLAG_SIZE_MSB	0x0020
 #define FLAG_CHECKSUM	0x0040
 #define FLAG_RESERVED	0x0080
+#define FLAG_MATCH_TIME	0x0800
 #define FLAG_CODED	0x1000
 #define FLAG_INVALID	0x2000
 
@@ -182,6 +183,11 @@ static int64_t read_svar(void)
 	return convert_to_signed(read_var());
 }
 
+static int64_t read_svar_restricted(void)
+{
+	return convert_to_signed(read_var_restricted());
+}
+
 static uint64_t convert_ts(uint64_t t, int tb_from, int tb_to)
 {
 	uint64_t ln = time_bases[tb_from].num * time_bases[tb_to].denom;
@@ -214,6 +220,7 @@ static void parse_main_header(void)
 	int64_t tmp_pts;
 	uint64_t tmp_mul;
 	uint64_t tmp_stream;
+	int64_t tmp_match;
 	uint64_t tmp_size;
 	uint64_t tmp_res;
 	uint64_t count;
@@ -264,6 +271,7 @@ static void parse_main_header(void)
 	tmp_pts = 0;
 	tmp_mul = 1;
 	tmp_stream = 0;
+	tmp_match = 1 - (INT64_C(1) << 62);
 	for (i = 0; i < 256; ) {
 		tmp_flag = read_var();
 		printf("  tmp_flag: %"PRIu64"\n", tmp_flag);
@@ -313,7 +321,11 @@ static void parse_main_header(void)
 			if (!count)
 				error("count is zero");
 		}
-		for (j64 = 6; j64 < tmp_fields; ++j64)
+		if (tmp_fields > 6) {
+			tmp_match = read_svar();
+			printf("  tmp_match: %"PRId64"\n", tmp_match);
+		}
+		for (j64 = 7; j64 < tmp_fields; ++j64)
 			printf("  tmp_reserved[%"PRIu64"]: %"PRIu64"\n", j64, read_var());
 		for (j = 0; j < count && i < 256; ++j, ++i) {
 			if (i == 'N') {
@@ -337,6 +349,8 @@ static void parse_main_header(void)
 					printf(" checksum");
 				if (tmp_flag & FLAG_RESERVED)
 					printf(" reserved");
+				if (tmp_flag & FLAG_MATCH_TIME)
+					printf(" match_time");
 				if (tmp_flag & FLAG_CODED)
 					printf(" flag_coded");
 				if (tmp_flag & FLAG_INVALID)
@@ -706,6 +720,7 @@ static void parse_frame(int frame_type)
 	uint64_t coded_pts = 0;
 	int64_t pts_delta;
 	uint64_t data_size_msb;
+	int64_t match_time_delta;
 	uint64_t reserved_count;
 	uint64_t data_size;
 	uint64_t old_last_pts;
@@ -739,6 +754,10 @@ static void parse_frame(int frame_type)
 	if (frame_flags & FLAG_SIZE_MSB) {
 		data_size_msb = read_var_restricted();
 		printf("  data_size_msb: %"PRIu64"\n", data_size_msb);
+	}
+	if (frame_flags & FLAG_MATCH_TIME) {
+		match_time_delta = read_svar_restricted();
+		printf("  match_time_delta: %"PRId64"\n", match_time_delta);
 	}
 	if (frame_flags & FLAG_RESERVED) {
 		reserved_count = read_var_restricted();
