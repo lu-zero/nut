@@ -1,0 +1,97 @@
+Issue broadcast-clock-sync
+----------------
+Problem: Clock synchronization leading to buffer overflow and underflow
+in the decoder.
+
+
+Issue broadcast-preload-len
+----------------
+Problem: How long should the receiver preload the nut file before starting
+playback and after seeking, so no buffer over/underflows happens.
+
+Solutions to the above 2 issues are for example storing one of the following
+A. preload time
+B. preload bytes
+C. buffer fullness in seconds
+D. buffer fullness in bytes
+E. transmit time stamps
+
+Values in bytes scale nicer with increased bandwidth, that is doubling the
+bandwidth from the one assumed by the muxer halfs the needed preload. time
+based sync values dont naturally change the needed preload with increased
+bandwidth but instead increase the needed buffer size.
+
+These can be stored in one of the following
+a. sync points
+b. info packets
+c. a new stream type
+
+Info packets are currently not allowed to change thus they are not suitable
+without that being changed.
+
+
+Issue chapter-overlap/gap
+-------------------------
+If one changes the timebase between chapters then overlaps (forbidden by the
+spec) or gaps (problematic with split&merge) can happen.
+
+Solutions
+A dont change the timebase
+B store start and end in seperate timebases (breaks compatibility)
+C add a field into the info packet overriding the chapter_end with a
+  more accurate value.
+D use the chapter start of the next chapter (breaks compatibility and
+  error robustness)
+
+
+Issue stream-chapter-overlap
+----------------------------
+It is possible especially in the light of the precission of the previous
+issue, that chapters might not end exactly at the same points in time in
+all streams. There could be a few samples difference.
+Do we care about this?
+
+
+Issue info-stream-subsets
+-------------------------
+Currently if info applies to more than 1 stream but not all, it has to be
+duplicated for each stream it applies to.
+
+
+Issue multiple-programs
+-----------------------
+Multiple programs (that is several audio-video stream pairs for example) can
+not be stored cleanly in nut.
+
+Solutions:
+A. one backptr per program + any solution for issue info-stream-subsets
+
+
+Issue info-overhead
+-------------------
+Info can be stored much more compactly by replacing common strings by
+shorter represenstations.
+
+
+Issue edit-lists
+----------------
+For editing its very usefull to not rewrite the whole file after every step.
+
+Solutions.
+A. Store such edits in info packets
+B. Store such edits in info packets but allow them only in "private" nut
+   files. That is files distributed must be remuxed. Players must reject
+   files with edit lists.
+C. Dont support this (this would mean no interoperability between video
+   editing programs using nut as they would use their own formats)
+
+
+Issue alternatives
+------------------
+Alternatives like a variant without some scenes or with a happy ending
+instead of a tragic one cannot be stored in nut currently.
+
+Solutions
+A. Store such alterative play lists of scenes in info packets somehow
+B. Design a seperate layer for it
+C. Dont support this
