@@ -65,12 +65,20 @@ not be stored cleanly in nut.
 
 Solutions:
 A. one backptr per program + any solution for issue info-stream-subsets
+B. Design a seperate layer for it
+C. Dont support this
 
 
 Issue info-overhead
 -------------------
 Info can be stored much more compactly by replacing common strings by
 shorter represenstations.
+
+A. Change syntax so a v value which indexes into a fixed table can select
+   info names. (breaks compatibility completely)
+B. Use/allow 1 char abbreviations (new demuxers could read old files, old
+   ones could read everything except the abbreviated fields)
+C. Leave info as it is.
 
 
 Issue edit-lists
