@@ -2,7 +2,7 @@
 
 !!! DRAFT DRAFT DRAFT !!!
 
-DRAFT USAGE / SEMANTICS / RATIONALE SECTIONS FOR NUT SPEC
+DRAFT USAGE / SEMANTICS / RATIONALE SECTIONS FOR THE NUT SPEC
 
 
 Overview of NUT
@@ -13,7 +13,7 @@ consist of a sequence of packets, which can contain global headers,
 file metadata, stream headers for the individual media streams,
 optional index data to accelerate seeking, and, of course, the actual
 encoded media frames. Aside from frames, all packets begin with a
-64-bit startcode, the first byte of which is 0x4E, the ASCII character
+64 bit startcode, the first byte of which is 0x4E, the ASCII character
 'N'. In addition to identifying the type of packet to follow, these
 startcodes (combined with CRC) allow for reliable resynchronization
 when reading damaged or incomplete files. Packets have a common
@@ -32,7 +32,7 @@ in packet types where overhead must be kept to a minimum.
 Packet Structure
 
 Every NUT packet has a packet_header and a packet_footer.
-The packet_header consists of a 64-bit startcode, a forward_ptr, and an
+The packet_header consists of a 64 bit startcode, a forward_ptr, and an
 optional CRC on the packet header if the forward_ptr is larger than 4k.
 The forward_ptr gives the size of the packet from after the packet_header
 until the end of the packet_footer. The optional CRC is to prevent a
@@ -46,22 +46,22 @@ the packet from after the packet_header until the CRC itself.
 Variable Length Coding
 
 Almost all fields in NUT are coded using VLCs. VLCs allow for compact
-storage of small integers, while still being extendible to infinitely
-large integers. The syntax is of a VLC is, per byte, a 1 bit flag stating
+storage of small integers, while still being extensible to infinitely
+large integers. The syntax of a VLC is, per byte, a 1 bit flag stating
 if there are more bits to the integer, and 7 bits to be prepended to the
 lsb of the integer, shifting the previous value to the left.
 Stuffing is allowed in VLCs by adding 0x80 bytes before the actual value,
 but a maximum of 8 bytes of stuffing is allowed in any VLC outside of a
 NUT packet. The only such fields are forward_ptr and fields in frame
-headers. This is to prevent demuxers from looping on a large of amount of
-damaged bytes of 0x80. Fields inside a NUT packet are protected by a CRC
+headers. This is to prevent demuxers from looping on a large amount of
+damaged 0x80 bytes. Fields inside a NUT packet are protected by a CRC
 which can be checked before decoding.
 
 Header Structure
 
 A NUT file must begin with a magic identification string, followed by
 the main header and a stream header for each stream, ordered by stream
-id. No other packets may intervene between these header packets. For
+ID. No other packets may intervene between these header packets. For
 robustness, a NUT file needs to include backup copies of the headers.
 In the absence of valid headers at the beginning of the file,
 processes attempting to read a NUT file are recommended to search for
@@ -70,7 +70,7 @@ and before end of file.
 Simple stop conditions are provided to ensure that this search
 algorithm is bounded logarithmically in file length. This stop condition
 is finding any valid NUT packet (such as a syncpoint) during the search,
-as no packets are allowed between a search start until a reapeted header
+as no packets are allowed between a search start until a repeated header
 set.
 
 Metadata - Info Packets
@@ -80,7 +80,7 @@ The NUT main header and stream headers may be followed by metadata
 possible) information on the file, on particular streams, or on
 particular time intervals ("chapters") of the file, such as: title,
 author, language, etc. One should note that info packets may occur at
-other locations in a file, particulatly in a file that is being
+other locations in a file, particularly in a file that is being
 generated/transmitted in real time; however, a process interpreting a
 NUT file should not make any attempt to search for info packets except
 in their usual location, i.e. following the headers. It is intended
@@ -89,8 +89,8 @@ automated responses to information stored in these packets, e.g.
 selecting a subtitle language based on the user's preferred list of
 languages, or providing a visual list of chapters to the user.
 Therefore, the format of info packets and the data they are to contain
-has been carefully specified and is aligned with International
-Standards for language codes and so forth. For this reason it is also
+has been carefully specified and is aligned with international
+standards for language codes and so forth. For this reason it is also
 important that info packets be stored in the correct locations, so
 that processes making automated responses to these packets can operate
 correctly.
@@ -108,7 +108,7 @@ on the underlying media when it is available.
 
 On the other hand, all NUT files except live streams (which have no
 concept of "end of file") must include an index at the end of the
-file, followed by a fixed-size 64-bit integer that is an offset
+file, followed by a fixed-size 64 bit integer that is an offset
 backwards from end-of-file at which the final index packet begins.
 This is the only fixed-size field specified by NUT, and makes it
 possible to locate an index stored at the end of the file without
@@ -127,7 +127,7 @@ handled at a higher protocol layer should they be desired (for
 example, using several NUT files with an external script file to
 control their playback in combination).
 
-With each stream, a single media encoding format is associated. The
+A single media encoding format is associated with each stream. The
 stream headers convey properties of the encoding, such as video frame
 dimensions, sample rates, and the compression standard ("codec") used
 (if any). Stream headers may also carry with them an opaque, binary
@@ -139,7 +139,7 @@ stream.
 
 Each stream has a last_pts context. For compression, every frame's
 pts is coded relatively to the last_pts. In order for demuxing to resume
-from arbitrary points in the file, all last_pts contexes are reset by
+from arbitrary points in the file, all last_pts contexts are reset by
 syncpoints.
 
 Frames
@@ -160,8 +160,8 @@ intervals of samples; their length is determined by the compression
 format used.
 
 Frames need not be decoded in their presentation order. NUT allows for
-arbitrary out-of-order frame systems, from classic MPEG-1-style B
-frames to H.264 B pyramid and beyond, using a simple notion of "delay"
+arbitrary out-of-order frame systems, from classic MPEG-1-style
+B-frames to H.264 B-pyramid and beyond, using a simple notion of "delay"
 and an implicitly-determined "decode timestamp" (dts). Out-of-order
 decoding is not limited to video streams; it is available to audio
 streams as well, and, given the right conditions, even subtitle
@@ -179,14 +179,14 @@ perform decoding to be more properly factored.
 
 Keyframes
 
-NUT defines a "key frame" as any frame such that the frame itself and
+NUT defines a "keyframe" as any frame such that the frame itself and
 all subsequent (with regard to presentation time) frames of the stream
 can be decoded successfully without reference to prior (with regard to
 storage/decoding order) frames in the stream. This definition may
 sometimes be bent on a per-codec basis, particularly with audio
 formats where there is MDCT window overlap or similar.
 
-The concept of key frames is central to seeking, and key frames will
+The concept of keyframes is central to seeking, and keyframes will
 be the targets of the seek-to-time operation.
 
 Representation of Time
@@ -197,7 +197,7 @@ accurately represent the time units of each stream. The set of
 available time bases is defined in the main header, while each stream
 header indicates which time base the corresponding stream will use.
 
-Effective use of time bases both allows for compact representation of
+Effective use of time bases allows for compact representation of
 timestamps, minimizing overhead, and enriches the information
 contained in the file. For example, a process interpreting a NUT file
 with a video time base of 1/25 second knows it can convert the video
@@ -221,7 +221,7 @@ Frame Coding
 
 Each frame begins with a "framecode", a single byte which indexes a
 table in the main header. This table can associate properties such as
-stream id, size, relative timestamp, keyframe flag, etc. with the
+stream ID, size, relative timestamp, keyframe flag, etc. with the
 frame that follows, or allow the values to be explicitly coded
 following the framecode byte. By careful construction of the framecode
 table in the main header, an average overhead of significantly less
@@ -229,17 +229,17 @@ than 2 bytes per frame can be achieved for single-stream files at low
 bitrates.
 Framecodes can also be flagged as invalid, and seeing such a framecode
 indicates a damaged file. The frame code 0x4E ('N') is a special invalid
-framecode which marks that the next packet is a NUT packet, and not a
-frame. The following 7 bytes, combined with 'N', is the full startcode of
+framecode which marks the next packet as a NUT packet, and not a frame.
+The following 7 bytes, combined with 'N', are the full startcode of
 the NUT packet.
 
 Syncpoints
 
-Syncpoints are mini-NUT packets, which serve for seeking, error recovery,
+Syncpoints are mini NUT packets, which serve for seeking, error recovery
 and error checking. They contain a startcode like all NUT packets, a
 timestamp, a back_ptr, and a CRC on the packet itself. Syncpoints must be
 placed every 32kb (or whatever max_distance is set to in the main header,
-64kb at most), unless between the 2 syncpoints is a single frame.
+64kb at most), unless a single frame is between the 2 syncpoints.
 Syncpoints must be followed by a frame, and must be placed after headers
 (except those at end of file).
 The timestamp coded in the syncpoint is a global timestamp, which is used
@@ -257,9 +257,9 @@ syncpoint is 16 bytes:
 
 End of Relevance
 EOR is a flag that can be attributed to a frame in any stream, and marks
-the end of relavence of a stream on presentation, such as a subtitle
+the end of relevance of a stream on presentation, such as a subtitle
 stream currently showing no subtitles on screen. EOR flag can only be
-given to zero byte frames, and must be set as keyframe as well. Once EOR
+given to zero byte frames, and must be set as keyframe. Once EOR
 is seen on such a stream, the stream is set EOR until the next keyframe on
 that stream. Streams which are set EOR are ignored by back_ptr in
 syncpoints until EOR is unset. The significance of EOR is to set the
@@ -269,7 +269,7 @@ begin demuxing.
 Error Checking
 
 There are several ways to detect a damaged stream in NUT during demuxing:
-1. Invalid framecode - If a framecode which has been marked as invalid in
+1. Invalid framecode: If a framecode which has been marked as invalid in
    the main header is found as the framecode in a frame header, then the
    stream is damaged. For this reason, 0x00 and 0xFF are recommended to be
    set as invalid frame codes in NUT.
@@ -284,7 +284,7 @@ There are several ways to detect a damaged stream in NUT during demuxing:
 6. A VLC is found with more than 8 bytes of stuffing in a frame header or
    forward_ptr.
 7. Streams are found to not be strictly interleaved by comparing dts and
-   pts - a precise formula for this check can be found in the spec.
+   pts. A precise formula for this check can be found in the specification.
 
 All these conditions make it impossible for a demuxer to read, skip or
 buffer a large amount of data from a file because of damaged data. Also
@@ -301,5 +301,5 @@ case a syncpoint was already skipped due to demuxing damaged data.
 
 Seeking
 
-An in depth explanation of an optimal seeking algorithm can be found in
+An in depth explanation of an optimal seeking algorithm can be found at
 http://wiki.multimedia.cx/index.php?title=NUT
