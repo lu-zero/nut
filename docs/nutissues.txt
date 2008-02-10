@@ -43,6 +43,8 @@ C add a field into the info packet overriding the chapter_end with a
 D use the chapter start of the next chapter (breaks compatibility and
   error robustness)
 
+It seems the consensus is A
+
 
 Issue stream-chapter-overlap
 ----------------------------
