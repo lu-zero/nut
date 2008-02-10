@@ -93,7 +93,8 @@ B. Store such edits in info packets but allow them only in "private" nut
    files. That is files distributed must be remuxed. Players must reject
    files with edit lists.
 C. Dont support this (this would mean no interoperability between video
-   editing programs using nut as they would use their own formats)
+   editing programs using nut as they would use their own formats to store
+   edit lists)
 
 
 Issue alternatives
