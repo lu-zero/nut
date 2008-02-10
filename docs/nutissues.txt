@@ -1,11 +1,11 @@
 Issue broadcast-clock-sync
-----------------
+--------------------------
 Problem: Clock synchronization leading to buffer overflow and underflow
 in the decoder.
 
 
 Issue broadcast-preload-len
-----------------
+---------------------------
 Problem: How long should the receiver preload the nut file before starting
 playback and after seeking, so no buffer over/underflows happens.
 
@@ -35,7 +35,7 @@ Issue chapter-overlap/gap
 If one changes the timebase between chapters then overlaps (forbidden by the
 spec) or gaps (problematic with split&merge) can happen.
 
-Solutions
+Solutions:
 A dont change the timebase
 B store start and end in seperate timebases (breaks compatibility)
 C add a field into the info packet overriding the chapter_end with a
@@ -76,6 +76,7 @@ Issue info-overhead
 Info can be stored much more compactly by replacing common strings by
 shorter represenstations.
 
+Solutions:
 A. Change syntax so a v value which indexes into a fixed table can select
    info names. (breaks compatibility completely)
 B. Use/allow 1 char abbreviations (new demuxers could read old files, old
@@ -87,7 +88,7 @@ Issue edit-lists
 ----------------
 For editing its very usefull to not rewrite the whole file after every step.
 
-Solutions.
+Solutions:
 A. Store such edits in info packets
 B. Store such edits in info packets but allow them only in "private" nut
    files. That is files distributed must be remuxed. Players must reject
@@ -102,7 +103,7 @@ Issue alternatives
 Alternatives like a variant without some scenes or with a happy ending
 instead of a tragic one cannot be stored in nut currently.
 
-Solutions
+Solutions:
 A. Store such alterative play lists of scenes in info packets somehow
 B. Design a seperate layer for it
 C. Dont support this
