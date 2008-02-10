@@ -828,6 +828,8 @@ chapter_id (s)
 
 chapter_start (t)
     timestamp of start of chapter
+    2 info packets which apply to the same subset of streams SHOULD use the
+    same timebase.
 
 chapter_len (v)
     Length of chapter in the same timebase as chapter_start.
