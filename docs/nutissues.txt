@@ -6,8 +6,8 @@ in the decoder.
 
 Issue broadcast-preload-len
 ---------------------------
-Problem: How long should the receiver preload the nut file before starting
-playback and after seeking, so no buffer over/underflows happens.
+Problem: How long should the receiver preload the NUT file before starting
+playback and after seeking, so no buffer over/underflow happens.
 
 Solutions to the above 2 issues are for example storing one of the following
 A. preload time
@@ -16,9 +16,9 @@ C. buffer fullness in seconds
 D. buffer fullness in bytes
 E. transmit time stamps
 
-Values in bytes scale nicer with increased bandwidth, that is doubling the
-bandwidth from the one assumed by the muxer halfs the needed preload. Time
-based sync values dont naturally change the needed preload with increased
+Values in bytes scale nicer with increased bandwidth, that is, doubling the
+bandwidth from the one assumed by the muxer halves the needed preload. Time
+based sync values do not naturally change the needed preload with increased
 bandwidth but instead increase the needed buffer size.
 
 These can be stored in one of the following
@@ -33,22 +33,22 @@ without that being changed.
 Issue chapter-overlap/gap
 -------------------------
 If one changes the timebase between chapters then overlaps (forbidden by the
-spec) or gaps (problematic with split&merge) can happen.
+spec) or gaps (problematic with split & merge) can happen.
 
 Solutions:
-A. dont change the timebase
-B. store start and end in seperate timebases (breaks compatibility)
-C. add a field into the info packet overriding the chapter_end with a
+A. Do not change the timebase.
+B. Store start and end in separate timebases (breaks compatibility).
+C. Add a field into the info packet overriding the chapter_end with a
    more accurate value.
-D. use the chapter start of the next chapter (breaks compatibility and
-   error robustness)
+D. Use the chapter start of the next chapter (breaks compatibility and
+   error robustness).
 
-It seems the consensus is A
+It seems the consensus is A.
 
 
 Issue stream-chapter-overlap
 ----------------------------
-It is possible especially in the light of the precission of the previous
+It is possible especially in the light of the precision of the previous
 issue, that chapters might not end exactly at the same points in time in
 all streams. There could be a few samples difference.
 Do we care about this?
@@ -63,47 +63,47 @@ duplicated for each stream it applies to.
 Issue multiple-programs
 -----------------------
 Multiple programs (that is several audio-video stream pairs for example) can
-not be stored cleanly in nut.
+not be stored cleanly in NUT.
 
 Solutions:
 A. one backptr per program + any solution for issue info-stream-subsets
-B. Design a seperate layer for it
-C. Dont support this
+B. Design a separate layer for it.
+C. Do not support this.
 
 
 Issue info-overhead
 -------------------
 Info can be stored much more compactly by replacing common strings by
-shorter represenstations.
+shorter representations.
 
 Solutions:
 A. Change syntax so a v value which indexes into a fixed table can select
    info names. (breaks compatibility completely)
 B. Use/allow 1 char abbreviations (new demuxers could read old files, old
-   ones could read everything except the abbreviated fields)
+   ones could read everything except the abbreviated fields).
 C. Leave info as it is.
 
 
 Issue edit-lists
 ----------------
-For editing its very usefull to not rewrite the whole file after every step.
+For editing it is very useful to not rewrite the whole file after every step.
 
 Solutions:
-A. Store such edits in info packets
-B. Store such edits in info packets but allow them only in "private" nut
+A. Store such edits in info packets.
+B. Store such edits in info packets but allow them only in "private" NUT
    files. That is files distributed must be remuxed. Players must reject
    files with edit lists.
-C. Dont support this (this would mean no interoperability between video
-   editing programs using nut as they would use their own formats to store
-   edit lists)
+C. Do not support this (this would mean no interoperability between video
+   editing programs using NUT as they would use their own formats to store
+   edit lists).
 
 
 Issue alternatives
 ------------------
 Alternatives like a variant without some scenes or with a happy ending
-instead of a tragic one cannot be stored in nut currently.
+instead of a tragic one cannot be stored in NUT currently.
 
 Solutions:
-A. Store such alterative play lists of scenes in info packets somehow
-B. Design a seperate layer for it
-C. Dont support this
+A. Store such alternative playlists of scenes in info packets somehow.
+B. Design a separate layer for it.
+C. Do not support this.
