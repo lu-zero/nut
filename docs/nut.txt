@@ -814,8 +814,8 @@ Info tags:
 ----------
 
 stream_id_plus1 (v)
-    Stream this info packet applies to. If zero, packet applies to the
-    whole file.
+    Stream this info packet applies to. If zero, packet applies to all
+    streams.
 
 chapter_id (s)
     The ID of the chapter this packet applies to. If zero, the packet applies
