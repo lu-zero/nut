@@ -17,7 +17,7 @@ D. buffer fullness in bytes
 E. transmit time stamps
 
 Values in bytes scale nicer with increased bandwidth, that is doubling the
-bandwidth from the one assumed by the muxer halfs the needed preload. time
+bandwidth from the one assumed by the muxer halfs the needed preload. Time
 based sync values dont naturally change the needed preload with increased
 bandwidth but instead increase the needed buffer size.
 
@@ -36,12 +36,12 @@ If one changes the timebase between chapters then overlaps (forbidden by the
 spec) or gaps (problematic with split&merge) can happen.
 
 Solutions:
-A dont change the timebase
-B store start and end in seperate timebases (breaks compatibility)
-C add a field into the info packet overriding the chapter_end with a
-  more accurate value.
-D use the chapter start of the next chapter (breaks compatibility and
-  error robustness)
+A. dont change the timebase
+B. store start and end in seperate timebases (breaks compatibility)
+C. add a field into the info packet overriding the chapter_end with a
+   more accurate value.
+D. use the chapter start of the next chapter (breaks compatibility and
+   error robustness)
 
 It seems the consensus is A
 
