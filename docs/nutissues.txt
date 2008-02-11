@@ -21,6 +21,9 @@ bandwidth from the one assumed by the muxer halves the needed preload. Time
 based sync values do not naturally change the needed preload with increased
 bandwidth but instead increase the needed buffer size.
 
+Values in bytes are sensitiv to packet loss, which can delay initial startup.
+
+
 These can be stored in one of the following
 a. sync points
 b. info packets
