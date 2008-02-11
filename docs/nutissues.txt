@@ -110,3 +110,42 @@ Solutions:
 A. Store such alternative playlists of scenes in info packets somehow.
 B. Design a separate layer for it.
 C. Do not support this.
+
+
+Issue header-compression
+------------------------
+Headers of codec frames often contain low entropy information or things
+we already know like the frame size.
+
+A. Store header bytes and length in the framecode table.
+B. Leave things as they are.
+
+
+Issue small-frames
+------------------
+The original intent of nut frames was that 1 container frame == 1 codec
+frame. Though this does not seem to be explicitly written in nut.txt.
+Also it is inefficient for very small frames, AMR-NB for example has 6-32
+bytes per frame.
+
+Solutions:
+A. Enforce 1 container frame == 1 codec frame even if it causes 10% overhead.
+B. Allow multiple frames as long as the whole packet is less than some
+   fixed minimum in bytes (like 256byte)
+C. Allow multiple frames as long as the whole packet is less than some
+   fixed minimum in bytes (like 256byte) and the codec uses a constant
+   framesize in samples.
+D. Use header compression, that is allow to store the first (few) bytes
+   of a codec frame together with its size in the framecode table. This
+   would allow us to store the size of a frame without any redundancy.
+   Thus effectivly avoiding the overhead small frames cause.
+
+
+Issue pcm-frames
+----------------
+No word is said about how many or few PCM samples should be in a frame.
+
+Solutions:
+A. Define an maximum number of samples (like 512)
+B. Define an maximum timespam (like 0.1 sec)
+C. Define an maximum number of bytes (like 1024)
