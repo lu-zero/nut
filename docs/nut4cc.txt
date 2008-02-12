@@ -1,0 +1,86 @@
+This list lists fourcc codes and the codecs they identify.
+
+Codecs which are not in this list but have a standard fourcc in avi can be
+used with the AVI fourcc in nut as well.
+Codecs which are in this list but are not used with the same fourcc in avi
+should be reported to us! (these maybe a typo)
+Codecs which are in this list and in avi with the same fourcc as well as
+other fourccs, SHOULD use the fourcc specified here.
+For codecs which do not have a fourcc in AVI nor this list, please contact
+us so we can add them to the list.
+
+
+ASV1    Asus Video
+ASV2    Asus Video 2
+CVID    Cinepak
+CYUV    Creative YUV
+DUCK    Truemotion 1
+FFV1    FFmpeg video 1
+FFVH    FFmpeg Huffyuv
+H261    ITU H.261
+H262    ITU H.262
+H263    ITU H.263
+H264    ITU H.264
+HFYU    Huffyuv
+I263    Intel H.263
+IV31    Indeo 3.1
+IV32    Indeo 3.2
+IV50    Indeo 5.0
+LJPG    ITU JPEG (lossless)
+MJLS    ITU JPEG-LS
+MJPG    ITU JPEG
+MPG4    MS MPEG4v1 (!NOT ISO MPEG4!)
+MP42    MS MPEG4v2
+MP43    MS MPEG4v3
+mpg1    ISO MPEG1 Video
+mpg2    ISO MPEG2 Video
+MRLE    MS RLE
+MSVC    MS Video 1
+RT21    Indeo 2.1
+RV10    Real Video 1.0
+RV20    Real Video 2.0
+RV30    Real Video 3.0
+RV40    Real Video 4.0
+SNOW    FFmpeg snow
+SVQ1    Sorenson Video 1
+SVQ3    Sorenson Video 3
+theo    Xiph theora
+TM20    Truemotion 2.0
+VCR1    ATI VCR1
+VP30    VP 3.0
+VP31    VP 3.1
+VP50    VP 5.0
+VP60    VP 6.0
+VP61    VP 6.1
+VP61    VP 6.2
+WMV1    MS WMV7
+WMV2    MS WMV8
+WMV3    MS WMV9
+WVC1    VC-1
+
+Raw video: [x] is a byte with value x
+YV12    Planar 4:2:0 YUV
+YUV9    Planar 4:1:0 YUV
+Y800    8bit Gray
+411P    Planar 4:1:1 YUV
+422P    Planar 4:2:2 YUV
+444P    Planar 4:4:4 YUV
+UYVY    Packed 4:2:2 YUV (UYVY)
+YUY2    Packed 4:2:2 YUV (YUYV)
+RGB[15] Packed RGB 5:5:5, 16bpp, (msb)1A 5R 5G 5B(lsb), little endian [NOT in AVI]
+BGR[15] Packed BGR 5:5:5, 16bpp, (msb)1A 5B 5G 5R(lsb), little endian [NOT in AVI]
+RGB[16] Packed RGB 5:6:5, 16bpp, (msb)   5R 6G 5B(lsb), little endian [NOT in AVI]
+BGR[16] Packed BGR 5:6:5, 16bpp, (msb)   5B 6G 5R(lsb), little endian [NOT in AVI]
+[15]BGR Packed RGB 5:5:5, 16bpp, (msb)1A 5R 5G 5B(lsb), big endian [NOT in AVI]
+[15]RGB Packed BGR 5:5:5, 16bpp, (msb)1A 5B 5G 5R(lsb), big endian [NOT in AVI]
+[16]BGR Packed RGB 5:6:5, 16bpp, (msb)   5R 6G 5B(lsb), big endian [NOT in AVI]
+[16]RGB Packed BGR 5:6:5, 16bpp, (msb)   5B 6G 5R(lsb), big endian [NOT in AVI]
+RGBA    Packed RGBA 8:8:8:8, 32bpp, RGBA [NOT in AVI]
+BGRA    Packed RGBA 8:8:8:8, 32bpp, BGRA [NOT in AVI]
+ABGR    Packed RGBA 8:8:8:8, 32bpp, ABGR [NOT in AVI]
+ARGB    Packed RGBA 8:8:8:8, 32bpp, ARGB [NOT in AVI]
+RGB[24] Packed RGB 8:8:8, 24bpp RGB [NOT in AVI]
+BGR[24] Packed RGB 8:8:8, 24bpp BGR [NOT in AVI]
+
+
+FIXME mpeg4/dv/gray16/audio codecs
