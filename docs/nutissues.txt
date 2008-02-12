@@ -152,6 +152,7 @@ How do we identify the sample format
 
 A. fourcc
 B. extradata
+C. New field in the stream header
 
 
 Issue pcm-interleaving
@@ -160,3 +161,4 @@ How do we identify the interleaving
 
 A. fourcc
 B. extradata
+C. New field in the stream header
