@@ -148,7 +148,15 @@ C. Define an maximum number of bytes (like 1024)
 
 Issue pcm-sample-format
 -----------------------
-How do we identify the sample format and interleaving
+How do we identify the sample format
+
+A. fourcc
+B. extradata
+
+
+Issue pcm-interleaving
+----------------------
+How do we identify the interleaving
 
 A. fourcc
 B. extradata
