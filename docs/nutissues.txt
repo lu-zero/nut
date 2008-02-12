@@ -107,8 +107,8 @@ B. Design a separate layer for it.
 C. Do not support this.
 
 
-Issue header-compression
-------------------------
+Issue header-elision
+--------------------
 Headers of codec frames often contain low entropy information or things
 we already know like the frame size.
 
