@@ -162,3 +162,8 @@ How do we identify the interleaving
 A. fourcc
 B. extradata
 C. New field in the stream header
+D. Only allow 1 standard interleaving
+
+What about the interleaving of non raw codecs, do all specify the
+interleaving, or does any leave it to the container? If so, our options
+would be down to only C.
