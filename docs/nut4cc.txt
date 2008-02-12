@@ -32,6 +32,7 @@ MJPG    ITU JPEG
 MPG4    MS MPEG4v1 (!NOT ISO MPEG4!)
 MP42    MS MPEG4v2
 MP43    MS MPEG4v3
+MP4V    ISO MPEG4 Video
 mpg1    ISO MPEG1 Video
 mpg2    ISO MPEG2 Video
 MRLE    MS RLE
@@ -93,4 +94,4 @@ P<type><interleaving><bits> little endian PCM
 PFD[32]   would for example be signed 32 bit little endian IEEE float
 
 
-FIXME mpeg4/dv/gray16/audio codecs/multi chan interleaving
+FIXME dv/gray16/audio codecs/multi chan interleaving
