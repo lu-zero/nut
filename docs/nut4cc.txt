@@ -85,13 +85,12 @@ BGR[24] Packed RGB 8:8:8, 24bpp BGR [NOT in AVI]
 Raw audio: [x] is an byte with value x,  [NOT in AVI]
 ALAW    A-LAW
 ULAW    MU-LAW
-<sign><type><interleaving><bits> little endian PCM
-<bits><interleaving><type><sign> big endian PCM
-    <sign> is S for signed, U for unsigned
-    <type> is I for integer, F for IEEE float
+P<type><interleaving><bits> little endian PCM
+<bits><interleaving><type>P big    endian PCM
+    <type> is S for signed integer, U for unsigned integer, F for IEEE float
     <interleaving> is D for default (left, right)
     <bits> is 8/16/24/32
-SFD[32]   would for example be signed 32 bit little endian IEEE float
+PFD[32]   would for example be signed 32 bit little endian IEEE float
 
 
 FIXME mpeg4/dv/gray16/audio codecs/multi chan interleaving
