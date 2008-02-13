@@ -139,7 +139,7 @@ D. Use header compression, that is allow to store the first (few) bytes
    would allow us to store the size of a frame without any redundancy.
    Thus effectivly avoiding the overhead small frames cause.
 
-It seems the consensus is: A+D
+It seems the consensus is: A+D With the specified bounds
 
 
 Issue pcm-frames
