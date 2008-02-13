@@ -33,6 +33,8 @@ MPG4    MS MPEG4v1 (!NOT ISO MPEG4!)
 MP42    MS MPEG4v2
 MP43    MS MPEG4v3
 MP4V    ISO MPEG4 Part 2 Video
+        !for non compliant mpeg4 like old divx4/odivx use the respective
+         fourcc, this fourcc is only for fully comliant mpeg4!
 mpg1    ISO MPEG1 Video
 mpg2    ISO MPEG2 Video
 MRLE    MS RLE
