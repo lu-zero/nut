@@ -51,6 +51,8 @@ issue, that chapters might not end exactly at the same points in time in
 all streams. There could be a few samples difference.
 Do we care about this?
 
+It seems the consensus is: no, we dont care
+
 
 Issue info-stream-subsets
 -------------------------
