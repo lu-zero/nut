@@ -691,7 +691,7 @@ match_time_delta (s)
 match_time_delta[frame_code] (s)
     If FLAG_MATCH_TIME is not set then this value shall be used for
     match_time_delta, otherwise this value is ignored.
-    MUST be <32786 and >-32768 or =1-(1<<62)
+    MUST be <32768 and >-32768 or =1-(1<<62)
 
 lsb_pts
     Least significant bits of the pts in time_base precision.
