@@ -1073,7 +1073,7 @@ single codec frame. A muxer MUST NOT store anything except exactly 1 single
 codec frame per NUT frame.
 For RAW audio up to 4096 samples shall be considered 1 codec frame, the actual
 number of samples MAY vary between NUT frames.
-For RAW video a single frame shall be 1 codec frame.
+For RAW video a single picture shall be 1 codec frame.
 
 
 Sample code (Public Domain, & untested):
