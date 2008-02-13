@@ -701,24 +701,24 @@ match_time_delta (s)
 match_time_delta[frame_code] (s)
     If FLAG_MATCH_TIME is not set then this value shall be used for
     match_time_delta, otherwise this value is ignored.
-    MUST be <32768 and >-32768 or =1-(1<<62)
+    MUST be <32768 and >-32768 or =1-(1<<62).
 
 header_idx[frame_code] (v)
     The index into the elision_header table.
-    MUST by <128
+    MUST be <128.
 
 header_count_minus1 (v)
     The number of distinct non empty elision headers.
-    MUST be <128
+    MUST be <128.
 
 elision_header[header_idx] (vb)
     For frames with a final size <= 4096 this header is prepended to the
     frame data. That is if the stored frame is 4000 bytes and the
     elision_header is 96 bytes then it is prepended, if it is 97 byte then it
     is not.
-    elision_header[0] is fixed to a length 0 header
-    The length of each elision_header except header 0 MUST be < 256 and >0
-    The sum of the lengthes of all elision_headers MUST be <=1024
+    elision_header[0] is fixed to a length 0 header.
+    The length of each elision_header except header 0 MUST be < 256 and >0.
+    The sum of the lengthes of all elision_headers MUST be <=1024.
 
 lsb_pts
     Least significant bits of the pts in time_base precision.
@@ -1068,11 +1068,11 @@ duplicate the role of a container. Any such file is to be considered invalid.
 For example Vorbis in Ogg in NUT is invalid, as is
 mpegvideo + mpegaudio in MPEG-PS/TS in NUT or dvvideo + dvaudio in DV in NUT.
 
-A demuxer MUST NOT demux a nut frame containing anything else than exactly a
+A demuxer MUST NOT demux a NUT frame containing anything else than exactly a
 single codec frame. A muxer MUST NOT store anything except exactly 1 single
-codec frame per nut frame.
+codec frame per NUT frame.
 For RAW audio up to 4096 samples shall be considered 1 codec frame, the actual
-number of samples MAY vary between nut frames.
+number of samples MAY vary between NUT frames.
 
 
 Sample code (Public Domain, & untested):
