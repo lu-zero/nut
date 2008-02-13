@@ -2,6 +2,7 @@ include config.mak
 
 LIBNUT_OBJS = libnut/muxer.o libnut/demuxer.o libnut/reorder.o libnut/framecode.o
 NUTUTILS_PROGS = nututils/nutmerge nututils/nutindex nututils/nutparse
+NUTMERGE_OBJS = nututils/nutmerge.o nututils/demux_avi.o nututils/demux_ogg.o nututils/framer_mp3.o nututils/framer_mpeg4.o nututils/framer_vorbis.o
 
 all: libnut nututils
 
@@ -19,7 +20,8 @@ $(LIBNUT_OBJS): libnut/priv.h libnut/libnut.h
 
 nututils: $(NUTUTILS_PROGS)
 
-nututils/nutmerge: nututils/demux_avi.c nututils/demux_ogg.c nututils/framer_mp3.c nututils/framer_mpeg4.c nututils/framer_vorbis.c nututils/nutmerge.h libnut/libnut.a
+$(NUTMERGE_OBJS): nututils/nutmerge.h
+nututils/nutmerge: $(NUTMERGE_OBJS) libnut/libnut.a
 
 $(NUTUTILS_PROGS): CFLAGS += -Ilibnut
 
