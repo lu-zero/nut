@@ -1068,6 +1068,11 @@ duplicate the role of a container. Any such file is to be considered invalid.
 For example Vorbis in Ogg in NUT is invalid, as is
 mpegvideo + mpegaudio in MPEG-PS/TS in NUT or dvvideo + dvaudio in DV in NUT.
 
+A demuxer MUST NOT demux a nut frame containing anything else than exactly a
+single codec frame. A muxer MUST NOT store anything except exactly 1 single
+codec frame per nut frame.
+For RAW audio up to 4096 samples shall be considered 1 codec frame, the actual
+number of sampes MAY vary between nut frames.
 
 
 Sample code (Public Domain, & untested):
