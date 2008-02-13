@@ -151,6 +151,8 @@ A. Define an maximum number of samples (like 512)
 B. Define an maximum timespam (like 0.1 sec)
 C. Define an maximum number of bytes (like 1024)
 
+Implemented: A
+
 
 Issue pcm-sample-format
 -----------------------
