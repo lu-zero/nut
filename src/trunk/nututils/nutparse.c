@@ -490,7 +490,7 @@ static void parse_syncpoint(uint64_t pos)
 	for (i = 0; i < stream_count; ++i)
 		streams[i].last_pts = convert_ts(pts, tbid, streams[i].time_base_id);
 	value = read_var();
-	printf("  back_ptr_div16: %"PRIu64" (%"PRIu64") -> 0x%"PRIx64"\n", value, value * 16 + 15, pos - (value * 16 + 15));
+	printf("  back_ptr_div16: %"PRIu64" (0x%"PRIx64")\n", value, pos - (value * 16 + 15));
 }
 
 static void parse_index(void)
