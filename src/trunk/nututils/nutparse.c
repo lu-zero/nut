@@ -324,6 +324,9 @@ static void parse_main_header(void)
 		if (tmp_fields > 6) {
 			tmp_match = read_svar();
 			printf("  tmp_match: %"PRId64"\n", tmp_match);
+			if ((tmp_match <= -32768 || tmp_match >= 32768) &&
+			    tmp_match != 1 - (INT64_C(1) << 62))
+				error("absolute delta match time must be less than 32768");
 		}
 		for (j64 = 7; j64 < tmp_fields; ++j64)
 			printf("  tmp_reserved[%"PRIu64"]: %"PRIu64"\n", j64, read_var());
