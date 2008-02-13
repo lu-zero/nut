@@ -678,7 +678,7 @@ coded_pts (v)
     delta = last_pts - mask / 2
     pts   = ( (pts_lsb - delta) & mask ) + delta
 
-match_time_delta
+match_time_delta (s)
     This is the time difference in stream timebase units from the pts at which
     the output from the decoder has converged independent from the availability
     of previous frames (that is the frames are virtually identical no matter
@@ -687,6 +687,11 @@ match_time_delta
     the muxer lacked sufficient information to set it.
     A muxer MUST only set it to 1-(1<<62) if it does not know the correct
     value. That is, it is not allowed to randomly discard known values.
+
+match_time_delta[frame_code] (s)
+    If FLAG_MATCH_TIME is not set then this value shall be used for
+    match_time_delta, otherwise this value is ignored.
+    MUST be <32786 and >-32768 or =1-(1<<62)
 
 lsb_pts
     Least significant bits of the pts in time_base precision.
