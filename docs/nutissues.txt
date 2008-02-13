@@ -158,6 +158,8 @@ A. fourcc
 B. extradata
 C. New field in the stream header
 
+It seems the consensus is: A
+
 
 Issue pcm-interleaving
 ----------------------
