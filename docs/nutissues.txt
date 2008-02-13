@@ -115,6 +115,8 @@ we already know like the frame size.
 A. Store header bytes and length in the framecode table.
 B. Leave things as they are.
 
+Implemented
+
 
 Issue small-frames
 ------------------
@@ -134,6 +136,8 @@ D. Use header compression, that is allow to store the first (few) bytes
    of a codec frame together with its size in the framecode table. This
    would allow us to store the size of a frame without any redundancy.
    Thus effectivly avoiding the overhead small frames cause.
+
+It seems the consensus is: A+D
 
 
 Issue pcm-frames
