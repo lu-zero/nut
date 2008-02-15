@@ -677,8 +677,10 @@ reserved_count[frame_code] (v)
     MUST be <256.
 
 data_size
-    The size of the following frame.
     data_size = data_size_lsb + data_size_msb * data_size_mul ;
+    The size of the following frame, including a possible elision header.
+    If data_size is 500 bytes, and it has an elision header of 10 bytes,
+    then the stored frame data following the frame header is 490 bytes.
 
 coded_pts (v)
     If coded_pts < ( 1 << msb_pts_shift ) then it is an lsb
