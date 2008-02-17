@@ -517,6 +517,8 @@ fourcc (vb)
     if needed.
     The ID values used are the same as in AVI, so if a codec uses a specific
     FourCC in AVI then the same FourCC MUST be used here.
+    For raw video and audio, the used sample format (signed/unsigned,
+    8/16/32bit, big/little endian, rgb/yuv) is indicated by the fourcc.
 
 time_base_num (v) / time_base_denom (v) = time_base
     the length of a timer tick in seconds, this MUST be equal to the 1/fps
