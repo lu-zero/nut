@@ -416,11 +416,14 @@ info_packet:
             type= "v"
         }
     }
+    main_flags                          v
     reserved_bytes
 
 syncpoint:
     global_key_pts                      t
     back_ptr_div16                      v
+    if(main_flags & BROADCAST_MODE)
+        transmit_ts                     t
     reserved_bytes
 
             Complete definition:
@@ -487,6 +490,10 @@ max_distance (v)
 
     This is also half the maximum frame size without a checksum after the
     frame header.
+
+main_flags (v)
+    Bit Name            Description
+    0   BROADCAST_MODE  Set if broadcast mode is in use.
 
 
 max_pts_distance (v)
@@ -810,6 +817,12 @@ global_key_pts (t)
 
     global_key_pts MUST be bigger or equal to dts of all past frames across
     all streams, and smaller or equal to pts of all future frames.
+
+transmit_ts (t)
+    The value of the reference clock at the moment when the first bit of
+    transmit_ts is transmitted/received.
+    The reference clock MUST always be less than or equal to the DTS of
+    every not yet completely received frame.
 
 Index tags:
 -----------
