@@ -105,8 +105,8 @@ PFD[32]   would for example be signed 32 bit little endian IEEE float
 Subtitles:
 UTF8    Raw utf8
 SSA[0]  SubStation Alpha
-DDSU    DVD subtitles
-DBSU    DVB subtitles
+DVDS    DVD subtitles
+DVBS    DVB subtitles
 
 
 FIXME dv/gray16/audio codecs/multi chan interleaving
