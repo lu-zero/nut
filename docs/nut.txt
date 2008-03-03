@@ -1092,6 +1092,14 @@ B. forward seeking
     smallest one which has a back ptr >= the position of what was found in 1.
 2. Follow the back pointer to the corresponding syncpoint.
 
+Alternatively a demuxer can search for a shorter back ptr (which ensures that
+keyframes in all streams are closer together) before 2.
+One way to do this for backward seeking is:
+if the back ptr is longer than the demuxer wants, step back by half the ptr,
+search for another syncpoint and repeat until either the ptr is short enough
+or the search went too far.
+
+
 Seeking with an index (non-normative):
 --------------------------------------
 The demuxer only has to find the appropriate keyframe in the index and
@@ -1100,6 +1108,10 @@ start demuxing from the previous syncpoint.
 Note, more complicated seeking methods exist which are capable of quickly
 seeking to the optimal point in the presence of an index even if only a
 subset of all streams is active.
+
+Note2, A demuxer might wish to favor a syncpoint which has keyframes
+in all active streams shortly afterwards instead of one where they are
+distant.
 
 A muxer SHOULD place syncpoints so that that simple low complexity seeking
 works with fine granularity. That is, syncpoints should be placed prior
