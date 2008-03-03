@@ -82,8 +82,8 @@ dts
 
 EOR frames
     End of relevance frames indicate that a given stream is not relevant
-    for presentation begining with the EOR frame and until the following
-    keyframe. This is primarely intended for periods were subtitles are
+    for presentation beginning with the EOR frame and until the following
+    keyframe. This is primarily intended for periods where subtitles are
     not displayed. But it is not limited to subtitles.
 
 
@@ -1023,10 +1023,10 @@ Decoding can only start at a keyframe. Thus if efficient seeking with at
 least a granularity of N seconds is wanted, then it is neccessary to have
 at least 1 keyframe every N seconds in every stream.
 
-Furthermore to start correct "presentation" (after seeking) it is neccessary
+Furthermore, to start correct "presentation" (after seeking) it is necessary
 to have a decoded frame from every stream at approximately the same time.
 Thus it is important to have closely placed keyframes in all streams at least
-once every N seconds. This is equivalent of having back pointers frequently
+once every N seconds. This is equivalent to having back pointers frequently
 short.
 Good example:
 Video:           .....K...........................................K...........
@@ -1045,7 +1045,7 @@ shortest back ptrs:   <--------------------o
 
 In the bad example a player would have to demux and decode half of the video
 between the 2 keyrames to start correct playback if it favors the shortest
-back ptr.
+back pointer.
 
 The above considerations are not specific to NUT.
 
@@ -1089,15 +1089,15 @@ B. forward seeking
     1a. Perform a binary search on the syncpoint timestamps finding the one
     which is smallest and >= the target timestamp.
     1b. Perform a binary search on the syncpoint back pointers finding the
-    smallest one which has a back ptr >= the position of what was found in 1.
+    smallest one which has a back pointer >= the position found in 1.
 2. Follow the back pointer to the corresponding syncpoint.
 
-Alternatively a demuxer can search for a shorter back ptr (which ensures that
-keyframes in all streams are closer together) before 2.
+Alternatively a demuxer can search for a shorter back pointer (which ensures
+that keyframes in all streams are closer together) before 2.
 One way to do this for backward seeking is:
-if the back ptr is longer than the demuxer wants, step back by half the ptr,
-search for another syncpoint and repeat until either the ptr is short enough
-or the search went too far.
+If the back pointer is longer than the demuxer wants, step back by half the
+pointer, search for another syncpoint and repeat until either the pointer is
+short enough or the search went too far.
 
 
 Seeking with an index (non-normative):
