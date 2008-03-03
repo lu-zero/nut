@@ -1047,7 +1047,7 @@ In the bad example a player would have to demux and decode half of the video
 between the 2 keyrames to start correct playback if it favors the shortest
 back ptr.
 
-The above 2 considerations are not specific to NUT.
+The above considerations are not specific to NUT.
 
 
 Index:
