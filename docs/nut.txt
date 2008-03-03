@@ -1017,6 +1017,39 @@ The muxer SHOULD repeat non-mandatory headers like mandatory ones if
 the overhead is not excessive.
 
 
+Random Access (seeking) considerations:
+---------------------------------------
+Decoding can only start at a keyframe. Thus if efficient seeking with at
+least a granularity of N seconds is wanted, then it is neccessary to have
+at least 1 keyframe every N seconds in every stream.
+
+Furthermore to start correct "presentation" (after seeking) it is neccessary
+to have a decoded frame from every stream at approximately the same time.
+Thus it is important to have closely placed keyframes in all streams at least
+once every N seconds. This is equivalent of having back pointers frequently
+short.
+Good example:
+Video:           .....K...........................................K...........
+Audio:           KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK
+Subtitle:        ..K............................................K.....K.......
+shortest back ptrs:<--o
+                      <-----------------------------------------o
+                                                                <-o
+                                                                  <---o
+Bad example:
+Video:           .....K...........................................K...........
+Audio:           KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK
+Subtitle:        ..........................K..................................
+shortest back ptrs:   <--------------------o
+                                           <----------------------o
+
+In the bad example a player would have to demux and decode half of the video
+between the 2 keyrames to start correct playback if it favors the shortest
+back ptr.
+
+The above 2 considerations are not specific to NUT.
+
+
 Index:
 ------
 
