@@ -80,6 +80,12 @@ pts
 dts
     The time when a frame is input into a synchronous 1-in-1-out decoder.
 
+EOR frames
+    End of relevance frames indicate that a given stream is not relevant
+    for presentation begining with the EOR frame and until the following
+    keyframe. This is primarely intended for periods were subtitles are
+    not displayed. But it is not limited to subtitles.
+
 
 Syntax:
 =======
