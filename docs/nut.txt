@@ -1026,8 +1026,8 @@ at least 1 keyframe every N seconds in every stream.
 Furthermore, to start correct "presentation" (after seeking) it is necessary
 to have a decoded frame from every stream at approximately the same time.
 Thus it is important to have closely placed keyframes in all streams at least
-once every N seconds. This is equivalent to having back pointers frequently
-short.
+once every N seconds. This is equivalent to having frequent, short back
+pointers.
 Good example:
 Video:           .....K...........................................K...........
 Audio:           KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK
