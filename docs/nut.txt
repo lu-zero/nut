@@ -1044,10 +1044,10 @@ shortest back ptrs:   <--------------------o
                                            <----------------------o
 
 In the bad example a player would have to demux and decode half of the video
-between the 2 keyrames to start correct playback if it favors the shortest
+between the 2 keyframes to start correct playback if it favors the shortest
 back pointer. A player could of course also choose to ignore subtitles and
 thus not display them between the video keyframe and subtitle frame. This
-would avoid the decoding but not neccessarily demuxing and of course would
+would avoid the decoding but not necessarily demuxing and of course would
 lead to incorrect display (no subtitles). An encoding application SHOULD thus
 try to reasonably align keyframes in time. This could be achieved by repeating
 subtitle packets at video keyframes (with appropriately adjusted start/end
