@@ -16,7 +16,7 @@ C. buffer fullness in seconds
 D. buffer fullness in bytes
 E. transmit time stamps
 
-Values in bytes are sensitiv to packet loss, which can delay initial startup.
+Values in bytes are sensitive to packet loss, which can delay initial startup.
 
 
 These can be stored in one of the following
@@ -122,34 +122,34 @@ Implemented
 
 Issue small-frames
 ------------------
-The original intent of nut frames was that 1 container frame == 1 codec
-frame. Though this does not seem to be explicitly written in nut.txt.
+The original intent of NUT frames was that 1 container frame == 1 codec
+frame, albeit this does not seem to be explicitly written in nut.txt.
 Also it is inefficient for very small frames, AMR-NB for example has 6-32
 bytes per frame.
 
 Solutions:
 A. Enforce 1 container frame == 1 codec frame even if it causes 10% overhead.
 B. Allow multiple frames as long as the whole packet is less than some
-   fixed minimum in bytes (like 256byte)
+   fixed minimum in bytes (like 256byte).
 C. Allow multiple frames as long as the whole packet is less than some
    fixed minimum in bytes (like 256byte) and the codec uses a constant
    framesize in samples.
 D. Use header compression, that is allow to store the first (few) bytes
    of a codec frame together with its size in the framecode table. This
    would allow us to store the size of a frame without any redundancy.
-   Thus effectivly avoiding the overhead small frames cause.
+   Thus effectively avoiding the overhead small frames cause.
 
 It seems the consensus is: A+D With the specified bounds
 
 
 Issue pcm-frames
 ----------------
-No word is said about how many or few PCM samples should be in a frame.
+No word is said about how many or how few PCM samples should be in a frame.
 
 Solutions:
-A. Define an maximum number of samples (like 512)
-B. Define an maximum timespam (like 0.1 sec)
-C. Define an maximum number of bytes (like 1024)
+A. Define a maximum number of samples (like 512).
+B. Define a maximum timespam (like 0.1 sec).
+C. Define a maximum number of bytes (like 1024).
 
 Implemented: A
 
@@ -175,7 +175,7 @@ C. New field in the stream header
 D. Only allow 1 standard interleaving
 
 What about the interleaving of non raw codecs, do all specify the
-interleaving, or does any leave it to the container? If so, our options
+interleaving, or do any leave it to the container? If so, our options
 would be down to only C.
 
 Also a field specific to just raw does not belong in the stream headers.
