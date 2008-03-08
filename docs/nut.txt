@@ -291,6 +291,7 @@ main_header:
     header_count_minus1                  v
     for(i=0; i<header_count_minus1; i++)
         elision_header[i+1]             vb
+    main_flags                          v
     reserved_bytes
 
 stream_header:
@@ -422,7 +423,6 @@ info_packet:
             type= "v"
         }
     }
-    main_flags                          v
     reserved_bytes
 
 syncpoint:
