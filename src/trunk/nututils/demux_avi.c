@@ -394,7 +394,7 @@ static int read_headers(demuxer_priv_t * avi, stream_t ** streams) {
 			char * fourccs[] = {"FMP4","fmp4","DIVX","divx",
 			                    "DIV1","div1","MP4S","mp4s",
 			                    "xvid","XVID","XviD","XVIX",
-			                    "M4S2","m4s2","mp4v","MP4V"
+			                    "M4S2","m4s2","mp4v","MP4V",
 			                    "DX50","dx50","BLZ0",
 			};
 			int j;
