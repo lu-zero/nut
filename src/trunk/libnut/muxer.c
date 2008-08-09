@@ -181,6 +181,8 @@ static void put_main_header(nut_context_t * nut) {
 		if (fields > 4) put_v(tmp, 0); // reserved
 		if (fields > 5) put_v(tmp, count);
 	}
+	put_v(tmp, 0); // header_count_minus1
+	put_v(tmp, 0); // main_flags
 
 	put_header(nut->o, tmp, nut->tmp_buffer2, MAIN_STARTCODE, 0);
 }
