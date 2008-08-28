@@ -968,6 +968,7 @@ info packet types
         instead? is there some other unique way to identify fonts?
         This stream uses the specified font, if it is unavailable presentation
         might be less pretty.
+    Note: Nonstandard fields should be prefixed by "X-".
 
 value
     value of this name/type pair
