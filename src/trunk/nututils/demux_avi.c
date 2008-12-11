@@ -18,12 +18,12 @@ typedef struct riff_tree_s {
 	struct riff_tree_s * tree; // this is an array (size is 'amount')
 	char * data;
 	int offset;
-} riff_tree_t;
+} riff_tree_tt;
 
 typedef struct {
 	int amount;
-	riff_tree_t * tree;
-} full_riff_tree_t;
+	riff_tree_tt * tree;
+} full_riff_tree_tt;
 
 typedef struct {
 	uint8_t wFormatTag[2];
@@ -33,7 +33,7 @@ typedef struct {
 	uint16_t nBlockAlign;
 	uint16_t wBitsPerSample;
 	uint16_t cbSize;
-} audio_header_t;
+} audio_header_tt;
 
 typedef struct {
 	uint32_t biSize;
@@ -47,7 +47,7 @@ typedef struct {
 	uint32_t biYPelsPerMeter;
 	uint32_t biClrUsed;
 	uint32_t biClrImportant;
-} video_header_t;
+} video_header_tt;
 
 typedef struct {
 	uint32_t dwMicroSecPerFrame;
@@ -64,7 +64,7 @@ typedef struct {
 	uint32_t dwRate;
 	uint32_t dwStart;
 	uint32_t dwLength;
-} avi_header_t;
+} avi_header_tt;
 
 typedef struct {
 	uint8_t fccType[4];
@@ -80,32 +80,32 @@ typedef struct {
 	uint32_t dwQuality;
 	uint32_t dwSampleSize;
 	uint16_t rcframe[4];
-} avi_stream_header_t;
+} avi_stream_header_tt;
 
 typedef struct {
 	uint8_t ckid[4];
 	uint32_t dwFlags;
 	uint32_t dwChunkOffset;
 	uint32_t dwChunkLength;
-} avi_index_entry_t;
+} avi_index_entry_tt;
 
 typedef struct {
 	int type; // 0 video, 1 audio
-	avi_stream_header_t * strh;
-	video_header_t * video;
-	audio_header_t * audio;
+	avi_stream_header_tt * strh;
+	video_header_tt * video;
+	audio_header_tt * audio;
 	int extra_len;
 	int last_pts;
 	uint8_t * extra;
-} avi_stream_context_t;
+} avi_stream_context_tt;
 
 struct demuxer_priv_s {
 	FILE * in;
-	full_riff_tree_t * riff;
-	stream_t * s;
-	avi_header_t * avih;
-	avi_stream_context_t * stream; // this is an array, free this
-	avi_index_entry_t * index; // this is an array and data
+	full_riff_tree_tt * riff;
+	stream_tt * s;
+	avi_header_tt * avih;
+	avi_stream_context_tt * stream; // this is an array, free this
+	avi_index_entry_tt * index; // this is an array and data
 	int packets;
 	int cur;
 };
@@ -114,7 +114,7 @@ struct demuxer_priv_s {
 #define READ_16(out, ptr) do { out = ((uint8_t*)ptr)[0] | (((uint8_t*)ptr)[1] << 8); ptr += 2; } while (0)
 #define READ_32(out, ptr) do { out = ((uint8_t*)ptr)[0] | (((uint8_t*)ptr)[1] << 8) | (((uint8_t*)ptr)[2] << 16) | (((uint8_t*)ptr)[3] << 24); ptr += 4; } while (0)
 
-static void data_to_audio_header(void * data, audio_header_t * out) {
+static void data_to_audio_header(void * data, audio_header_tt * out) {
 	uint8_t * p = data;
 	READ_B(out->wFormatTag, p, 2);
 	READ_16(out->nChannels, p);
@@ -125,7 +125,7 @@ static void data_to_audio_header(void * data, audio_header_t * out) {
 	READ_16(out->cbSize, p);
 }
 
-static void data_to_video_header(void * data, video_header_t * out) {
+static void data_to_video_header(void * data, video_header_tt * out) {
 	uint8_t * p = data;
 	READ_32(out->biSize, p);
 	READ_32(out->biWidth, p);
@@ -140,7 +140,7 @@ static void data_to_video_header(void * data, video_header_t * out) {
 	READ_32(out->biClrImportant, p);
 }
 
-static void data_to_avi_header(void * data, avi_header_t * out) {
+static void data_to_avi_header(void * data, avi_header_tt * out) {
 	uint8_t * p = data;
 	READ_32(out->dwMicroSecPerFrame, p);
 	READ_32(out->dwMaxBytesPerSec, p);
@@ -158,7 +158,7 @@ static void data_to_avi_header(void * data, avi_header_t * out) {
 	READ_32(out->dwLength, p);
 }
 
-static void data_to_stream_header(void * data, avi_stream_header_t * out) {
+static void data_to_stream_header(void * data, avi_stream_header_tt * out) {
 	uint8_t * p = data;
 	READ_B(out->fccType, p, 4);
 	READ_B(out->fccHandler, p, 4);
@@ -178,7 +178,7 @@ static void data_to_stream_header(void * data, avi_stream_header_t * out) {
 	READ_16(out->rcframe[3], p);
 }
 
-static void data_to_index_entry(void * data, avi_index_entry_t * out) {
+static void data_to_index_entry(void * data, avi_index_entry_tt * out) {
 	uint8_t * p = data;
 	READ_B(out->ckid, p, 4);
 	READ_32(out->dwFlags, p);
@@ -186,7 +186,7 @@ static void data_to_index_entry(void * data, avi_index_entry_t * out) {
 	READ_32(out->dwChunkLength, p);
 }
 
-static int mk_riff_tree(FILE * in, riff_tree_t * tree) {
+static int mk_riff_tree(FILE * in, riff_tree_tt * tree) {
 	char lenc[4], * p = lenc;
 	int left;
 	tree->tree = NULL;
@@ -210,7 +210,7 @@ static int mk_riff_tree(FILE * in, riff_tree_t * tree) {
 			while (left > 0) {
 				int err;
 				tree->tree =
-					realloc(tree->tree, sizeof(riff_tree_t) * (tree->amount+1));
+					realloc(tree->tree, sizeof(riff_tree_tt) * (tree->amount+1));
 				if ((err = mk_riff_tree(in, &tree->tree[tree->amount])))
 					return err;
 				left -= (tree->tree[tree->amount].len + 8);
@@ -227,7 +227,7 @@ static int mk_riff_tree(FILE * in, riff_tree_t * tree) {
 	return 0;
 }
 
-static void free_riff_tree(riff_tree_t * tree) {
+static void free_riff_tree(riff_tree_tt * tree) {
 	int i;
 	if (!tree) return;
 
@@ -238,27 +238,27 @@ static void free_riff_tree(riff_tree_t * tree) {
 	free(tree->data); tree->data = NULL;
 }
 
-static full_riff_tree_t * init_riff() {
-	full_riff_tree_t * full = malloc(sizeof(full_riff_tree_t));
+static full_riff_tree_tt * init_riff() {
+	full_riff_tree_tt * full = malloc(sizeof(full_riff_tree_tt));
 	full->amount = 0;
 	full->tree = NULL;
 	return full;
 }
 
-static int get_full_riff_tree(FILE * in, full_riff_tree_t * full) {
+static int get_full_riff_tree(FILE * in, full_riff_tree_tt * full) {
 	int err = 0;
 
 	while (1) {
 		int c;
 		if ((c = fgetc(in)) == EOF) break; ungetc(c, in);
-		full->tree = realloc(full->tree, sizeof(riff_tree_t) * ++full->amount);
+		full->tree = realloc(full->tree, sizeof(riff_tree_tt) * ++full->amount);
 		if ((err = mk_riff_tree(in, &full->tree[full->amount - 1]))) goto err_out;
 	}
 err_out:
 	return err;
 }
 
-static void uninit_riff(full_riff_tree_t * full) {
+static void uninit_riff(full_riff_tree_tt * full) {
 	int i;
 	if (!full) return;
 	for (i = 0; i < full->amount; i++) free_riff_tree(&full->tree[i]);
@@ -266,7 +266,7 @@ static void uninit_riff(full_riff_tree_t * full) {
 	free(full);
 }
 
-static int avi_read_stream_header(avi_stream_context_t * stream, riff_tree_t * tree) {
+static int avi_read_stream_header(avi_stream_context_tt * stream, riff_tree_tt * tree) {
 	int i;
 	assert(tree->type == 0);
 	assert(strFOURCC(tree->listname) == mmioFOURCC('s','t','r','l'));
@@ -274,7 +274,7 @@ static int avi_read_stream_header(avi_stream_context_t * stream, riff_tree_t * t
 	for (i = 0; i < tree->amount; i++) {
 		if (tree->tree[i].type == 1 && !strncmp(tree->tree[i].name, "strh", 4)) {
 			if (tree->tree[i].len != 56) return err_avi_bad_strh_len;
-			stream->strh = malloc(sizeof(avi_stream_header_t));
+			stream->strh = malloc(sizeof(avi_stream_header_tt));
 			data_to_stream_header(tree->tree[i].data, stream->strh);
 			break;
 		}
@@ -288,7 +288,7 @@ static int avi_read_stream_header(avi_stream_context_t * stream, riff_tree_t * t
 				case mmioFOURCC('v','i','d','s'):
 					if (len < 40) return err_avi_bad_vids_len;
 					stream->type = 0;
-					stream->video = malloc(sizeof(video_header_t));
+					stream->video = malloc(sizeof(video_header_tt));
 					data_to_video_header(tree->tree[i].data, stream->video);
 					stream->extra_len = len - 40;
 					if (len > 40) stream->extra = (uint8_t*)tree->tree[i].data + 40;
@@ -296,7 +296,7 @@ static int avi_read_stream_header(avi_stream_context_t * stream, riff_tree_t * t
 				case mmioFOURCC('a','u','d','s'):
 					if (len < 18) return err_avi_bad_auds_len;
 					stream->type = 1;
-					stream->audio = malloc(sizeof(audio_header_t));
+					stream->audio = malloc(sizeof(audio_header_tt));
 					data_to_audio_header(tree->tree[i].data, stream->audio);
 					stream->extra_len = len - 18;
 					if (len > 18) stream->extra = (uint8_t*)tree->tree[i].data + 18;
@@ -312,7 +312,7 @@ static int avi_read_stream_header(avi_stream_context_t * stream, riff_tree_t * t
 	return 0;
 }
 
-static int avi_read_main_header(demuxer_priv_t * avi, const riff_tree_t * tree) {
+static int avi_read_main_header(demuxer_priv_tt * avi, const riff_tree_tt * tree) {
 	int i, tmp = 0, err;
 	assert(tree->type == 0);
 	assert(strFOURCC(tree->listname) == mmioFOURCC('h','d','r','l'));
@@ -320,7 +320,7 @@ static int avi_read_main_header(demuxer_priv_t * avi, const riff_tree_t * tree) 
 	for (i = 0; i < tree->amount; i++) {
 		if (tree->tree[i].type == 1 && !strncmp(tree->tree[i].name, "avih", 4)) {
 			if (tree->tree[i].len != 56) return err_avi_bad_avih_len;
-			avi->avih = malloc(sizeof(avi_header_t));
+			avi->avih = malloc(sizeof(avi_header_tt));
 			data_to_avi_header(tree->tree[i].data, avi->avih);
 			break;
 		}
@@ -328,7 +328,7 @@ static int avi_read_main_header(demuxer_priv_t * avi, const riff_tree_t * tree) 
 	if (i == tree->amount) return err_avi_no_avih;
 
 	if (avi->avih->dwStreams > 200) return err_avi_stream_overflow;
-	avi->stream = malloc(avi->avih->dwStreams * sizeof(avi_stream_context_t));
+	avi->stream = malloc(avi->avih->dwStreams * sizeof(avi_stream_context_tt));
 	for (i = 0; i < avi->avih->dwStreams; i++) {
 		avi->stream[i].video = NULL;
 		avi->stream[i].audio = NULL;
@@ -345,8 +345,8 @@ static int avi_read_main_header(demuxer_priv_t * avi, const riff_tree_t * tree) 
 	return 0;
 }
 
-static int avi_read_headers(demuxer_priv_t * avi) {
-	const riff_tree_t * tree;
+static int avi_read_headers(demuxer_priv_tt * avi) {
+	const riff_tree_tt * tree;
 	int i, err;
 	if ((err = get_full_riff_tree(avi->in, avi->riff))) return err;
 	tree = &avi->riff->tree[0];
@@ -366,7 +366,7 @@ static int avi_read_headers(demuxer_priv_t * avi) {
 		for (j = 0; j < tree->amount; j++) {
 			if (tree->tree[j].type == 1 && !strncmp(tree->tree[j].name, "idx1", 4)) {
 				avi->packets = tree->tree[j].len / 16;
-				avi->index = calloc(avi->packets, sizeof(avi_index_entry_t));
+				avi->index = calloc(avi->packets, sizeof(avi_index_entry_tt));
 				for (ii = 0; ii < avi->packets; ii++) {
 					data_to_index_entry((char*)tree->tree[j].data + 16*ii, avi->index + ii);
 				}
@@ -386,7 +386,7 @@ static int avi_read_headers(demuxer_priv_t * avi) {
 	return 0;
 }
 
-static int read_headers(demuxer_priv_t * avi, stream_t ** streams) {
+static int read_headers(demuxer_priv_tt * avi, stream_tt ** streams) {
 	int i;
 	if ((i = avi_read_headers(avi))) return i;
 	for (i = 0; i < avi->avih->dwStreams; i++) {
@@ -408,9 +408,9 @@ static int read_headers(demuxer_priv_t * avi, stream_t ** streams) {
 		}
 	}
 
-	*streams = avi->s = malloc(sizeof(stream_t) * (avi->avih->dwStreams + 1));
+	*streams = avi->s = malloc(sizeof(stream_tt) * (avi->avih->dwStreams + 1));
 	for (i = 0; i < avi->avih->dwStreams; i++) {
-		extern demuxer_t avi_demuxer;
+		extern demuxer_tt avi_demuxer;
 		avi->s[i].stream_id = i;
 		avi->s[i].demuxer = avi_demuxer;
 		avi->s[i].demuxer.priv = avi;
@@ -451,10 +451,10 @@ static int read_headers(demuxer_priv_t * avi, stream_t ** streams) {
 	return 0;
 }
 
-static int fill_buffer(demuxer_priv_t * avi) {
+static int fill_buffer(demuxer_priv_tt * avi) {
 	char fourcc[4], lenc[4], * plen = lenc;
 	int len;
-	packet_t p;
+	packet_tt p;
 	if (ftell(avi->in) & 1) fgetc(avi->in);
 
 	if (avi->cur >= avi->packets) return -1;
@@ -487,8 +487,8 @@ static int fill_buffer(demuxer_priv_t * avi) {
 	return 0;
 }
 
-static demuxer_priv_t * init(FILE * in) {
-	demuxer_priv_t * avi = malloc(sizeof(demuxer_priv_t));
+static demuxer_priv_tt * init(FILE * in) {
+	demuxer_priv_tt * avi = malloc(sizeof(demuxer_priv_tt));
 	avi->avih = NULL;
 	avi->stream = NULL;
 	avi->index = NULL;
@@ -499,7 +499,7 @@ static demuxer_priv_t * init(FILE * in) {
 	return avi;
 }
 
-static void uninit(demuxer_priv_t * avi) {
+static void uninit(demuxer_priv_tt * avi) {
 	int i, streams = avi->avih ? avi->avih->dwStreams : 0;
 	uninit_riff(avi->riff);
 	if (avi->stream) for (i = 0; i < streams; i++) {
@@ -515,7 +515,7 @@ static void uninit(demuxer_priv_t * avi) {
 	free(avi);
 }
 
-demuxer_t avi_demuxer = {
+demuxer_tt avi_demuxer = {
 	"avi",
 	init,
 	read_headers,

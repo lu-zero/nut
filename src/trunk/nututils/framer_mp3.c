@@ -4,10 +4,10 @@
 #include "nutmerge.h"
 
 struct framer_priv_s {
-	stream_t * stream;
+	stream_tt * stream;
 };
 
-static int get_packet(framer_priv_t * mp, packet_t * p) {
+static int get_packet(framer_priv_tt * mp, packet_tt * p) {
 	static const int tabsel_123[2][3][16] = {
 		{ {0,32,64,96,128,160,192,224,256,288,320,352,384,416,448,0},
 		  {0,32,48,56, 64, 80, 96,112,128,160,192,224,256,320,384,0},
@@ -62,22 +62,22 @@ static int get_packet(framer_priv_t * mp, packet_t * p) {
 	return 0;
 }
 
-static int setup_headers(framer_priv_t * mp, nut_stream_header_t * s) {
+static int setup_headers(framer_priv_tt * mp, nut_stream_header_tt * s) {
 	*s = mp->stream->sh;
 	return 0; // nothing to do
 }
 
-static framer_priv_t * init(stream_t * s) {
-	framer_priv_t * mp = malloc(sizeof(framer_priv_t));
+static framer_priv_tt * init(stream_tt * s) {
+	framer_priv_tt * mp = malloc(sizeof(framer_priv_tt));
 	mp->stream = s;
 	return mp;
 }
 
-static void uninit(framer_priv_t * mp) {
+static void uninit(framer_priv_tt * mp) {
 	free(mp);
 }
 
-framer_t mp3_framer = {
+framer_tt mp3_framer = {
 	e_mp3,
 	init,
 	setup_headers,

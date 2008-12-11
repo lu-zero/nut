@@ -43,15 +43,15 @@ typedef struct {
 	int write_len; // allocated memory
 	off_t file_pos;
 	FILE * out;
-} output_buffer_t;
+} output_buffer_tt;
 
-static void flush_out_buf(output_buffer_t * bc) {
+static void flush_out_buf(output_buffer_tt * bc) {
 	assert(!bc->is_mem);
 	bc->file_pos += fwrite(bc->buf, 1, bc->buf_ptr - bc->buf, bc->out);
 	bc->buf_ptr = bc->buf;
 }
 
-static void ready_write_buf(output_buffer_t * bc, int amount) {
+static void ready_write_buf(output_buffer_tt * bc, int amount) {
 	if (bc->write_len - (bc->buf_ptr - bc->buf) > amount) return;
 
         if (bc->is_mem) {
@@ -69,14 +69,14 @@ static void ready_write_buf(output_buffer_t * bc, int amount) {
 	}
 }
 
-static void put_bytes(output_buffer_t * bc, int count, uint64_t val) {
+static void put_bytes(output_buffer_tt * bc, int count, uint64_t val) {
 	ready_write_buf(bc, count);
 	for(count--; count >= 0; count--){
 		*(bc->buf_ptr++) = val >> (8 * count);
 	}
 }
 
-static output_buffer_t * new_mem_buffer(output_buffer_t * bc) {
+static output_buffer_tt * new_mem_buffer(output_buffer_tt * bc) {
 	bc->write_len = 0;
 	bc->is_mem = 1;
 	bc->file_pos = 0;
@@ -84,7 +84,7 @@ static output_buffer_t * new_mem_buffer(output_buffer_t * bc) {
 	return bc;
 }
 
-static output_buffer_t * new_output_buffer(output_buffer_t * bc, FILE * out) {
+static output_buffer_tt * new_output_buffer(output_buffer_tt * bc, FILE * out) {
 	new_mem_buffer(bc);
 	bc->is_mem = 0;
 	bc->out = out;
@@ -98,7 +98,7 @@ static int v_len(uint64_t val) {
 	return i;
 }
 
-static void put_v(output_buffer_t * bc, uint64_t val) {
+static void put_v(output_buffer_tt * bc, uint64_t val) {
 	int i = v_len(val);
 	ready_write_buf(bc, i);
 	for(i = (i-1)*7; i; i-=7) {
@@ -107,7 +107,7 @@ static void put_v(output_buffer_t * bc, uint64_t val) {
 	*(bc->buf_ptr++)= val & 0x7F;
 }
 
-static void put_data(output_buffer_t * bc, int len, const uint8_t * data) {
+static void put_data(output_buffer_tt * bc, int len, const uint8_t * data) {
 	if (len + (bc->buf_ptr - bc->buf) < bc->write_len || bc->is_mem) {
 		ready_write_buf(bc, len);
 		memcpy(bc->buf_ptr, data, len);
@@ -118,7 +118,7 @@ static void put_data(output_buffer_t * bc, int len, const uint8_t * data) {
 	}
 }
 
-static void free_out_buffer(output_buffer_t * bc) {
+static void free_out_buffer(output_buffer_tt * bc) {
 	if (!bc) return;
 	if (!bc->is_mem) flush_out_buf(bc);
 	free(bc->buf);
@@ -134,16 +134,16 @@ typedef struct {
 	int read_len;  // data in memory
 	off_t file_pos;
 	off_t filesize;
-} input_buffer_t;
+} input_buffer_tt;
 
-static void flush_buf(input_buffer_t *bc) {
+static void flush_buf(input_buffer_tt *bc) {
 	bc->file_pos += bc->buf_ptr - bc->buf;
 	bc->read_len -= bc->buf_ptr - bc->buf;
 	memmove(bc->buf, bc->buf_ptr, bc->read_len);
 	bc->buf_ptr = bc->buf;
 }
 
-static int ready_read_buf(input_buffer_t * bc, int amount) {
+static int ready_read_buf(input_buffer_tt * bc, int amount) {
 	int pos = (bc->buf_ptr - bc->buf);
 	if (bc->read_len - pos < amount) {
 		amount += 10;
@@ -157,7 +157,7 @@ static int ready_read_buf(input_buffer_t * bc, int amount) {
 	return bc->read_len - (bc->buf_ptr - bc->buf);
 }
 
-static void seek_buf(input_buffer_t * bc, long long pos, int whence) {
+static void seek_buf(input_buffer_tt * bc, long long pos, int whence) {
 	if (whence == SEEK_CUR) pos -= bc->read_len - (bc->buf_ptr - bc->buf);
 	fseek(bc->in, pos, whence);
 	bc->file_pos = ftell(bc->in);
@@ -166,7 +166,7 @@ static void seek_buf(input_buffer_t * bc, long long pos, int whence) {
 	if (whence == SEEK_END) bc->filesize = bc->file_pos - pos;
 }
 
-static input_buffer_t * new_input_buffer(input_buffer_t * bc, FILE * in) {
+static input_buffer_tt * new_input_buffer(input_buffer_tt * bc, FILE * in) {
 	bc->read_len = 0;
 	bc->write_len = 0;
 	bc->file_pos = 0;
@@ -176,18 +176,18 @@ static input_buffer_t * new_input_buffer(input_buffer_t * bc, FILE * in) {
 	return bc;
 }
 
-static int skip_buffer(input_buffer_t * bc, int len) {
+static int skip_buffer(input_buffer_tt * bc, int len) {
 	if (ready_read_buf(bc, len) < len) return 1;
 	bc->buf_ptr += len;
 	return 0;
 }
 
-static void free_buffer(input_buffer_t * bc) {
+static void free_buffer(input_buffer_tt * bc) {
 	if (!bc) return;
 	free(bc->buf);
 }
 
-static int get_bytes(input_buffer_t * bc, int count, uint64_t * val) {
+static int get_bytes(input_buffer_tt * bc, int count, uint64_t * val) {
 	int i;
 	if (ready_read_buf(bc, count) < count) return 1;
 	*val = 0;
@@ -197,7 +197,7 @@ static int get_bytes(input_buffer_t * bc, int count, uint64_t * val) {
 	return 0;
 }
 
-static int get_v(input_buffer_t * bc, uint64_t * val) {
+static int get_v(input_buffer_tt * bc, uint64_t * val) {
 	int i, len;
 	*val = 0;
 	do {
@@ -211,7 +211,7 @@ static int get_v(input_buffer_t * bc, uint64_t * val) {
 	return 1;
 }
 
-static int get_data(input_buffer_t * bc, int len, uint8_t * buf) {
+static int get_data(input_buffer_tt * bc, int len, uint8_t * buf) {
 	int tmp = MIN(len, bc->read_len - (bc->buf_ptr - bc->buf));
 	if (tmp) {
 		memcpy(buf, bc->buf_ptr, tmp);
@@ -230,7 +230,7 @@ static int get_data(input_buffer_t * bc, int len, uint8_t * buf) {
 #define CHECK(expr) do { int _a; if ((_a = (expr))) return _a; } while(0)
 #define GET_V(bc, v) do { uint64_t _tmp; CHECK(get_v((bc), &_tmp)); (v) = _tmp; } while(0)
 
-static int get_header(input_buffer_t * in) {
+static int get_header(input_buffer_tt * in) {
 	off_t start = bctello(in) - 8; // startcode
 	int forward_ptr;
 
@@ -245,7 +245,7 @@ static int get_header(input_buffer_t * in) {
 	return 0;
 }
 
-static int read_headers(input_buffer_t * in) {
+static int read_headers(input_buffer_tt * in) {
 	int len = strlen(ID_STRING) + 1;
 	uint64_t tmp;
 	assert(in->buf == in->buf_ptr);
@@ -262,7 +262,7 @@ static int read_headers(input_buffer_t * in) {
 	return 0;
 }
 
-static int find_copy_index(input_buffer_t * in, output_buffer_t * out, off_t * end) {
+static int find_copy_index(input_buffer_tt * in, output_buffer_tt * out, off_t * end) {
 	uint64_t tmp;
 	uint64_t idx_len;
 	uint64_t max_pts, syncpoints;
@@ -326,8 +326,8 @@ static int find_copy_index(input_buffer_t * in, output_buffer_t * out, off_t * e
 int main(int argc, char * argv[]) {
 	FILE * fin = argc>2 ? fopen(argv[1], "rb") : NULL;
 	FILE * fout = argc>2 ? fopen(argv[2], "wb") : NULL;
-	input_buffer_t iin, * in;
-	output_buffer_t oout, * out, omem, * mem = new_mem_buffer(&omem);
+	input_buffer_tt iin, * in;
+	output_buffer_tt oout, * out, omem, * mem = new_mem_buffer(&omem);
 	off_t end;
 	if (!fin || !fout) {
 		fprintf(stderr, "%s <input-nut-file> <output-nut-file>\n", argv[0]);

@@ -11,13 +11,13 @@ static int stream_write(void * priv, size_t len, const uint8_t * buf) {
 	return fwrite(buf, 1, len, priv);
 }
 
-static void flush_buf(output_buffer_t * bc) {
+static void flush_buf(output_buffer_tt * bc) {
 	assert(bc->osc.write);
 	bc->file_pos += bc->osc.write(bc->osc.priv, bc->buf_ptr - bc->buf, bc->buf);
 	bc->buf_ptr = bc->buf;
 }
 
-static void ready_write_buf(output_buffer_t * bc, int amount) {
+static void ready_write_buf(output_buffer_tt * bc, int amount) {
 	if (bc->write_len - (bc->buf_ptr - bc->buf) > amount) return;
 
         if (bc->is_mem) {
@@ -35,8 +35,8 @@ static void ready_write_buf(output_buffer_t * bc, int amount) {
 	}
 }
 
-static output_buffer_t * new_mem_buffer(nut_alloc_t * alloc) {
-	output_buffer_t * bc = alloc->malloc(sizeof(output_buffer_t));
+static output_buffer_tt * new_mem_buffer(nut_alloc_tt * alloc) {
+	output_buffer_tt * bc = alloc->malloc(sizeof(output_buffer_tt));
 	bc->alloc = alloc;
 	bc->write_len = PREALLOC_SIZE;
 	bc->is_mem = 1;
@@ -46,28 +46,28 @@ static output_buffer_t * new_mem_buffer(nut_alloc_t * alloc) {
 	return bc;
 }
 
-static output_buffer_t * new_output_buffer(nut_alloc_t * alloc, nut_output_stream_t osc) {
-	output_buffer_t * bc = new_mem_buffer(alloc);
+static output_buffer_tt * new_output_buffer(nut_alloc_tt * alloc, nut_output_stream_tt osc) {
+	output_buffer_tt * bc = new_mem_buffer(alloc);
 	bc->is_mem = 0;
 	bc->osc = osc;
 	if (!bc->osc.write) bc->osc.write = stream_write;
 	return bc;
 }
 
-static void free_buffer(output_buffer_t * bc) {
+static void free_buffer(output_buffer_tt * bc) {
 	if (!bc) return;
 	if (!bc->is_mem) flush_buf(bc);
 	bc->alloc->free(bc->buf);
 	bc->alloc->free(bc);
 }
 
-static output_buffer_t * clear_buffer(output_buffer_t * bc) {
+static output_buffer_tt * clear_buffer(output_buffer_tt * bc) {
 	assert(bc->is_mem);
 	bc->buf_ptr = bc->buf;
 	return bc;
 }
 
-static void put_bytes(output_buffer_t * bc, int count, uint64_t val) {
+static void put_bytes(output_buffer_tt * bc, int count, uint64_t val) {
 	ready_write_buf(bc, count);
 	for(count--; count >= 0; count--){
 		*(bc->buf_ptr++) = val >> (8 * count);
@@ -81,7 +81,7 @@ static int v_len(uint64_t val) {
 	return i;
 }
 
-static void put_v(output_buffer_t * bc, uint64_t val) {
+static void put_v(output_buffer_tt * bc, uint64_t val) {
 	int i = v_len(val);
 	ready_write_buf(bc, i);
 	for(i = (i-1)*7; i; i-=7) {
@@ -90,12 +90,12 @@ static void put_v(output_buffer_t * bc, uint64_t val) {
 	*(bc->buf_ptr++)= val & 0x7F;
 }
 
-static void put_s(output_buffer_t * bc, int64_t val) {
+static void put_s(output_buffer_tt * bc, int64_t val) {
 	if (val<=0) put_v(bc, -2*val  );
 	else        put_v(bc,  2*val-1);
 }
 
-static void put_data(output_buffer_t * bc, int len, const void * data) {
+static void put_data(output_buffer_tt * bc, int len, const void * data) {
 	if (!len) return;
 	assert(data);
 	if (bc->write_len - (bc->buf_ptr - bc->buf) > len || bc->is_mem) {
@@ -108,12 +108,12 @@ static void put_data(output_buffer_t * bc, int len, const void * data) {
 	}
 }
 
-static void put_vb(output_buffer_t * bc, int len, const void * data) {
+static void put_vb(output_buffer_tt * bc, int len, const void * data) {
 	put_v(bc, len);
 	put_data(bc, len, data);
 }
 
-static void put_header(output_buffer_t * bc, output_buffer_t * in, output_buffer_t * tmp, uint64_t startcode, int index_ptr) {
+static void put_header(output_buffer_tt * bc, output_buffer_tt * in, output_buffer_tt * tmp, uint64_t startcode, int index_ptr) {
 	int forward_ptr;
 	assert(in->is_mem);
 	assert(tmp->is_mem);
@@ -137,8 +137,8 @@ static void put_header(output_buffer_t * bc, output_buffer_t * in, output_buffer
 	if (startcode != SYNCPOINT_STARTCODE) debug_msg("header/index size: %d\n", (int)(bctello(tmp) + bctello(in)));
 }
 
-static void put_main_header(nut_context_t * nut) {
-	output_buffer_t * tmp = clear_buffer(nut->tmp_buffer);
+static void put_main_header(nut_context_tt * nut) {
+	output_buffer_tt * tmp = clear_buffer(nut->tmp_buffer);
 	int i;
 	int flag, fields, timestamp = 0, mul = 1, stream = 0, size, count;
 
@@ -187,9 +187,9 @@ static void put_main_header(nut_context_t * nut) {
 	put_header(nut->o, tmp, nut->tmp_buffer2, MAIN_STARTCODE, 0);
 }
 
-static void put_stream_header(nut_context_t * nut, int id) {
-	output_buffer_t * tmp = clear_buffer(nut->tmp_buffer);
-	stream_context_t * sc = &nut->sc[id];
+static void put_stream_header(nut_context_tt * nut, int id) {
+	output_buffer_tt * tmp = clear_buffer(nut->tmp_buffer);
+	stream_context_tt * sc = &nut->sc[id];
 
 	put_v(tmp, id);
 	put_v(tmp, sc->sh.type);
@@ -219,8 +219,8 @@ static void put_stream_header(nut_context_t * nut, int id) {
 	put_header(nut->o, tmp, nut->tmp_buffer2, STREAM_STARTCODE, 0);
 }
 
-static void put_info(nut_context_t * nut, const nut_info_packet_t * info) {
-	output_buffer_t * tmp = clear_buffer(nut->tmp_buffer);
+static void put_info(nut_context_tt * nut, const nut_info_packet_tt * info) {
+	output_buffer_tt * tmp = clear_buffer(nut->tmp_buffer);
 	int i;
 
 	put_v(tmp, info->stream_id_plus1);
@@ -231,7 +231,7 @@ static void put_info(nut_context_t * nut, const nut_info_packet_t * info) {
 	put_v(tmp, info->count);
 
 	for(i = 0; i < info->count; i++){
-		nut_info_field_t * field = &info->fields[i];
+		nut_info_field_tt * field = &info->fields[i];
 		put_vb(tmp, strlen(field->name), field->name);
 		if (!strcmp(field->type, "v")) {
 			put_s(tmp, field->val);
@@ -260,7 +260,7 @@ static void put_info(nut_context_t * nut, const nut_info_packet_t * info) {
 	put_header(nut->o, tmp, nut->tmp_buffer2, INFO_STARTCODE, 0);
 }
 
-static void put_headers(nut_context_t * nut) {
+static void put_headers(nut_context_tt * nut) {
 	int i;
 	nut->last_headers = bctello(nut->o);
 	nut->headers_written++;
@@ -270,14 +270,14 @@ static void put_headers(nut_context_t * nut) {
 	for (i = 0; i < nut->info_count; i++) put_info(nut, &nut->info[i]);
 }
 
-static void put_syncpoint(nut_context_t * nut) {
-	output_buffer_t * tmp = clear_buffer(nut->tmp_buffer);
+static void put_syncpoint(nut_context_tt * nut) {
+	output_buffer_tt * tmp = clear_buffer(nut->tmp_buffer);
 	int i;
 	uint64_t pts = 0;
 	int timebase = 0;
 	int back_ptr = 0;
 	int keys[nut->stream_count];
-	syncpoint_list_t * s = &nut->syncpoints;
+	syncpoint_list_tt * s = &nut->syncpoints;
 
 	nut->last_syncpoint = bctello(nut->o);
 
@@ -290,7 +290,7 @@ static void put_syncpoint(nut_context_t * nut) {
 
 	if (s->alloc_len <= s->len) {
 		s->alloc_len += PREALLOC_SIZE;
-		s->s = nut->alloc->realloc(s->s, s->alloc_len * sizeof(syncpoint_t));
+		s->s = nut->alloc->realloc(s->s, s->alloc_len * sizeof(syncpoint_tt));
 		s->pts = nut->alloc->realloc(s->pts, s->alloc_len * nut->stream_count * sizeof(uint64_t));
 		s->eor = nut->alloc->realloc(s->eor, s->alloc_len * nut->stream_count * sizeof(uint64_t));
 	}
@@ -317,7 +317,7 @@ static void put_syncpoint(nut_context_t * nut) {
 	back_ptr = (nut->last_syncpoint - s->s[i].pos) / 16;
 	if (!nut->mopts.write_index) { // clear some syncpoint cache if possible
 		s->len -= i;
-		memmove(s->s, s->s + i, s->len * sizeof(syncpoint_t));
+		memmove(s->s, s->s + i, s->len * sizeof(syncpoint_tt));
 		memmove(s->pts, s->pts + i * nut->stream_count, s->len * nut->stream_count * sizeof(uint64_t));
 		memmove(s->eor, s->eor + i * nut->stream_count, s->len * nut->stream_count * sizeof(uint64_t));
 	}
@@ -336,9 +336,9 @@ static void put_syncpoint(nut_context_t * nut) {
 	nut->sync_overhead += bctello(tmp) + bctello(nut->tmp_buffer2);
 }
 
-static void put_index(nut_context_t * nut) {
-	output_buffer_t * tmp = clear_buffer(nut->tmp_buffer);
-	syncpoint_list_t * s = &nut->syncpoints;
+static void put_index(nut_context_tt * nut) {
+	output_buffer_tt * tmp = clear_buffer(nut->tmp_buffer);
+	syncpoint_list_tt * s = &nut->syncpoints;
 	int i;
 	uint64_t max_pts = 0;
 	int timebase = 0;
@@ -403,8 +403,8 @@ static void put_index(nut_context_t * nut) {
 	put_header(nut->o, tmp, nut->tmp_buffer2, INDEX_STARTCODE, 1);
 }
 
-static int frame_header(nut_context_t * nut, output_buffer_t * tmp, const nut_packet_t * fd) {
-	stream_context_t * sc = &nut->sc[fd->stream];
+static int frame_header(nut_context_tt * nut, output_buffer_tt * tmp, const nut_packet_tt * fd) {
+	stream_context_tt * sc = &nut->sc[fd->stream];
 	int i, ftnum = -1, size = 0, coded_pts, coded_flags = 0, msb_pts = (1 << sc->msb_pts_shift);
 	int checksum = 0, pts_delta = (int64_t)fd->pts - (int64_t)sc->last_pts;
 
@@ -455,17 +455,17 @@ static int frame_header(nut_context_t * nut, output_buffer_t * tmp, const nut_pa
 	return size;
 }
 
-static int add_timebase(nut_context_t * nut, nut_timebase_t tb) {
+static int add_timebase(nut_context_tt * nut, nut_timebase_tt tb) {
 	int i;
 	for (i = 0; i < nut->timebase_count; i++) if (compare_ts(1, nut->tb[i], 1, tb) == 0) break;
 	if (i == nut->timebase_count) {
-		nut->tb = nut->alloc->realloc(nut->tb, sizeof(nut_timebase_t) * ++nut->timebase_count);
+		nut->tb = nut->alloc->realloc(nut->tb, sizeof(nut_timebase_tt) * ++nut->timebase_count);
 		nut->tb[i] = tb;
 	}
 	return i;
 }
 
-static void check_header_repetition(nut_context_t * nut) {
+static void check_header_repetition(nut_context_tt * nut) {
 	if (nut->mopts.realtime_stream) return;
 	if (bctello(nut->o) >= (1 << 23)) {
 		int i; // ### magic value for header repetition
@@ -477,9 +477,9 @@ static void check_header_repetition(nut_context_t * nut) {
 	}
 }
 
-void nut_write_frame(nut_context_t * nut, const nut_packet_t * fd, const uint8_t * buf) {
-	stream_context_t * sc = &nut->sc[fd->stream];
-	output_buffer_t * tmp;
+void nut_write_frame(nut_context_tt * nut, const nut_packet_tt * fd, const uint8_t * buf) {
+	stream_context_tt * sc = &nut->sc[fd->stream];
+	output_buffer_tt * tmp;
 	int i;
 
 	check_header_repetition(nut);
@@ -515,7 +515,7 @@ void nut_write_frame(nut_context_t * nut, const nut_packet_t * fd, const uint8_t
 	if (nut->mopts.realtime_stream) flush_buf(nut->o);
 }
 
-void nut_write_info(nut_context_t * nut, const nut_info_packet_t * info) {
+void nut_write_info(nut_context_tt * nut, const nut_info_packet_tt * info) {
 	if (!nut->mopts.realtime_stream) return;
 
 	nut->last_headers = bctello(nut->o); // to force syncpoint writing after the info header
@@ -523,14 +523,14 @@ void nut_write_info(nut_context_t * nut, const nut_info_packet_t * info) {
 	if (nut->mopts.realtime_stream) flush_buf(nut->o);
 }
 
-nut_context_t * nut_muxer_init(const nut_muxer_opts_t * mopts, const nut_stream_header_t s[], const nut_info_packet_t info[]) {
-	nut_context_t * nut;
-	nut_frame_table_input_t * fti = mopts->fti, mfti[256];
+nut_context_tt * nut_muxer_init(const nut_muxer_opts_tt * mopts, const nut_stream_header_tt s[], const nut_info_packet_tt info[]) {
+	nut_context_tt * nut;
+	nut_frame_table_input_tt * fti = mopts->fti, mfti[256];
 	int i, n;
 	// TODO check that all input is valid
 
-	if (mopts->alloc.malloc) nut = mopts->alloc.malloc(sizeof(nut_context_t));
-	else nut = malloc(sizeof(nut_context_t));
+	if (mopts->alloc.malloc) nut = mopts->alloc.malloc(sizeof(nut_context_tt));
+	else nut = malloc(sizeof(nut_context_tt));
 
 	nut->mopts = *mopts;
 	if (nut->mopts.realtime_stream) nut->mopts.write_index = 0;
@@ -590,7 +590,7 @@ nut_context_t * nut_muxer_init(const nut_muxer_opts_t * mopts, const nut_stream_
 
 	for (nut->stream_count = 0; s[nut->stream_count].type >= 0; nut->stream_count++);
 
-	nut->sc = nut->alloc->malloc(sizeof(stream_context_t) * nut->stream_count);
+	nut->sc = nut->alloc->malloc(sizeof(stream_context_tt) * nut->stream_count);
 	nut->tb = NULL;
 	nut->timebase_count = 0;
 
@@ -631,12 +631,12 @@ nut_context_t * nut_muxer_init(const nut_muxer_opts_t * mopts, const nut_stream_
 	if (info) {
 		for (nut->info_count = 0; info[nut->info_count].count >= 0; nut->info_count++);
 
-		nut->info = nut->alloc->malloc(sizeof(nut_info_packet_t) * nut->info_count);
+		nut->info = nut->alloc->malloc(sizeof(nut_info_packet_tt) * nut->info_count);
 
 		for (i = 0; i < nut->info_count; i++) {
 			int j;
 			nut->info[i] = info[i];
-			nut->info[i].fields = nut->alloc->malloc(sizeof(nut_info_field_t) * info[i].count);
+			nut->info[i].fields = nut->alloc->malloc(sizeof(nut_info_field_tt) * info[i].count);
 			add_timebase(nut, nut->info[i].chapter_tb);
 			for (j = 0; j < info[i].count; j++) {
 				nut->info[i].fields[j] = info[i].fields[j];
@@ -667,7 +667,7 @@ nut_context_t * nut_muxer_init(const nut_muxer_opts_t * mopts, const nut_stream_
 	return nut;
 }
 
-void nut_muxer_uninit(nut_context_t * nut) {
+void nut_muxer_uninit(nut_context_tt * nut) {
 	int i;
 	int total = 0;
 	if (!nut) return;

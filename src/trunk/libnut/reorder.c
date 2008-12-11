@@ -7,7 +7,7 @@
 #include "libnut.h"
 #include "priv.h"
 
-static void shift_frames(nut_context_t * nut, stream_context_t * s, int amount) {
+static void shift_frames(nut_context_tt * nut, stream_context_tt * s, int amount) {
 	int i;
 	assert(amount <= s->num_packets);
 	for (i = 0; i < amount; i++) {
@@ -17,11 +17,11 @@ static void shift_frames(nut_context_t * nut, stream_context_t * s, int amount) 
 	if (s->next_pts != -2) s->next_pts = s->packets[i - 1].p.next_pts;
 	s->num_packets -= amount;
 
-	memmove(s->packets, s->packets + amount, s->num_packets * sizeof(reorder_packet_t));
-	s->packets = nut->alloc->realloc(s->packets, s->num_packets * sizeof(reorder_packet_t));
+	memmove(s->packets, s->packets + amount, s->num_packets * sizeof(reorder_packet_tt));
+	s->packets = nut->alloc->realloc(s->packets, s->num_packets * sizeof(reorder_packet_tt));
 }
 
-static void flushcheck_frames(nut_context_t * nut) {
+static void flushcheck_frames(nut_context_tt * nut) {
 	int change, i;
 	for (i = 0; i < nut->stream_count; i++) {
 		// check if any streams are missing essential info
@@ -58,7 +58,7 @@ static void flushcheck_frames(nut_context_t * nut) {
 	} while (change);
 }
 
-void nut_muxer_uninit_reorder(nut_context_t * nut) {
+void nut_muxer_uninit_reorder(nut_context_tt * nut) {
 	int i;
 	if (!nut) return;
 
@@ -73,15 +73,15 @@ void nut_muxer_uninit_reorder(nut_context_t * nut) {
 	nut_muxer_uninit(nut);
 }
 
-void nut_write_frame_reorder(nut_context_t * nut, const nut_packet_t * p, const uint8_t * buf) {
-	stream_context_t * s = &nut->sc[p->stream];
+void nut_write_frame_reorder(nut_context_tt * nut, const nut_packet_tt * p, const uint8_t * buf) {
+	stream_context_tt * s = &nut->sc[p->stream];
 	if (nut->stream_count < 2) { // do nothing
 		nut_write_frame(nut, p, buf);
 		return;
 	}
 
 	s->num_packets++;
-	s->packets = nut->alloc->realloc(s->packets, s->num_packets * sizeof(reorder_packet_t));
+	s->packets = nut->alloc->realloc(s->packets, s->num_packets * sizeof(reorder_packet_tt));
 	s->packets[s->num_packets - 1].p = *p;
 	s->packets[s->num_packets - 1].dts = get_dts(s->sh.decode_delay, s->reorder_pts_cache, p->pts);
 

@@ -4,7 +4,7 @@
 #include "nutmerge.h"
 
 struct framer_priv_s {
-	stream_t * stream;
+	stream_tt * stream;
 	int64_t cur_pts;
 };
 
@@ -20,8 +20,8 @@ static int find_frame_type(int len, uint8_t * buf, int * type) {
 
 #define CHECK(x) do{ if ((err = (x))) return err; }while(0)
 
-static int get_packet(framer_priv_t * mc, packet_t * p) {
-	packet_t tmp_p;
+static int get_packet(framer_priv_tt * mc, packet_tt * p) {
+	packet_tt tmp_p;
 	int n = 0;
 	int type, err = 0;
 
@@ -52,23 +52,23 @@ static int get_packet(framer_priv_t * mc, packet_t * p) {
 	return 0;
 }
 
-static int setup_headers(framer_priv_t * mc, nut_stream_header_t * s) {
+static int setup_headers(framer_priv_tt * mc, nut_stream_header_tt * s) {
 	*s = mc->stream->sh;
 	return 0; // nothing to do
 }
 
-static framer_priv_t * init(stream_t * s) {
-	framer_priv_t * mc = malloc(sizeof(framer_priv_t));
+static framer_priv_tt * init(stream_tt * s) {
+	framer_priv_tt * mc = malloc(sizeof(framer_priv_tt));
 	mc->stream = s;
 	mc->cur_pts = 0;
 	return mc;
 }
 
-static void uninit(framer_priv_t * mc) {
+static void uninit(framer_priv_tt * mc) {
 	free(mc);
 }
 
-framer_t mpeg4_framer = {
+framer_tt mpeg4_framer = {
 	e_mpeg4,
 	init,
 	setup_headers,

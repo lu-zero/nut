@@ -6,7 +6,7 @@
 
 struct framer_priv_s {
 	int blocksize[2];
-	stream_t * stream;
+	stream_tt * stream;
 	int mode_count;
 	int * modes;
 	uint8_t * codec_specific;
@@ -31,9 +31,9 @@ typedef struct bit_packer_s {
 	int pos;
 	int left;
 	uint8_t * buf_ptr;
-} bit_packer_t;
+} bit_packer_tt;
 
-static int get_bits(bit_packer_t * bp, int bits, uint64_t * res) {
+static int get_bits(bit_packer_tt * bp, int bits, uint64_t * res) {
 	uint64_t val = 0;
 	int pos = 0;
 	bp->left -= bits;
@@ -65,13 +65,13 @@ static int get_bits(bit_packer_t * bp, int bits, uint64_t * res) {
 
 #define CHECK(x) do{ if ((err = (x))) goto err_out; }while(0)
 
-static int setup_headers(framer_priv_t * vc, nut_stream_header_t * s) {
-	bit_packer_t bp;
+static int setup_headers(framer_priv_tt * vc, nut_stream_header_tt * s) {
+	bit_packer_tt bp;
 	uint64_t num;
 	int i, err = 0, pd_read = 0;
 	int channels, sample_rate, codec_specific_len;
 	uint8_t * p;
-	packet_t pd[3];
+	packet_tt pd[3];
 
 	// need first 3 packets - TODO - support working directly from good codec_specific instead of Ogg crap
 	CHECK(get_stream_packet(vc->stream, &pd[0])); pd_read++;
@@ -283,8 +283,8 @@ err_out:
 	return err;
 }
 
-static int get_packet(framer_priv_t * vc, packet_t * p) {
-	bit_packer_t bp;
+static int get_packet(framer_priv_tt * vc, packet_tt * p) {
+	bit_packer_tt bp;
 	uint64_t num;
 	int64_t last_pts = MAX(vc->pts, 0); // -1 is not valid
 	int mode, err = 0;
@@ -319,8 +319,8 @@ err_out:
 	return err == err_vorbis_header ? err_vorbis_packet : err;
 }
 
-static framer_priv_t * init(stream_t * s) {
-	framer_priv_t * vc = malloc(sizeof(framer_priv_t));
+static framer_priv_tt * init(stream_tt * s) {
+	framer_priv_tt * vc = malloc(sizeof(framer_priv_tt));
 	vc->stream = s;
 	vc->modes = NULL;
 	vc->codec_specific = NULL;
@@ -328,13 +328,13 @@ static framer_priv_t * init(stream_t * s) {
 	return vc;
 }
 
-static void uninit(framer_priv_t * vc) {
+static void uninit(framer_priv_tt * vc) {
 	free(vc->modes);
 	free(vc->codec_specific);
 	free(vc);
 }
 
-framer_t vorbis_framer = {
+framer_tt vorbis_framer = {
 	e_vorbis,
 	init,
 	setup_headers,

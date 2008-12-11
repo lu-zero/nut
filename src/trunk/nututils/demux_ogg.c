@@ -8,7 +8,7 @@
 #include "nutmerge.h"
 #define FREAD(file, len, var) do { if (fread((var), 1, (len), (file)) != (len)) return -1; }while(0)
 
-typedef struct ogg_stream_s ogg_stream_t;
+typedef struct ogg_stream_s ogg_stream_tt;
 
 struct ogg_stream_s {
 	int serial;
@@ -18,8 +18,8 @@ struct ogg_stream_s {
 
 struct demuxer_priv_s {
 	FILE * in;
-	ogg_stream_t * os;
-	stream_t * s;
+	ogg_stream_tt * os;
+	stream_tt * s;
 	int nstreams;
 	int stream_count; // when nutmerge_streams was handed to the API ...
 };
@@ -29,14 +29,14 @@ static struct { enum nutmerge_codecs id; uint8_t * magic; int magic_len; } codec
        { 0, NULL, 0 }
 };
 
-static int find_stream(demuxer_priv_t * ogg, int serial) {
-	extern demuxer_t ogg_demuxer;
+static int find_stream(demuxer_priv_tt * ogg, int serial) {
+	extern demuxer_tt ogg_demuxer;
 	int i;
 	for (i = 0; i < ogg->nstreams; i++) {
 		if (ogg->os[i].serial == serial) return i;
 	}
-	ogg->os = realloc(ogg->os, sizeof(ogg_stream_t) * ++ogg->nstreams);
-	ogg->s = realloc(ogg->s, sizeof(stream_t) * (ogg->nstreams+1));
+	ogg->os = realloc(ogg->os, sizeof(ogg_stream_tt) * ++ogg->nstreams);
+	ogg->s = realloc(ogg->s, sizeof(stream_tt) * (ogg->nstreams+1));
 	ogg->os[i].serial = serial;
 	ogg->os[i].leftover_buf = NULL;
 	ogg->os[i].leftover = 0;
@@ -49,8 +49,8 @@ static int find_stream(demuxer_priv_t * ogg, int serial) {
 	return i;
 }
 
-static int read_page(demuxer_priv_t * ogg, int * stream) {
-	ogg_stream_t * os;
+static int read_page(demuxer_priv_tt * ogg, int * stream) {
+	ogg_stream_tt * os;
 	int i, serial, segments;
 	char tmp_header[27];
 	uint8_t sizes[256];
@@ -73,7 +73,7 @@ static int read_page(demuxer_priv_t * ogg, int * stream) {
 	for (i = 0; i < segments; i++) {
 		len += sizes[i];
 		if (sizes[i] != 255) {
-			packet_t p;
+			packet_tt p;
 			p.buf = malloc(len);
 			p.p.len = len;
 			p.p.stream = *stream;
@@ -97,7 +97,7 @@ static int read_page(demuxer_priv_t * ogg, int * stream) {
 	return 0;
 }
 
-static int read_headers(demuxer_priv_t * ogg, stream_t ** streams) {
+static int read_headers(demuxer_priv_tt * ogg, stream_tt ** streams) {
 	int i;
 	int err;
 
@@ -120,7 +120,7 @@ static int read_headers(demuxer_priv_t * ogg, stream_t ** streams) {
 	return 0;
 }
 
-static int fill_buffer(demuxer_priv_t * ogg) {
+static int fill_buffer(demuxer_priv_tt * ogg) {
 	int err, dummy;
 
 	if ((err = read_page(ogg, &dummy))) return err;
@@ -129,8 +129,8 @@ static int fill_buffer(demuxer_priv_t * ogg) {
 	return 0;
 }
 
-static demuxer_priv_t * init(FILE * in) {
-	demuxer_priv_t * ogg = malloc(sizeof(demuxer_priv_t));
+static demuxer_priv_tt * init(FILE * in) {
+	demuxer_priv_tt * ogg = malloc(sizeof(demuxer_priv_tt));
 	ogg->in = in;
 	ogg->os = NULL;
 	ogg->s = NULL;
@@ -138,7 +138,7 @@ static demuxer_priv_t * init(FILE * in) {
 	return ogg;
 }
 
-static void uninit(demuxer_priv_t * ogg) {
+static void uninit(demuxer_priv_tt * ogg) {
 	int i;
 	for (i = 0; i < ogg->nstreams; i++) free(ogg->os[i].leftover_buf);
 	free(ogg->os);
@@ -147,7 +147,7 @@ static void uninit(demuxer_priv_t * ogg) {
 	free(ogg);
 }
 
-demuxer_t ogg_demuxer = {
+demuxer_tt ogg_demuxer = {
 	"ogg",
 	init,
 	read_headers,

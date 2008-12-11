@@ -6,37 +6,37 @@
 
 FILE * stats = NULL;
 
-extern demuxer_t avi_demuxer;
-extern demuxer_t nut_demuxer;
-extern demuxer_t ogg_demuxer;
+extern demuxer_tt avi_demuxer;
+extern demuxer_tt nut_demuxer;
+extern demuxer_tt ogg_demuxer;
 
-demuxer_t * ndemuxers[] = {
+demuxer_tt * ndemuxers[] = {
 	&avi_demuxer,
 	//&nut_demuxer,
 	&ogg_demuxer,
 	NULL
 };
 
-extern framer_t vorbis_framer;
-extern framer_t mpeg4_framer;
-extern framer_t mp3_framer;
+extern framer_tt vorbis_framer;
+extern framer_tt mpeg4_framer;
+extern framer_tt mp3_framer;
 
-framer_t * nframers[] = {
+framer_tt * nframers[] = {
 	&vorbis_framer,
 	&mpeg4_framer,
 	&mp3_framer,
 	NULL
 };
 
-void push_packet(stream_t * stream, packet_t * p) {
+void push_packet(stream_tt * stream, packet_tt * p) {
 	if (stream->npackets == stream->packets_alloc) {
 		stream->packets_alloc += 20;
-		stream->packets = realloc(stream->packets, stream->packets_alloc * sizeof(packet_t));
+		stream->packets = realloc(stream->packets, stream->packets_alloc * sizeof(packet_tt));
 	}
 	stream->packets[stream->npackets++] = *p;
 }
 
-int peek_stream_packet(stream_t * stream, packet_t * p, int n) {
+int peek_stream_packet(stream_tt * stream, packet_tt * p, int n) {
 	while (stream->npackets <= n) {
 		int err;
 		if ((err = stream->demuxer.fill_buffer(stream->demuxer.priv))) return err;
@@ -45,18 +45,18 @@ int peek_stream_packet(stream_t * stream, packet_t * p, int n) {
 	return 0;
 }
 
-int get_stream_packet(stream_t * stream, packet_t * p) {
+int get_stream_packet(stream_tt * stream, packet_tt * p) {
 	while (!stream->npackets) {
 		int err;
 		if ((err = stream->demuxer.fill_buffer(stream->demuxer.priv))) return err;
 	}
 	*p = stream->packets[0];
 	stream->npackets--;
-	memmove(&stream->packets[0], &stream->packets[1], stream->npackets * sizeof(packet_t));
+	memmove(&stream->packets[0], &stream->packets[1], stream->npackets * sizeof(packet_tt));
 	return 0;
 }
 
-void free_streams(stream_t * streams) {
+void free_streams(stream_tt * streams) {
 	int i;
 	if (!streams) return;
 	for (i = 0; streams[i].stream_id >= 0; i++) {
@@ -66,7 +66,7 @@ void free_streams(stream_t * streams) {
 	}
 }
 
-static int pick(stream_t * streams, int stream_count) {
+static int pick(stream_tt * streams, int stream_count) {
 	int i, n = 0;
 	for (i = 1; i < stream_count; i++) if (streams[i].npackets > streams[n].npackets) n = i;
 	return n;
@@ -74,13 +74,13 @@ static int pick(stream_t * streams, int stream_count) {
 
 #define fget_packet(framer, p) (framer).get_packet((framer).priv, p)
 
-static int convert(FILE * out, demuxer_t * demuxer, stream_t * streams, int stream_count) {
-	nut_context_t * nut = NULL;
-	nut_stream_header_t nut_stream[stream_count+1];
-	nut_muxer_opts_t mopts;
-	framer_t framers[stream_count];
+static int convert(FILE * out, demuxer_tt * demuxer, stream_tt * streams, int stream_count) {
+	nut_context_tt * nut = NULL;
+	nut_stream_header_tt nut_stream[stream_count+1];
+	nut_muxer_opts_tt mopts;
+	framer_tt framers[stream_count];
 	int i, err = 0;
-	packet_t p;
+	packet_tt p;
 	int pts[stream_count];
 
 	memset(framers, 0, sizeof framers);
@@ -96,7 +96,7 @@ static int convert(FILE * out, demuxer_t * demuxer, stream_t * streams, int stre
 	}
 	nut_stream[i].type = -1;
 
-	mopts.output = (nut_output_stream_t){ .priv = out, .write = NULL };
+	mopts.output = (nut_output_stream_tt){ .priv = out, .write = NULL };
 	mopts.write_index = 1;
 	mopts.realtime_stream = 0;
 	mopts.fti = NULL;
@@ -125,8 +125,8 @@ err_out:
 
 int main(int argc, char * argv []) {
 	FILE * in = NULL, * out = NULL;
-	demuxer_t demuxer = { .priv = NULL };
-	stream_t * streams;
+	demuxer_tt demuxer = { .priv = NULL };
+	stream_tt * streams;
 	int i, err = 0;
 	const char * extension;
 
