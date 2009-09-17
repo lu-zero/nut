@@ -555,8 +555,8 @@ convert_ts
     To switch from 2 different timebases, the following calculation is
     defined:
 
-    ln        = from_time_base_num*to_time_base_denom
-    sn        = from_timestamp
+    ln        = from_time_base_num*from_timestamp
+    sn        = to_time_base_denom
     d1        = from_time_base_denom
     d2        = to_time_base_num
     timestamp = (ln/d1*sn + ln%d1*sn/d1)/d2
