@@ -538,6 +538,7 @@ time_base_num (v) / time_base_denom (v) = time_base
     if FLAG_FIXED_FPS is set
     time_base_num and time_base_denom MUST NOT be 0
     time_base_num and time_base_denom MUST be relatively prime
+    time_base_num MUST be < 2^31
     time_base_denom MUST be < 2^31
     examples:
         fps       time_base_num    time_base_denom
