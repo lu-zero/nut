@@ -771,6 +771,14 @@ dts
     dts of all frames MUST be bigger or equal to dts of all previous frames
     in the same stream.
 
+    If a codec spec defines dts in a way incompatible to this then the decoder
+    dts shall be considered to be entirely outside the nut spec. In this case
+    a decoder compatible with a nut demuxer will output/display decoded frames
+    purely based on the pts values stored in a nut file.
+    Such nut files MUST NOT contain non standard fields conveying these codec
+    dts as this would break remuxing, spliting, merging and time scaling by
+    (de)muxers unaware of these non standard fields.
+
 width (v) / height (v)
     Width and height of the video in pixels.
     MUST be set to the coded width/height, MUST NOT be 0.
