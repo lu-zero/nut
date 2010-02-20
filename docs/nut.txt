@@ -948,6 +948,8 @@ info packet types
         Note: Names of fields SHOULD be in English if a word with the same
               meaning exists in English.
         Note: MUST be less than 64 bytes long.
+    "TargetAudience"
+        "default", "visually impaired", "hearing impaired"
     "Replaces"
         v (stream id)
         This stream is a superior alternative (higher resolution or otherwise)
