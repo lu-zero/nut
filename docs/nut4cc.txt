@@ -78,10 +78,14 @@ Y800    8bit Gray
 444P    Planar 4:4:4 YUV
 UYVY    Packed 4:2:2 YUV (UYVY)
 YUY2    Packed 4:2:2 YUV (YUYV)
+RGB[12] Packed RGB 4:4:4, 16bpp, (msb)4A 4R 4G 4B(lsb), little-endian [NOT in AVI]
+BGR[12] Packed BGR 4:4:4, 16bpp, (msb)4A 4B 4G 4R(lsb), little-endian [NOT in AVI]
 RGB[15] Packed RGB 5:5:5, 16bpp, (msb)1A 5R 5G 5B(lsb), little-endian [NOT in AVI]
 BGR[15] Packed BGR 5:5:5, 16bpp, (msb)1A 5B 5G 5R(lsb), little-endian [NOT in AVI]
 RGB[16] Packed RGB 5:6:5, 16bpp, (msb)   5R 6G 5B(lsb), little-endian [NOT in AVI]
 BGR[16] Packed BGR 5:6:5, 16bpp, (msb)   5B 6G 5R(lsb), little-endian [NOT in AVI]
+[12]RGB Packed RGB 4:4:4, 16bpp, (msb)4A 4R 4G 4B(lsb), big-endian [NOT in AVI]
+[12]BGR Packed BGR 4:4:4, 16bpp, (msb)4A 4B 4G 4R(lsb), big-endian [NOT in AVI]
 [15]BGR Packed RGB 5:5:5, 16bpp, (msb)1A 5R 5G 5B(lsb), big-endian [NOT in AVI]
 [15]RGB Packed BGR 5:5:5, 16bpp, (msb)1A 5B 5G 5R(lsb), big-endian [NOT in AVI]
 [16]BGR Packed RGB 5:6:5, 16bpp, (msb)   5R 6G 5B(lsb), big-endian [NOT in AVI]
