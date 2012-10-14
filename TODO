@@ -1,0 +1,10 @@
+- doc
+  - Add Markup to the text document and cleanup them
+  - Try to rewrite the specification to be easier to understand
+  - move everything to texinfo
+
+- code
+  - reformat
+  - cleanup
+  - document
+  - make sure it does match specification and Libav implementation
